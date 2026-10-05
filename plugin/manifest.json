@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.vianney-g.omatro",
+  "name": "omatro",
+  "version": "0.1.0",
+  "author": "Vianney Gremmel",
+  "description": "Jeu de cartes à la Balatro aux couleurs du thème : mains de poker, jokers, blinds",
+  "license": "MIT",
+  "kinds": ["panel"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Omatro.qml"
+  }
+}

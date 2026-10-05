@@ -2,6 +2,7 @@
 //! entrée, une réponse JSON par ligne en sortie.
 
 use crate::game::{Game, State};
+use crate::hand::HandKind;
 use crate::joker::Joker;
 use crate::score::Breakdown;
 use serde::{Deserialize, Serialize};
@@ -22,15 +23,33 @@ pub enum Command {
     Discard {
         cards: Vec<usize>,
     },
+    Preview {
+        cards: Vec<usize>,
+    },
     NextBlind,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum Response {
-    State { state: State },
-    Scored { score: Breakdown, state: State },
-    Error { message: String },
+    State {
+        state: State,
+    },
+    Scored {
+        score: Breakdown,
+        state: State,
+    },
+    /// Main formée par la sélection (`hand` absent si rien n'est choisi).
+    Preview {
+        cards: Vec<usize>,
+        hand: Option<HandKind>,
+        scoring: Vec<usize>,
+        base_chips: u64,
+        base_mult: f64,
+    },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Default)]
@@ -69,6 +88,20 @@ impl Session {
                     state: game.state(),
                 });
             }
+            Command::Preview { cards } => {
+                let evaluated = game.preview(&cards).map_err(|e| e.to_string())?;
+                let (base_chips, base_mult) =
+                    evaluated.as_ref().map_or((0, 0.0), |e| e.kind.base());
+                return Ok(Response::Preview {
+                    hand: evaluated.as_ref().map(|e| e.kind),
+                    scoring: evaluated.map_or_else(Vec::new, |e| {
+                        e.scoring.iter().map(|&i| sorted_nth(&cards, i)).collect()
+                    }),
+                    cards,
+                    base_chips,
+                    base_mult,
+                });
+            }
             Command::Discard { cards } => game.discard(&cards).map_err(|e| e.to_string())?,
             Command::NextBlind => game.next_blind().map_err(|e| e.to_string())?,
         }
@@ -76,6 +109,14 @@ impl Session {
             state: game.state(),
         })
     }
+}
+
+/// Indice dans la main de la `n`-ième carte choisie, les cartes étant prises
+/// dans l'ordre de la main.
+fn sorted_nth(cards: &[usize], n: usize) -> usize {
+    let mut sorted = cards.to_vec();
+    sorted.sort();
+    sorted[n]
 }
 
 fn random_seed() -> u64 {
@@ -111,6 +152,21 @@ mod tests {
     }
 
     #[test]
+    fn preview_scoring_points_into_the_hand() {
+        let mut session = Session::default();
+        session.handle(r#"{"cmd":"new_game","seed":1}"#);
+        let game = session.game.as_mut().unwrap();
+        game.set_hand(crate::card::cards("KH 9D 9S 7C 5H 4D 3S 2C"));
+        let r = send(&mut session, r#"{"cmd":"preview","cards":[2,0,1]}"#);
+        assert_eq!(r["hand"], "pair");
+        assert_eq!(r["scoring"], serde_json::json!([1, 2]));
+        assert_eq!(
+            (r["base_chips"].as_u64(), r["base_mult"].as_f64()),
+            (Some(10), Some(2.0))
+        );
+    }
+
+    #[test]
     fn errors_before_any_game() {
         let mut session = Session::default();
         assert_eq!(send(&mut session, r#"{"cmd":"state"}"#)["event"], "error");
@@ -136,6 +192,12 @@ mod tests {
 
         let r = send(&mut session, r#"{"cmd":"discard","cards":[0]}"#);
         assert_eq!(r["state"]["discards_left"], 2);
+
+        let r = send(&mut session, r#"{"cmd":"preview","cards":[]}"#);
+        assert_eq!(
+            (r["event"].as_str(), r["hand"].is_null()),
+            (Some("preview"), true)
+        );
 
         let r = send(&mut session, r#"{"cmd":"next_blind"}"#);
         assert_eq!(r["event"], "error");

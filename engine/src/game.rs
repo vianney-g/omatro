@@ -1,6 +1,7 @@
 //! Déroulement d'une partie : blinds successives, mains et défausses.
 
 use crate::card::{Card, standard_deck};
+use crate::hand::{Evaluated, evaluate};
 use crate::joker::Joker;
 use crate::rng::Rng;
 use crate::score::{Breakdown, score};
@@ -126,10 +127,13 @@ impl Game {
         {
             self.hand.push(card);
         }
+        // Main rangée comme à la table : rang décroissant, puis couleur.
+        self.hand
+            .sort_by_key(|c| (std::cmp::Reverse(c.rank), c.suit as u8));
     }
 
-    /// Retire de la main les cartes choisies et les rend dans l'ordre de la main.
-    fn take(&mut self, indices: &[usize]) -> Result<Vec<Card>, GameError> {
+    /// Vérifie une sélection et renvoie ses indices triés.
+    fn validate(&self, indices: &[usize]) -> Result<Vec<usize>, GameError> {
         if self.phase != Phase::Playing {
             return Err(GameError::NotPlaying);
         }
@@ -147,6 +151,12 @@ impl Game {
         if let Some(&i) = sorted.iter().find(|&&i| i >= self.hand.len()) {
             return Err(GameError::BadSelection(format!("pas de carte n° {i}")));
         }
+        Ok(sorted)
+    }
+
+    /// Retire de la main les cartes choisies et les rend dans l'ordre de la main.
+    fn take(&mut self, indices: &[usize]) -> Result<Vec<Card>, GameError> {
+        let sorted = self.validate(indices)?;
         let mut taken: Vec<Card> = sorted.iter().rev().map(|&i| self.hand.remove(i)).collect();
         taken.reverse();
         Ok(taken)
@@ -167,6 +177,19 @@ impl Game {
         Ok(breakdown)
     }
 
+    /// La main que formeraient les cartes choisies, sans les jouer.
+    pub fn preview(&self, indices: &[usize]) -> Result<Option<Evaluated>, GameError> {
+        if indices.is_empty() {
+            return Ok(None);
+        }
+        let cards: Vec<Card> = self
+            .validate(indices)?
+            .iter()
+            .map(|&i| self.hand[i])
+            .collect();
+        Ok(Some(evaluate(&cards)))
+    }
+
     pub fn discard(&mut self, indices: &[usize]) -> Result<(), GameError> {
         if self.phase == Phase::Playing && self.discards_left == 0 {
             return Err(GameError::NoDiscardsLeft);
@@ -184,6 +207,11 @@ impl Game {
         self.blind += 1;
         self.start_blind();
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_hand(&mut self, hand: Vec<Card>) {
+        self.hand = hand;
     }
 
     pub fn state(&self) -> State {
@@ -263,6 +291,24 @@ mod tests {
             Err(GameError::BadSelection(_))
         ));
         assert!(matches!(game.play(&[8]), Err(GameError::BadSelection(_))));
+        assert_eq!(game.state(), before);
+    }
+
+    #[test]
+    fn hand_is_sorted_by_rank() {
+        let hand = Game::new(10, vec![]).state().hand;
+        assert!(hand.windows(2).all(|w| w[0].rank >= w[1].rank));
+    }
+
+    #[test]
+    fn preview_does_not_play() {
+        let mut game = Game::new(11, vec![]);
+        game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
+        let before = game.state();
+        let preview = game.preview(&[0, 1]).unwrap().unwrap();
+        assert_eq!(preview.kind, crate::hand::HandKind::Pair);
+        assert_eq!(game.preview(&[]).unwrap(), None);
+        assert!(game.preview(&[9]).is_err());
         assert_eq!(game.state(), before);
     }
 
