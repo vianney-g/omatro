@@ -1,21 +1,23 @@
-PLUGIN_ID := io.github.vianney-g.omatro
-PLUGIN_DIR := $(HOME)/.config/omarchy/plugins/$(PLUGIN_ID)
+PREFIX ?= $(HOME)/.local
+OLD_PLUGIN := $(HOME)/.config/omarchy/plugins/io.github.vianney-g.omatro
 
-.PHONY: test plugin install
+.PHONY: test build run install uninstall
 
 test:
-	cd engine && cargo test
+	cargo test --workspace
 
-# Compile le moteur et le place à côté du QML du plugin.
-plugin:
-	cd engine && cargo build --release
-	mkdir -p plugin/bin
-	# Copie puis renommage : marche même si le shell fait tourner l'ancien binaire.
-	cp engine/target/release/omatro-engine plugin/bin/omatro-engine.new
-	mv -f plugin/bin/omatro-engine.new plugin/bin/omatro-engine
+build:
+	cargo build --release -p omatro
 
-# Relie le plugin au shell Omarchy (à faire une fois), puis l'active.
-install: plugin
-	ln -sfn $(CURDIR)/plugin $(PLUGIN_DIR)
-	omarchy-shell shell rescanPlugins
-	omarchy plugin enable $(PLUGIN_ID)
+run: build
+	./target/release/omatro
+
+# Installation dans ~/.local : binaire, entrée du lanceur et icône.
+install: build
+	install -Dm755 target/release/omatro $(PREFIX)/bin/omatro
+	install -Dm644 pkgbuild/omatro.desktop $(PREFIX)/share/applications/omatro.desktop
+	install -Dm644 pkgbuild/omatro.svg $(PREFIX)/share/icons/hicolor/scalable/apps/omatro.svg
+
+uninstall:
+	rm -f $(PREFIX)/bin/omatro $(PREFIX)/share/applications/omatro.desktop \
+	  $(PREFIX)/share/icons/hicolor/scalable/apps/omatro.svg

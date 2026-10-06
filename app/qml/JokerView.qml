@@ -1,5 +1,5 @@
 import QtQuick
-import qs.Commons
+import omatro
 
 // Un joker de la rangée : nom et effet.
 Item {

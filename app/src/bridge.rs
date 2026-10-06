@@ -1,0 +1,121 @@
+//! Le pont entre Rust et QML : le moteur de jeu et le thème Omarchy.
+
+#[cxx_qt::bridge]
+pub mod qobject {
+    unsafe extern "C++" {
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qcolor.h");
+        type QColor = cxx_qt_lib::QColor;
+    }
+
+    extern "RustQt" {
+        /// Le moteur, derrière le même protocole JSON que le binaire
+        /// `omatro-engine` : une commande en entrée, une réponse en sortie.
+        #[qobject]
+        #[qml_element]
+        type Engine = super::EngineRust;
+
+        #[qinvokable]
+        fn handle(self: Pin<&mut Engine>, line: &QString) -> QString;
+    }
+
+    extern "RustQt" {
+        /// Le thème Omarchy actif, relu quand il change.
+        #[qobject]
+        #[qml_element]
+        #[qml_singleton]
+        #[qproperty(QColor, background)]
+        #[qproperty(QColor, foreground)]
+        #[qproperty(QColor, accent)]
+        #[qproperty(QColor, urgent)]
+        #[qproperty(QColor, muted)]
+        #[qproperty(i32, font_base_size, cxx_name = "fontBaseSize")]
+        #[qproperty(i32, corner_radius, cxx_name = "cornerRadius")]
+        type OmarchyTheme = super::ThemeRust;
+
+        /// Relit le thème si ses fichiers ont changé.
+        #[qinvokable]
+        fn refresh(self: Pin<&mut OmarchyTheme>);
+    }
+
+    impl cxx_qt::Initialize for OmarchyTheme {}
+}
+
+use crate::theme::{self, Theme};
+use core::pin::Pin;
+use cxx_qt::CxxQtType;
+use cxx_qt_lib::{QColor, QString};
+use omatro_engine::protocol::Session;
+use std::path::PathBuf;
+use std::time::SystemTime;
+
+#[derive(Default)]
+pub struct EngineRust {
+    session: Session,
+}
+
+impl qobject::Engine {
+    pub fn handle(self: Pin<&mut Self>, line: &QString) -> QString {
+        let reply = self.rust_mut().session.handle(&line.to_string());
+        QString::from(&serde_json::to_string(&reply).unwrap_or_default())
+    }
+}
+
+pub struct ThemeRust {
+    background: QColor,
+    foreground: QColor,
+    accent: QColor,
+    urgent: QColor,
+    muted: QColor,
+    font_base_size: i32,
+    corner_radius: i32,
+    fingerprint: Vec<(PathBuf, Option<SystemTime>)>,
+}
+
+impl Default for ThemeRust {
+    fn default() -> Self {
+        ThemeRust {
+            background: QColor::default(),
+            foreground: QColor::default(),
+            accent: QColor::default(),
+            urgent: QColor::default(),
+            muted: QColor::default(),
+            font_base_size: 12,
+            corner_radius: 0,
+            fingerprint: Vec::new(),
+        }
+    }
+}
+
+fn color(hex: &str) -> QColor {
+    QColor::try_from(&QString::from(hex)).unwrap_or_default()
+}
+
+impl cxx_qt::Initialize for qobject::OmarchyTheme {
+    fn initialize(self: Pin<&mut Self>) {
+        self.refresh();
+    }
+}
+
+impl qobject::OmarchyTheme {
+    pub fn refresh(mut self: Pin<&mut Self>) {
+        let fingerprint = theme::fingerprint();
+        if fingerprint == self.fingerprint {
+            return;
+        }
+        self.as_mut().rust_mut().fingerprint = fingerprint;
+        let Theme {
+            palette,
+            font_base_size,
+            corner_radius,
+        } = Theme::load();
+        self.as_mut().set_background(color(&palette.background));
+        self.as_mut().set_foreground(color(&palette.foreground));
+        self.as_mut().set_accent(color(&palette.accent));
+        self.as_mut().set_urgent(color(&palette.urgent));
+        self.as_mut().set_muted(color(&palette.muted));
+        self.as_mut().set_font_base_size(font_base_size);
+        self.as_mut().set_corner_radius(corner_radius);
+    }
+}

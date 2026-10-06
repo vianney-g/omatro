@@ -1,5 +1,5 @@
 import QtQuick
-import qs.Commons
+import omatro
 import "Labels.js" as Labels
 
 // Une carte à jouer : cœurs et carreaux dans la couleur d'alerte du thème,

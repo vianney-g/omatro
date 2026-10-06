@@ -3,25 +3,33 @@
 Un jeu de cartes à la Balatro pour Omarchy : on joue des mains de poker pour battre des
 blinds, et des jokers multiplient le score (jetons × mult).
 
-- `engine/` : le moteur en Rust (règles, score, jokers), un processus qui dialogue en JSON.
-- `plugin/` : l'affichage, en plugin Quickshell (panneau avec sa propre fenêtre) pour le
-  shell Omarchy, aux couleurs et dans la police du thème actif.
+Une application Qt Quick autonome, comme omawrite ou omacut, mais écrite en Rust
+(liaison Qt avec [cxx-qt](https://github.com/KDAB/cxx-qt)) :
+
+- `engine/` : le moteur (règles, score, jokers, boutique), sans dépendance à Qt. Il
+  fournit aussi un binaire `omatro-engine` qui parle le protocole JSON sur stdin/stdout.
+- `app/` : l'application. Le QML est embarqué dans le binaire, et le moteur est appelé
+  directement, avec le même protocole JSON. Le thème Omarchy actif (couleurs de
+  `colors.toml`, taille de police de `shell.toml`, arrondi Hyprland) est relu dès qu'il
+  change.
+- `pkgbuild/` : entrée du lanceur et icône.
 
 Projet personnel, sans lien avec Balatro : les mécaniques sont reprises, mais ni le nom,
 ni les graphismes, ni les textes, ni le code.
 
 ## Installation
 
+Il faut Rust et Qt 6 (`qt6-base`, `qt6-declarative`).
+
 ```sh
-make install   # compile le moteur, le copie dans plugin/bin, relie et active le plugin
-omarchy-shell shell toggle io.github.vianney-g.omatro '{}'
+make install   # compile et installe dans ~/.local (binaire, lanceur, icône)
+omatro
+make run       # compile et lance sans installer
+make test
 ```
 
-Après une modification du moteur : `make plugin`, puis `omarchy restart shell` (le plugin
-reste chargé entre deux ouvertures et le shell ne suit pas le lien symbolique).
-
 Touches : 1 à 8 pour choisir les cartes, Entrée pour jouer, D pour défausser,
-N pour une nouvelle partie, Échap pour fermer. En boutique : 1 et 2 pour acheter,
+N pour une nouvelle partie, Ctrl+Q pour quitter. En boutique : 1 et 2 pour acheter,
 R pour relancer, Entrée pour la blind suivante.
 
 ## Déroulement
@@ -32,12 +40,10 @@ tranche de 5 $ possédés (5 $ au plus). On encaisse, puis la boutique propose 2
 qu'on n'a pas encore (5 emplacements, revente à moitié prix ; relance à 5 $, puis 1 $ de
 plus à chaque fois). On commence avec 4 $ et sans joker.
 
-## Moteur
+## Moteur seul
 
 ```sh
-cd engine
-cargo test
-cargo run      # lit les commandes sur stdin
+cargo run -p omatro-engine   # lit les commandes sur stdin
 ```
 
 ## Protocole
