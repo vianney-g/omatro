@@ -297,8 +297,13 @@ Item {
         spacing: Style.spacing.huge
 
         // ---- colonne de gauche : blind, score, calcul en cours
+        // Largeur fixe : un layout imbriqué s'étire par défaut et la colonne
+        // changerait de taille selon le contenu de droite (jeu ou boutique).
         ColumnLayout {
+          Layout.fillWidth: false
           Layout.preferredWidth: Style.space(250)
+          Layout.minimumWidth: Style.space(250)
+          Layout.maximumWidth: Style.space(250)
           Layout.fillHeight: true
           spacing: Style.spacing.xxl
 
