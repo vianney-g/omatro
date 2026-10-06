@@ -26,6 +26,14 @@ pub enum Command {
     Preview {
         cards: Vec<usize>,
     },
+    CashOut,
+    Buy {
+        offer: usize,
+    },
+    Sell {
+        joker: usize,
+    },
+    Reroll,
     NextBlind,
 }
 
@@ -103,6 +111,10 @@ impl Session {
                 });
             }
             Command::Discard { cards } => game.discard(&cards).map_err(|e| e.to_string())?,
+            Command::CashOut => game.cash_out().map_err(|e| e.to_string())?,
+            Command::Buy { offer } => game.buy(offer).map_err(|e| e.to_string())?,
+            Command::Sell { joker } => game.sell(joker).map_err(|e| e.to_string())?,
+            Command::Reroll => game.reroll().map_err(|e| e.to_string())?,
             Command::NextBlind => game.next_blind().map_err(|e| e.to_string())?,
         }
         Ok(Response::State {
@@ -184,6 +196,8 @@ mod tests {
         assert_eq!(r["state"]["seed"], 42);
         assert_eq!(r["state"]["hand"].as_array().unwrap().len(), 8);
         assert_eq!(r["state"]["jokers"][0]["name"], "Griot");
+        assert_eq!(r["state"]["money"], 4);
+        assert_eq!(r["state"]["shop"], serde_json::json!([]));
 
         let r = send(&mut session, r#"{"cmd":"play","cards":[0,1]}"#);
         assert_eq!(r["event"], "scored");
@@ -199,7 +213,11 @@ mod tests {
             (Some("preview"), true)
         );
 
-        let r = send(&mut session, r#"{"cmd":"next_blind"}"#);
-        assert_eq!(r["event"], "error");
+        for cmd in ["next_blind", "cash_out", "reroll"] {
+            let r = send(&mut session, &format!(r#"{{"cmd":"{cmd}"}}"#));
+            assert_eq!(r["event"], "error", "{cmd}");
+        }
+        let r = send(&mut session, r#"{"cmd":"buy","offer":0}"#);
+        assert_eq!(r["message"], "la boutique est fermée");
     }
 }

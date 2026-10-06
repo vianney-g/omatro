@@ -29,6 +29,8 @@ function number(n) {
   return String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ")
 }
 
+function money(n) { return n + " $" }
+
 function mult(m) {
   return Number.isInteger(m) ? String(m) : m.toFixed(1).replace(".", ",")
 }

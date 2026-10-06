@@ -10,7 +10,9 @@ test:
 plugin:
 	cd engine && cargo build --release
 	mkdir -p plugin/bin
-	cp engine/target/release/omatro-engine plugin/bin/
+	# Copie puis renommage : marche même si le shell fait tourner l'ancien binaire.
+	cp engine/target/release/omatro-engine plugin/bin/omatro-engine.new
+	mv -f plugin/bin/omatro-engine.new plugin/bin/omatro-engine
 
 # Relie le plugin au shell Omarchy (à faire une fois), puis l'active.
 install: plugin

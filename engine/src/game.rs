@@ -12,12 +12,20 @@ pub const HAND_SIZE: usize = 8;
 pub const MAX_PLAY: usize = 5;
 pub const HANDS_PER_BLIND: u32 = 4;
 pub const DISCARDS_PER_BLIND: u32 = 3;
+pub const START_MONEY: u32 = 4;
+pub const BLIND_REWARD: u32 = 4;
+pub const MAX_INTEREST: u32 = 5;
+pub const MAX_JOKERS: usize = 5;
+pub const SHOP_OFFERS: usize = 2;
+pub const REROLL_COST: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
     Playing,
+    /// Blind gagnée, récompense pas encore encaissée.
     Won,
+    Shop,
     Lost,
 }
 
@@ -25,7 +33,10 @@ pub enum Phase {
 pub enum GameError {
     NotPlaying,
     NotWon,
+    NotInShop,
     NoDiscardsLeft,
+    NotEnoughMoney,
+    JokerSlotsFull,
     BadSelection(String),
 }
 
@@ -34,7 +45,12 @@ impl fmt::Display for GameError {
         match self {
             GameError::NotPlaying => write!(f, "la blind n'est plus en cours"),
             GameError::NotWon => write!(f, "la blind n'est pas encore gagnée"),
+            GameError::NotInShop => write!(f, "la boutique est fermée"),
             GameError::NoDiscardsLeft => write!(f, "plus de défausse"),
+            GameError::NotEnoughMoney => write!(f, "pas assez d'argent"),
+            GameError::JokerSlotsFull => {
+                write!(f, "plus de place pour un joker ({MAX_JOKERS} au plus)")
+            }
             GameError::BadSelection(why) => write!(f, "sélection invalide : {why}"),
         }
     }
@@ -47,6 +63,8 @@ pub struct JokerInfo {
     pub id: Joker,
     pub name: &'static str,
     pub description: &'static str,
+    pub price: u32,
+    pub sell_value: u32,
 }
 
 impl From<Joker> for JokerInfo {
@@ -55,8 +73,22 @@ impl From<Joker> for JokerInfo {
             id: joker,
             name: joker.name(),
             description: joker.description(),
+            price: joker.price(),
+            sell_value: joker.sell_value(),
         }
     }
+}
+
+/// Argent gagné en fin de blind.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Reward {
+    pub blind: u32,
+    /// 1 $ par main non jouée.
+    pub hands: u32,
+    /// 1 $ par tranche de 5 $ possédés, au plus `MAX_INTEREST`.
+    pub interest: u32,
+    pub jokers: u32,
+    pub total: u32,
 }
 
 /// Instantané de la partie envoyé à l'affichage.
@@ -72,6 +104,13 @@ pub struct State {
     pub hand: Vec<Card>,
     pub deck_left: usize,
     pub jokers: Vec<JokerInfo>,
+    pub max_jokers: usize,
+    pub money: u32,
+    /// Présente en phase `won`.
+    pub reward: Option<Reward>,
+    /// Offres de la boutique (vide hors boutique).
+    pub shop: Vec<JokerInfo>,
+    pub reroll_cost: u32,
 }
 
 /// Score à atteindre pour la blind `n` (à partir de 1).
@@ -90,6 +129,10 @@ pub struct Game {
     hands_left: u32,
     discards_left: u32,
     phase: Phase,
+    money: u32,
+    reward: Option<Reward>,
+    offers: Vec<Joker>,
+    reroll_cost: u32,
 }
 
 impl Game {
@@ -105,6 +148,10 @@ impl Game {
             hands_left: 0,
             discards_left: 0,
             phase: Phase::Playing,
+            money: START_MONEY,
+            reward: None,
+            offers: Vec::new(),
+            reroll_cost: REROLL_COST,
         };
         game.start_blind();
         game
@@ -169,6 +216,7 @@ impl Game {
         self.hands_left -= 1;
         if self.score >= blind_target(self.blind) {
             self.phase = Phase::Won;
+            self.reward = Some(self.reward());
         } else if self.hands_left == 0 {
             self.phase = Phase::Lost;
         } else {
@@ -200,10 +248,98 @@ impl Game {
         Ok(())
     }
 
-    pub fn next_blind(&mut self) -> Result<(), GameError> {
+    fn reward(&self) -> Reward {
+        let hands = self.hands_left;
+        let interest = (self.money / 5).min(MAX_INTEREST);
+        let jokers = self
+            .jokers
+            .iter()
+            .map(|j| j.on_blind_won(self.discards_left))
+            .sum();
+        Reward {
+            blind: BLIND_REWARD,
+            hands,
+            interest,
+            jokers,
+            total: BLIND_REWARD + hands + interest + jokers,
+        }
+    }
+
+    /// Encaisse la récompense et ouvre la boutique.
+    pub fn cash_out(&mut self) -> Result<(), GameError> {
         if self.phase != Phase::Won {
             return Err(GameError::NotWon);
         }
+        self.money += self.reward.take().map_or(0, |r| r.total);
+        self.phase = Phase::Shop;
+        self.reroll_cost = REROLL_COST;
+        self.roll_offers();
+        Ok(())
+    }
+
+    /// Tire de nouvelles offres parmi les jokers qu'on n'a pas.
+    fn roll_offers(&mut self) {
+        let mut pool: Vec<Joker> = Joker::ALL
+            .into_iter()
+            .filter(|j| !self.jokers.contains(j))
+            .collect();
+        self.rng.shuffle(&mut pool);
+        pool.truncate(SHOP_OFFERS);
+        self.offers = pool;
+    }
+
+    fn in_shop(&self) -> Result<(), GameError> {
+        if self.phase == Phase::Shop {
+            Ok(())
+        } else {
+            Err(GameError::NotInShop)
+        }
+    }
+
+    fn spend(&mut self, amount: u32) -> Result<(), GameError> {
+        self.money = self
+            .money
+            .checked_sub(amount)
+            .ok_or(GameError::NotEnoughMoney)?;
+        Ok(())
+    }
+
+    pub fn buy(&mut self, offer: usize) -> Result<(), GameError> {
+        self.in_shop()?;
+        let joker = *self
+            .offers
+            .get(offer)
+            .ok_or_else(|| GameError::BadSelection(format!("pas d'offre n° {offer}")))?;
+        if self.jokers.len() >= MAX_JOKERS {
+            return Err(GameError::JokerSlotsFull);
+        }
+        self.spend(joker.price())?;
+        self.offers.remove(offer);
+        self.jokers.push(joker);
+        Ok(())
+    }
+
+    pub fn sell(&mut self, index: usize) -> Result<(), GameError> {
+        self.in_shop()?;
+        if index >= self.jokers.len() {
+            return Err(GameError::BadSelection(format!("pas de joker n° {index}")));
+        }
+        self.money += self.jokers.remove(index).sell_value();
+        Ok(())
+    }
+
+    /// Nouvelles offres ; chaque relance coûte 1 $ de plus que la précédente.
+    pub fn reroll(&mut self) -> Result<(), GameError> {
+        self.in_shop()?;
+        self.spend(self.reroll_cost)?;
+        self.reroll_cost += 1;
+        self.roll_offers();
+        Ok(())
+    }
+
+    pub fn next_blind(&mut self) -> Result<(), GameError> {
+        self.in_shop()?;
+        self.offers.clear();
         self.blind += 1;
         self.start_blind();
         Ok(())
@@ -226,6 +362,11 @@ impl Game {
             hand: self.hand.clone(),
             deck_left: self.deck.len(),
             jokers: self.jokers.iter().map(|&j| j.into()).collect(),
+            max_jokers: MAX_JOKERS,
+            money: self.money,
+            reward: self.reward.clone(),
+            shop: self.offers.iter().map(|&j| j.into()).collect(),
+            reroll_cost: self.reroll_cost,
         }
     }
 }
@@ -330,21 +471,109 @@ mod tests {
         game.play(&[0]).unwrap();
         assert_eq!(game.state().phase, Phase::Lost);
         assert_eq!(game.play(&[0]).unwrap_err(), GameError::NotPlaying);
-        assert_eq!(game.next_blind(), Err(GameError::NotWon));
+        assert_eq!(game.next_blind(), Err(GameError::NotInShop));
+    }
+
+    /// Partie dont la première blind vient d'être gagnée par une quinte flush royale.
+    fn won_game(seed: u64, jokers: Vec<Joker>) -> Game {
+        let mut game = Game::new(seed, jokers);
+        game.hand = cards("AS KS QS JS 10S 2H 3D 4C");
+        game.play(&[0, 1, 2, 3, 4]).unwrap();
+        game
     }
 
     #[test]
-    fn winning_moves_to_next_blind() {
-        let mut game = Game::new(9, vec![]);
-        game.hand = cards("AS KS QS JS 10S 2H 3D 4C");
-        game.play(&[0, 1, 2, 3, 4]).unwrap(); // quinte flush royale : (100 + 51) × 8
-        assert_eq!(game.state().phase, Phase::Won);
+    fn winning_pays_a_reward() {
+        let game = won_game(9, vec![Joker::Tontine]);
+        let s = game.state();
+        assert_eq!(s.phase, Phase::Won);
+        // 4 $ + 3 mains restantes + 0 d'intérêts (4 $) + 3 défausses (tontine).
+        assert_eq!(
+            s.reward,
+            Some(Reward {
+                blind: 4,
+                hands: 3,
+                interest: 0,
+                jokers: 3,
+                total: 10
+            })
+        );
+    }
+
+    #[test]
+    fn interest_is_capped() {
+        let mut game = won_game(9, vec![]);
+        game.money = 100;
+        assert_eq!(game.reward().interest, MAX_INTEREST);
+    }
+
+    #[test]
+    fn cash_out_opens_the_shop_then_next_blind() {
+        let mut game = won_game(9, vec![]);
+        assert_eq!(game.next_blind(), Err(GameError::NotInShop));
+        game.cash_out().unwrap();
+        let s = game.state();
+        assert_eq!(
+            (s.phase, s.money, s.reward),
+            (Phase::Shop, START_MONEY + 7, None)
+        );
+        assert_eq!(s.shop.len(), SHOP_OFFERS);
+        assert_eq!(game.cash_out(), Err(GameError::NotWon));
         game.next_blind().unwrap();
         let s = game.state();
         assert_eq!(
             (s.blind, s.target, s.score, s.phase),
             (2, 450, 0, Phase::Playing)
         );
-        assert_eq!(s.hand.len(), HAND_SIZE);
+        assert_eq!((s.hand.len(), s.shop.len()), (HAND_SIZE, 0));
+    }
+
+    #[test]
+    fn buying_and_selling() {
+        let mut game = won_game(9, vec![]);
+        game.cash_out().unwrap();
+        game.money = 20;
+        let offer = game.offers[0];
+        game.buy(0).unwrap();
+        assert_eq!(game.jokers, [offer]);
+        assert_eq!(game.money, 20 - offer.price());
+        assert_eq!(game.offers.len(), SHOP_OFFERS - 1);
+        assert!(game.buy(5).is_err());
+        game.sell(0).unwrap();
+        assert!(game.jokers.is_empty());
+        assert_eq!(game.money, 20 - offer.price() + offer.sell_value());
+    }
+
+    #[test]
+    fn shop_limits() {
+        let mut game = won_game(9, vec![]);
+        game.cash_out().unwrap();
+        game.money = 0;
+        assert_eq!(game.buy(0), Err(GameError::NotEnoughMoney));
+        assert_eq!(game.reroll(), Err(GameError::NotEnoughMoney));
+        game.money = 100;
+        game.jokers = Joker::ALL[..MAX_JOKERS].to_vec();
+        game.roll_offers();
+        assert_eq!(game.buy(0), Err(GameError::JokerSlotsFull));
+        assert!(game.offers.iter().all(|o| !game.jokers.contains(o)));
+    }
+
+    #[test]
+    fn reroll_cost_rises() {
+        let mut game = won_game(9, vec![]);
+        game.cash_out().unwrap();
+        game.money = 100;
+        game.reroll().unwrap();
+        game.reroll().unwrap();
+        assert_eq!((game.money, game.reroll_cost), (100 - 5 - 6, 7));
+        assert_eq!(game.offers.len(), SHOP_OFFERS);
+    }
+
+    #[test]
+    fn shop_actions_need_the_shop() {
+        let mut game = Game::new(9, vec![Joker::Baobab]);
+        assert_eq!(game.buy(0), Err(GameError::NotInShop));
+        assert_eq!(game.sell(0), Err(GameError::NotInShop));
+        assert_eq!(game.reroll(), Err(GameError::NotInShop));
     }
 }

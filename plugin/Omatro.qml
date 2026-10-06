@@ -106,10 +106,10 @@ Item {
 
   readonly property bool busy: waiting || scoring !== null
   readonly property bool playing: game !== null && game.phase === "playing" && !busy
+  readonly property bool shopping: game !== null && game.phase === "shop" && !busy
   readonly property string handName: scoring ? Labels.hand(scoring.hand)
     : (preview && preview.hand ? Labels.hand(preview.hand) : "")
 
-  // Tous les jokers en attendant la boutique.
   function newGame() {
     if (!engine.running) {
       engineError = ""
@@ -117,7 +117,7 @@ Item {
       return
     }
     notice = ""
-    send({ cmd: "new_game", jokers: ["baobab", "marche", "griot", "harmattan"] })
+    send({ cmd: "new_game" })
   }
 
   function applyState(s) {
@@ -160,12 +160,30 @@ Item {
     send({ cmd: "discard", cards: selected })
   }
 
-  // Entrée : jouer, passer à la blind suivante ou recommencer.
+  // Entrée : jouer, encaisser, quitter la boutique ou recommencer.
   function confirm() {
     if (busy || !game) return
-    if (game.phase === "won") send({ cmd: "next_blind" })
+    notice = ""
+    if (game.phase === "won") send({ cmd: "cash_out" })
+    else if (game.phase === "shop") send({ cmd: "next_blind" })
     else if (game.phase === "lost") newGame()
     else play()
+  }
+
+  // ---- boutique -----------------------------------------------------------
+  function canBuy(offer) {
+    return shopping && game.money >= offer.price && game.jokers.length < game.max_jokers
+  }
+  function buy(i) {
+    if (shopping && i >= 0 && i < game.shop.length) send({ cmd: "buy", offer: i })
+  }
+  function sell(i) {
+    if (shopping) send({ cmd: "sell", joker: i })
+  }
+  function reroll() {
+    if (!shopping) return
+    if (game.money < game.reroll_cost) { notice = "Pas assez d'argent pour relancer."; return }
+    send({ cmd: "reroll" })
   }
 
   // ---- animation du score -------------------------------------------------
@@ -247,8 +265,8 @@ Item {
     title: "omatro"
     color: Color.background
     implicitWidth: Style.space(1100)
-    implicitHeight: Style.space(740)
-    minimumSize: Qt.size(Style.space(980), Style.space(660))
+    implicitHeight: Style.space(800)
+    minimumSize: Qt.size(Style.space(980), Style.space(720))
     visible: false
 
     // Fermée par Hyprland (SUPER + W…).
@@ -262,7 +280,11 @@ Item {
       Keys.onPressed: function(event) {
         var k = event.key
         if (k === Qt.Key_Escape) root.requestClose()
-        else if (k >= Qt.Key_1 && k <= Qt.Key_8) root.toggleCard(k - Qt.Key_1)
+        else if (k >= Qt.Key_1 && k <= Qt.Key_8) {
+          if (root.shopping) root.buy(k - Qt.Key_1)
+          else root.toggleCard(k - Qt.Key_1)
+        }
+        else if (k === Qt.Key_R) root.reroll()
         else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) root.confirm()
         else if (k === Qt.Key_D || k === Qt.Key_Delete) root.discard()
         else if (k === Qt.Key_N) root.newGame()
@@ -309,6 +331,18 @@ Item {
               spacing: Style.spacing.xs
               Caption { text: "Score de la blind" }
               Value { text: Labels.number(root.shownScore) }
+            }
+          }
+
+          Box {
+            Layout.fillWidth: true
+            implicitHeight: moneyCol.implicitHeight + 2 * Style.spacing.xxl
+            Column {
+              id: moneyCol
+              anchors { fill: parent; margins: Style.spacing.xxl }
+              spacing: Style.spacing.xs
+              Caption { text: "Argent" }
+              Value { text: root.game ? Labels.money(root.game.money) : "–"; color: Color.accent }
             }
           }
 
@@ -402,7 +436,9 @@ Item {
           Caption {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            text: "1 à 8 : choisir · Entrée : jouer\nD : défausser · N : nouvelle partie\nÉchap : fermer"
+            text: root.shopping
+              ? "1, 2 : acheter · R : relancer\nEntrée : blind suivante · Échap : fermer"
+              : "1 à 8 : choisir · Entrée : jouer\nD : défausser · N : nouvelle partie\nÉchap : fermer"
           }
         }
 
@@ -412,13 +448,106 @@ Item {
           Layout.fillHeight: true
           spacing: Style.spacing.huge
 
+          Caption {
+            Layout.alignment: Qt.AlignHCenter
+            text: root.game ? "Jokers " + root.game.jokers.length + " / " + root.game.max_jokers : ""
+          }
+
           Row {
             Layout.alignment: Qt.AlignHCenter
+            Layout.preferredHeight: Style.space(150) + (root.shopping ? Style.space(48) : 0)
             spacing: Style.spacing.xxl
             Repeater {
               id: jokerRepeater
               model: root.game ? root.game.jokers : []
-              JokerView { joker: modelData }
+              Column {
+                spacing: Style.spacing.md
+                function flash(text, color) { view.flash(text, color) }
+                JokerView { id: view; joker: modelData }
+                Button {
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  visible: root.shopping
+                  text: "Vendre " + Labels.money(modelData.sell_value)
+                  bordered: true
+                  onClicked: root.sell(index)
+                }
+              }
+            }
+          }
+
+          // Boutique, entre deux blinds.
+          ColumnLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: root.game !== null && root.game.phase === "shop"
+            spacing: Style.spacing.huge
+
+            Item { Layout.fillHeight: true }
+
+            Text {
+              Layout.alignment: Qt.AlignHCenter
+              text: "Boutique"
+              color: Color.accent
+              font.family: Style.font.family
+              font.pixelSize: Style.font.displayLarge
+              font.bold: true
+            }
+
+            Row {
+              Layout.alignment: Qt.AlignHCenter
+              spacing: Style.space(40)
+              Repeater {
+                model: root.game ? root.game.shop : []
+                Column {
+                  spacing: Style.spacing.md
+                  JokerView {
+                    joker: modelData
+                    opacity: root.canBuy(modelData) ? 1 : 0.5
+                  }
+                  Button {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: (index + 1) + " · " + Labels.money(modelData.price)
+                    bordered: true
+                    enabled: root.canBuy(modelData)
+                    opacity: enabled ? 1 : 0.5
+                    onClicked: root.buy(index)
+                  }
+                }
+              }
+            }
+
+            Caption {
+              Layout.alignment: Qt.AlignHCenter
+              visible: root.game !== null && root.game.shop.length === 0
+              text: "Plus rien à vendre : relancer pour de nouvelles offres."
+            }
+
+            Text {
+              Layout.alignment: Qt.AlignHCenter
+              text: root.notice
+              color: Color.muted
+              font.family: Style.font.family
+              font.pixelSize: Style.font.title
+            }
+
+            Item { Layout.fillHeight: true }
+
+            Row {
+              Layout.alignment: Qt.AlignHCenter
+              spacing: Style.spacing.xxl
+              Button {
+                text: "Relancer (R) · " + (root.game ? Labels.money(root.game.reroll_cost) : "")
+                bordered: true
+                enabled: root.shopping && root.game.money >= root.game.reroll_cost
+                opacity: enabled ? 1 : 0.5
+                onClicked: root.reroll()
+              }
+              Button {
+                text: "Blind suivante (Entrée)"
+                bordered: true
+                enabled: root.shopping
+                onClicked: root.confirm()
+              }
             }
           }
 
@@ -426,6 +555,7 @@ Item {
           Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            visible: !root.shopping
 
             Row {
               anchors.centerIn: parent
@@ -468,6 +598,7 @@ Item {
           Row {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: Style.space(24)
+            visible: !root.shopping
             spacing: Style.spacing.lg
             Repeater {
               model: root.hand
@@ -484,6 +615,7 @@ Item {
           Row {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: Style.space(16)
+            visible: !root.shopping
             spacing: Style.spacing.xxl
             Button {
               text: "Jouer la main"
@@ -506,7 +638,7 @@ Item {
       // ---- fin de blind : gagnée ou perdue
       Rectangle {
         anchors.fill: parent
-        visible: root.game !== null && root.game.phase !== "playing" && !root.busy
+        visible: root.game !== null && (root.game.phase === "won" || root.game.phase === "lost") && !root.busy
         color: Util.alpha(Color.background, 0.85)
 
         MouseArea { anchors.fill: parent }
@@ -540,9 +672,40 @@ Item {
               font.family: Style.font.family
               font.pixelSize: Style.font.title
             }
+
+            // Détail de la récompense.
+            Grid {
+              anchors.horizontalCenter: parent.horizontalCenter
+              visible: endCol.won && root.game.reward !== null
+              columns: 2
+              columnSpacing: Style.space(40)
+              rowSpacing: Style.spacing.sm
+              Repeater {
+                model: {
+                  var r = root.game && root.game.reward
+                  if (!r) return []
+                  var lines = [["Blind", r.blind], ["Mains restantes", r.hands], ["Intérêts", r.interest]]
+                  if (r.jokers > 0) lines.push(["Jokers", r.jokers])
+                  lines.push(["Total", r.total])
+                  var cells = []
+                  for (var i = 0; i < lines.length; i++)
+                    cells.push({ text: lines[i][0], value: false, last: i === lines.length - 1 },
+                               { text: "+" + Labels.money(lines[i][1]), value: true, last: i === lines.length - 1 })
+                  return cells
+                }
+                Text {
+                  text: modelData.text
+                  color: modelData.value ? Color.accent : (modelData.last ? Color.foreground : Color.muted)
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.subtitle
+                  font.bold: modelData.last
+                }
+              }
+            }
+
             Button {
               anchors.horizontalCenter: parent.horizontalCenter
-              text: endCol.won ? "Blind suivante (Entrée)" : "Nouvelle partie (Entrée)"
+              text: endCol.won ? "Encaisser (Entrée)" : "Nouvelle partie (Entrée)"
               bordered: true
               onClicked: root.confirm()
             }

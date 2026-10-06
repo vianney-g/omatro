@@ -66,7 +66,7 @@ pub fn score(played: &[Card], jokers: &[Joker]) -> Breakdown {
         }
     }
     for (j, joker) in jokers.iter().enumerate() {
-        if let Some(effect) = joker.on_hand(played) {
+        if let Some(effect) = joker.on_hand(played, evaluated.kind) {
             push(Source::Joker { index: j }, effect, &mut chips, &mut mult);
         }
     }
@@ -114,6 +114,18 @@ mod tests {
         let b = score(&cards("QD QH 2D QD"), &[Joker::Marche, Joker::Griot]);
         assert_eq!((b.chips, b.mult), (120, 7.0));
         assert_eq!(b.total, 840);
+    }
+
+    #[test]
+    fn hand_kind_jokers() {
+        // Brelan : (30 + 3×5) × 3, puis ×3 pour le masque.
+        assert_eq!(score(&cards("5H 5D 5S"), &[Joker::Masque]).total, 405);
+        // Suite : (30 + 2+3+4+5+6) × (4 + 12).
+        assert_eq!(
+            score(&cards("2H 3D 4S 5C 6H"), &[Joker::Zemidjan]).total,
+            800
+        );
+        assert!(score(&cards("2H 2D 4S"), &[Joker::Zemidjan]).steps.len() == 2);
     }
 
     #[test]
