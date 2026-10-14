@@ -2,6 +2,7 @@
 
 pub mod blind;
 pub mod card;
+pub mod consumable;
 #[cfg(test)]
 mod docs;
 pub mod game;

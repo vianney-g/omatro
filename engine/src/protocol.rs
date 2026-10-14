@@ -3,7 +3,7 @@
 
 use crate::game::{Cheat, Game, State};
 use crate::hand::HandKind;
-use crate::joker::Joker;
+use crate::joker::{Bonus, Joker};
 use crate::score::Breakdown;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -35,6 +35,12 @@ pub enum Command {
     Sell {
         joker: usize,
     },
+    UseConsumable {
+        index: usize,
+    },
+    SellConsumable {
+        index: usize,
+    },
     MoveJoker {
         from: usize,
         to: usize,
@@ -63,6 +69,8 @@ pub enum Response {
         scoring: Vec<usize>,
         base_chips: u64,
         base_mult: f64,
+        /// Each joker's badge if this hand were played (empty without a hand).
+        bonuses: Vec<Option<Bonus>>,
     },
     Error {
         message: String,
@@ -73,14 +81,26 @@ pub enum Response {
 pub struct Session {
     game: Option<Game>,
     debug: bool,
+    /// Jokers of every new game that names none (debug only).
+    start_jokers: Vec<Joker>,
 }
 
 impl Session {
-    /// A session that accepts `debug` commands when `OMATRO_DEBUG=1`.
+    /// A session that accepts `debug` commands when `OMATRO_DEBUG=1`; then
+    /// `OMATRO_JOKERS=uptime,fork` also sets the jokers new games start with.
     pub fn from_env() -> Self {
+        let debug = std::env::var("OMATRO_DEBUG").is_ok_and(|v| v == "1");
+        let start_jokers = match std::env::var("OMATRO_JOKERS") {
+            Ok(list) if debug => list
+                .split(',')
+                .filter_map(|id| serde_json::from_value(id.trim().into()).ok())
+                .collect(),
+            _ => Vec::new(),
+        };
         Session {
             game: None,
-            debug: std::env::var("OMATRO_DEBUG").is_ok_and(|v| v == "1"),
+            debug,
+            start_jokers,
         }
     }
 
@@ -96,7 +116,10 @@ impl Session {
     }
 
     fn run(&mut self, command: Command) -> Result<Response, String> {
-        if let Command::NewGame { seed, jokers } = command {
+        if let Command::NewGame { seed, mut jokers } = command {
+            if jokers.is_empty() {
+                jokers = self.start_jokers.clone();
+            }
             let seed = seed.unwrap_or_else(random_seed);
             let game = self.game.insert(Game::new(seed, jokers));
             return Ok(Response::State {
@@ -127,6 +150,9 @@ impl Session {
                 return Ok(Response::Preview {
                     hand: evaluated.as_ref().map(|e| e.kind),
                     hand_name: evaluated.as_ref().map(|e| e.kind.name()),
+                    bonuses: evaluated
+                        .as_ref()
+                        .map_or_else(Vec::new, |e| game.bonuses_for(e.kind)),
                     scoring: evaluated.map_or_else(Vec::new, |e| {
                         e.scoring.iter().map(|&i| sorted_nth(&cards, i)).collect()
                     }),
@@ -139,6 +165,12 @@ impl Session {
             Command::CashOut => game.cash_out().map_err(|e| e.to_string())?,
             Command::Buy { offer } => game.buy(offer).map_err(|e| e.to_string())?,
             Command::Sell { joker } => game.sell(joker).map_err(|e| e.to_string())?,
+            Command::UseConsumable { index } => {
+                game.use_consumable(index).map_err(|e| e.to_string())?
+            }
+            Command::SellConsumable { index } => {
+                game.sell_consumable(index).map_err(|e| e.to_string())?
+            }
             Command::MoveJoker { from, to } => {
                 game.move_joker(from, to).map_err(|e| e.to_string())?
             }

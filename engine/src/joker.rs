@@ -193,6 +193,11 @@ pub enum Joker {
     Mvp,
     Ultrawide,
     UndoHistory,
+    ThemeCollector,
+    Unixporn,
+    FreeAsInBeer,
+    AutoUpdate,
+    ConfigReload,
 }
 
 /// What a joker sees of the hand being scored.
@@ -212,7 +217,7 @@ fn is_even(card: Card) -> bool {
 }
 
 impl Joker {
-    pub const ALL: [Joker; 52] = [
+    pub const ALL: [Joker; 57] = [
         Joker::Dotfiles,
         Joker::Omakase,
         Joker::RubyGem,
@@ -265,6 +270,11 @@ impl Joker {
         Joker::Mvp,
         Joker::Ultrawide,
         Joker::UndoHistory,
+        Joker::ThemeCollector,
+        Joker::Unixporn,
+        Joker::FreeAsInBeer,
+        Joker::AutoUpdate,
+        Joker::ConfigReload,
     ];
 
     pub fn name(self) -> &'static str {
@@ -321,6 +331,11 @@ impl Joker {
             Joker::Mvp => "MVP",
             Joker::Ultrawide => "Ultrawide",
             Joker::UndoHistory => "Undo History",
+            Joker::ThemeCollector => "Theme Collector",
+            Joker::Unixporn => "r/unixporn",
+            Joker::FreeAsInBeer => "Free as in Beer",
+            Joker::AutoUpdate => "Auto Update",
+            Joker::ConfigReload => "Config Reload",
         }
     }
 
@@ -378,6 +393,11 @@ impl Joker {
             Joker::Mvp => "Flushes and Straights can be made with 4 cards",
             Joker::Ultrawide => "+1 hand size",
             Joker::UndoHistory => "+1 discard each blind",
+            Joker::ThemeCollector => "Gains ×0.1 mult per theme applied",
+            Joker::Unixporn => "+$1 at the end of each blind per unique theme applied",
+            Joker::FreeAsInBeer => "Themes in the shop cost $0",
+            Joker::AutoUpdate => "1 in 4 chance to level up the played hand type",
+            Joker::ConfigReload => "Levels up the hand type of the first discard of each blind",
         }
     }
 
@@ -437,6 +457,11 @@ impl Joker {
             Joker::Mvp => "Minimum viable flush.",
             Joker::Ultrawide => "More screen, more cards.",
             Joker::UndoHistory => "Ctrl+Z, but for cards.",
+            Joker::ThemeCollector => "37 themes installed, 1 in use.",
+            Joker::Unixporn => "Karma, but you can spend it.",
+            Joker::FreeAsInBeer => "Also free as in freedom.",
+            Joker::AutoUpdate => "pacman -Syu, every hand.",
+            Joker::ConfigReload => "Super+Shift+R: everything, but fresher.",
         }
     }
 
@@ -447,7 +472,11 @@ impl Joker {
             | Joker::Heartbleed
             | Joker::Recursion
             | Joker::WatchMode
-            | Joker::Mvp => Rarity::Extra,
+            | Joker::Mvp
+            | Joker::ThemeCollector
+            | Joker::Unixporn
+            | Joker::FreeAsInBeer
+            | Joker::ConfigReload => Rarity::Extra,
             Joker::Hotwire
             | Joker::CodeReview
             | Joker::QuadCore
@@ -497,8 +526,14 @@ impl Joker {
             | Joker::FreeTrial
             | Joker::MuscleMemory
             | Joker::CiRunner
-            | Joker::BetaRelease => 5,
-            Joker::SuperKey | Joker::Uptime | Joker::Sponsorware | Joker::WatchMode => 6,
+            | Joker::BetaRelease
+            | Joker::AutoUpdate => 5,
+            Joker::SuperKey
+            | Joker::Uptime
+            | Joker::Sponsorware
+            | Joker::WatchMode
+            | Joker::ThemeCollector
+            | Joker::Unixporn => 6,
             Joker::NoBuild | Joker::Heartbleed | Joker::Mvp => 7,
             Joker::Hotwire
             | Joker::CodeReview
@@ -506,7 +541,9 @@ impl Joker {
             | Joker::GitBisect
             | Joker::Monorepo
             | Joker::Recursion
-            | Joker::BenevolentDictator => 8,
+            | Joker::BenevolentDictator
+            | Joker::FreeAsInBeer
+            | Joker::ConfigReload => 8,
             Joker::OrphanCleanup => 9,
             Joker::Fork => 10,
         }
@@ -517,7 +554,11 @@ impl Joker {
     pub fn copyable(self) -> bool {
         !matches!(
             self,
-            Joker::VintageThinkpad | Joker::Mvp | Joker::Ultrawide | Joker::UndoHistory
+            Joker::VintageThinkpad
+                | Joker::Mvp
+                | Joker::Ultrawide
+                | Joker::UndoHistory
+                | Joker::FreeAsInBeer
         )
     }
 
@@ -525,7 +566,7 @@ impl Joker {
     fn initial_counter(self) -> f64 {
         match self {
             Joker::FreeTrial => 100.0,
-            Joker::OrphanCleanup => 1.0,
+            Joker::OrphanCleanup | Joker::ThemeCollector => 1.0,
             _ => 0.0,
         }
     }
@@ -602,7 +643,7 @@ impl Joker {
             Joker::Uptime | Joker::GreenBuild if counter > 0.0 => Effect::Mult(counter),
             Joker::FreeTrial | Joker::CiRunner if counter > 0.0 => Effect::Chips(counter as u64),
             Joker::MuscleMemory if hand.times_played > 0 => Effect::Mult(hand.times_played as f64),
-            Joker::OrphanCleanup if counter > 1.0 => Effect::XMult(counter),
+            Joker::OrphanCleanup | Joker::ThemeCollector if counter > 1.0 => Effect::XMult(counter),
             Joker::Segfault => Effect::Mult(rng.below(24) as f64),
             Joker::BetaRelease => Effect::Mult(15.0),
             Joker::StableRelease => Effect::XMult(3.0),
@@ -612,14 +653,28 @@ impl Joker {
     }
 
     /// Money earned at the end of a won blind.
-    pub fn blind_money(self, discards_left: u32, discards_used: u32) -> u32 {
+    pub fn blind_money(self, discards_left: u32, discards_used: u32, unique_themes: u32) -> u32 {
         match self {
             Joker::CloudExit => discards_left,
+            Joker::Unixporn => unique_themes,
             Joker::Sponsorware => 4,
             Joker::DataHoarder if discards_used == 0 => 2 * discards_left,
             _ => 0,
         }
     }
+}
+
+/// The current value of a growing joker, shown on a badge.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Bonus {
+    /// `chips`, `mult`, `x_mult` or `money`: the badge's colour.
+    pub kind: &'static str,
+    pub text: String,
+}
+
+/// Rounds away float noise (1.3 rather than 1.3000000000000003).
+fn round(value: f64) -> f64 {
+    (value * 100.0).round() / 100.0
 }
 
 /// A joker the player owns, with its edition and what it gained so far.
@@ -652,15 +707,21 @@ impl OwnedJoker {
         (self.price() / 2).max(1) + self.sell_bonus
     }
 
-    /// What the joker currently adds, for jokers that grow or shrink.
-    pub fn current(&self) -> Option<String> {
-        let c = self.counter;
-        match self.joker {
-            Joker::Uptime | Joker::GreenBuild => Some(format!("Currently +{c} mult")),
-            Joker::FreeTrial | Joker::CiRunner => Some(format!("Currently +{c} chips")),
-            Joker::OrphanCleanup => Some(format!("Currently ×{c} mult")),
-            _ => None,
-        }
+    /// What a joker that grows, shrinks or depends on the game gives right now,
+    /// for its badge. `hand_plays`: times the selected hand type would have been
+    /// played, this hand included (none when no hand is selected).
+    pub fn bonus(&self, hand_plays: Option<u32>, unique_themes: u32) -> Option<Bonus> {
+        let c = round(self.counter);
+        let (kind, text) = match self.joker {
+            Joker::Uptime | Joker::GreenBuild => ("mult", format!("+{c} mult")),
+            Joker::FreeTrial | Joker::CiRunner => ("chips", format!("+{c} chips")),
+            Joker::OrphanCleanup | Joker::ThemeCollector => ("x_mult", format!("×{c} mult")),
+            Joker::MuscleMemory => ("mult", format!("+{} mult", hand_plays?)),
+            Joker::Unixporn => ("money", format!("+${unique_themes} / blind")),
+            Joker::VintageThinkpad => ("money", format!("sells ${}", self.sell_value())),
+            _ => return None,
+        };
+        Some(Bonus { kind, text })
     }
 
     /// Before a hand is scored: jokers that grow with the hands played.
@@ -685,6 +746,12 @@ impl OwnedJoker {
     pub fn on_discard(&mut self) {
         if self.joker == Joker::GreenBuild {
             self.counter = (self.counter - 1.0).max(0.0);
+        }
+    }
+
+    pub fn on_theme_used(&mut self) {
+        if self.joker == Joker::ThemeCollector {
+            self.counter += 0.1;
         }
     }
 
@@ -745,7 +812,17 @@ mod tests {
 
         let mut cleanup = OwnedJoker::new(Joker::OrphanCleanup, None);
         cleanup.on_card_sold();
-        assert_eq!(cleanup.current().as_deref(), Some("Currently ×1.25 mult"));
+        assert_eq!(cleanup.bonus(None, 0).unwrap().text, "×1.25 mult");
+
+        let mut collector = OwnedJoker::new(Joker::ThemeCollector, None);
+        assert_eq!(collector.bonus(None, 0).unwrap().text, "×1 mult");
+        for _ in 0..3 {
+            collector.on_theme_used();
+        }
+        assert_eq!(collector.bonus(None, 0).unwrap().text, "×1.3 mult");
+        let memory = OwnedJoker::new(Joker::MuscleMemory, None);
+        assert_eq!(memory.bonus(None, 0), None);
+        assert_eq!(memory.bonus(Some(4), 0).unwrap().text, "+4 mult");
         cleanup.end_of_blind(true, &mut Rng::new(1));
         assert_eq!(cleanup.counter, 1.0);
     }

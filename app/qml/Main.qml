@@ -160,6 +160,8 @@ Window {
 
   // ---- shop --------------------------------------------------------------
   function canBuy(offer) {
+    if (offer.kind !== "joker")
+      return shopping && game.money >= offer.price && game.consumables.length < game.consumable_slots
     var transparent = offer.edition !== null && offer.edition.id === "transparent"
     return shopping && game.money >= offer.price && (transparent || game.jokers.length < game.max_jokers)
   }
@@ -168,6 +170,15 @@ Window {
   }
   function sell(i) {
     if (shopping) send({ cmd: "sell", joker: i })
+  }
+  function useConsumable(i) {
+    if (busy || !game || i >= game.consumables.length) return
+    var c = game.consumables[i]
+    send({ cmd: "use_consumable", index: i })
+    notice = "Applied " + c.name + ": " + c.description + "."
+  }
+  function sellConsumable(i) {
+    if (!busy) send({ cmd: "sell_consumable", index: i })
   }
   function moveJoker(from, to) {
     if (!busy) send({ cmd: "move_joker", from: from, to: to })
@@ -267,6 +278,8 @@ Window {
         if (k === Qt.Key_Escape) root.infoOpen = false
         else return
       }
+      else if (k >= Qt.Key_1 && k <= Qt.Key_9 && (event.modifiers & Qt.ControlModifier))
+        root.useConsumable(k - Qt.Key_1)
       else if (k >= Qt.Key_0 && k <= Qt.Key_9) {
         var i = k === Qt.Key_0 ? 9 : k - Qt.Key_1
         if (root.shopping) root.buy(i)
@@ -277,6 +290,7 @@ Window {
       else if (k === Qt.Key_F5) root.cheat({ win: true })
       else if (k === Qt.Key_F6) root.cheat({ money: root.game.money + 100 })
       else if (k === Qt.Key_F7) root.cheat({ ante: root.game.winning_ante, blind: "boss" })
+      else if (k === Qt.Key_F10) root.cheat({ random_theme: true })
       else if (k === Qt.Key_F9) root.cheat({ random_joker: true })
       else if (k === Qt.Key_F8) root.cheat({ level_up: root.game.hands.map(function(h) { return h.kind }) })
       else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) root.confirm()
@@ -435,6 +449,41 @@ Window {
 
         Caption { text: root.game ? "Deck: " + root.game.remaining.length + " / " + root.game.deck_size : "" }
 
+        // Clipboard: consumables waiting to be used (Ctrl+1, Ctrl+2).
+        Column {
+          Layout.fillWidth: true
+          spacing: Style.spacing.md
+          Caption {
+            text: root.game ? "Clipboard " + root.game.consumables.length + " / " + root.game.consumable_slots : ""
+          }
+          Row {
+            spacing: Style.spacing.md
+            Repeater {
+              model: root.game ? root.game.consumables : []
+              Column {
+                spacing: Style.spacing.sm
+                ConsumableView { item: modelData; width: Style.space(117) }
+                Row {
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  spacing: Style.spacing.xs
+                  Button {
+                    compact: true
+                    text: "Apply"
+                    enabled: !root.busy && root.game.phase !== "lost"
+                    onClicked: root.useConsumable(index)
+                  }
+                  Button {
+                    compact: true
+                    text: Labels.money(modelData.sell_value)
+                    enabled: !root.busy && root.game.phase !== "lost"
+                    onClicked: root.sellConsumable(index)
+                  }
+                }
+              }
+            }
+          }
+        }
+
         Item { Layout.fillHeight: true }
 
         Caption {
@@ -476,7 +525,14 @@ Window {
               width: jokerRow.jokerWidth
               spacing: Style.spacing.md
               function flash(text, color) { view.flash(text, color) }
-              JokerView { id: view; joker: modelData; width: jokerRow.jokerWidth }
+              JokerView {
+                id: view
+                joker: modelData
+                width: jokerRow.jokerWidth
+                // The badge follows the selected hand (Muscle Memory).
+                bonus: root.preview && root.preview.bonuses.length > index
+                  ? root.preview.bonuses[index] : modelData.bonus
+              }
               // In the shop: sell, and move left or right (Fork copies its right neighbour).
               Row {
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -530,7 +586,13 @@ Window {
               Column {
                 spacing: Style.spacing.md
                 JokerView {
-                  joker: modelData
+                  visible: modelData.kind === "joker"
+                  joker: visible ? modelData : null
+                  opacity: root.canBuy(modelData) ? 1 : 0.5
+                }
+                ConsumableView {
+                  visible: modelData.kind !== "joker"
+                  item: visible ? modelData : null
                   opacity: root.canBuy(modelData) ? 1 : 0.5
                 }
                 Button {

@@ -1,6 +1,7 @@
 //! Human-readable references in `docs/`, generated from the code. A test fails
 //! when one no longer matches; `make docs` rewrites them.
 
+use crate::consumable::Theme;
 use crate::hand::HandKind;
 use crate::joker::{Edition, Joker};
 
@@ -103,12 +104,34 @@ fn hands() -> String {
     doc
 }
 
+fn themes() -> String {
+    let mut doc = header(
+        "Themes",
+        "Themes are consumables (planets, in the original): bought in the shop for $3,\n\
+         they wait in the clipboard (2 slots) until applied, at any time; each one\n\
+         levels up a poker hand type (see [hands.md](hands.md)). The themes of the\n\
+         secret hands only show up once the hand was played.",
+    );
+    doc += "| Id | Theme | Effect | Quip |\n|---|---|---|---|\n";
+    for theme in Theme::ALL {
+        doc += &format!(
+            "| `{}` | {} | {} | *{}* |\n",
+            id(theme),
+            theme.name(),
+            theme.description(),
+            cell(theme.quip())
+        );
+    }
+    doc
+}
+
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 3] = [
+    let docs: [(&str, fn() -> String); 4] = [
         ("jokers.md", jokers),
         ("editions.md", editions),
         ("hands.md", hands),
+        ("themes.md", themes),
     ];
     for (file, render) in docs {
         let path = format!("{}/../docs/{file}", env!("CARGO_MANIFEST_DIR"));

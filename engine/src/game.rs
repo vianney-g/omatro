@@ -2,11 +2,13 @@
 
 use crate::blind::{self, BlindKind, WINNING_ANTE};
 use crate::card::{Card, standard_deck};
+use crate::consumable::{CONSUMABLE_SLOTS, Consumable, Theme};
 use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, evaluate_with};
-use crate::joker::{Edition, Joker, OwnedJoker, Rarity};
+use crate::joker::{Bonus, Edition, Joker, OwnedJoker, Rarity};
 use crate::rng::Rng;
 use crate::score::{Breakdown, Table, copy_target, score};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fmt;
 
 pub const HAND_SIZE: usize = 8;
@@ -41,6 +43,7 @@ pub enum GameError {
     NoDiscardsLeft,
     NotEnoughMoney,
     JokerSlotsFull,
+    ClipboardFull,
     BadSelection(String),
 }
 
@@ -55,6 +58,7 @@ impl fmt::Display for GameError {
             GameError::NoDiscardsLeft => write!(f, "no discards left"),
             GameError::NotEnoughMoney => write!(f, "not enough money"),
             GameError::JokerSlotsFull => write!(f, "no room for another joker"),
+            GameError::ClipboardFull => write!(f, "the clipboard is full"),
             GameError::BadSelection(why) => write!(f, "invalid selection: {why}"),
         }
     }
@@ -84,6 +88,8 @@ impl From<Edition> for EditionInfo {
 /// A joker as the display shows it, owned or on offer.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct JokerInfo {
+    /// Always "joker", to tell shop offers apart.
+    pub kind: &'static str,
     pub id: Joker,
     pub name: &'static str,
     pub description: &'static str,
@@ -94,14 +100,17 @@ pub struct JokerInfo {
     /// Price with the edition.
     pub price: u32,
     pub sell_value: u32,
-    /// What a growing joker adds now, or what a Fork copies.
+    /// What a Fork copies.
     pub current: Option<String>,
+    /// What a growing joker gives right now, for its badge.
+    pub bonus: Option<Bonus>,
 }
 
 impl JokerInfo {
-    fn new(owned: &OwnedJoker, current: Option<String>) -> Self {
+    fn new(owned: &OwnedJoker, current: Option<String>, bonus: Option<Bonus>) -> Self {
         let joker = owned.joker;
         JokerInfo {
+            kind: "joker",
             id: joker,
             name: joker.name(),
             description: joker.description(),
@@ -112,8 +121,43 @@ impl JokerInfo {
             price: owned.price(),
             sell_value: owned.sell_value(),
             current,
+            bonus,
         }
     }
+}
+
+/// A consumable as the display shows it, in the clipboard or on offer.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ConsumableInfo {
+    /// `kind` ("theme") and `id`.
+    #[serde(flatten)]
+    pub consumable: Consumable,
+    pub name: &'static str,
+    pub description: String,
+    pub quip: &'static str,
+    pub price: u32,
+    pub sell_value: u32,
+}
+
+impl ConsumableInfo {
+    fn new(consumable: Consumable, price: u32) -> Self {
+        ConsumableInfo {
+            consumable,
+            name: consumable.name(),
+            description: consumable.description(),
+            quip: consumable.quip(),
+            price,
+            sell_value: consumable.sell_value(),
+        }
+    }
+}
+
+/// A shop offer: a joker or a consumable, told apart by `kind`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum OfferInfo {
+    Joker(JokerInfo),
+    Consumable(ConsumableInfo),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -191,11 +235,16 @@ pub struct State {
     pub hands: Vec<HandInfo>,
     pub jokers: Vec<JokerInfo>,
     pub max_jokers: usize,
+    /// The clipboard.
+    pub consumables: Vec<ConsumableInfo>,
+    pub consumable_slots: usize,
+    /// Distinct themes applied this game.
+    pub unique_themes: u32,
     pub money: u32,
     /// Present in the `won` phase.
     pub reward: Option<Reward>,
     /// Shop offers (empty outside the shop).
-    pub shop: Vec<JokerInfo>,
+    pub shop: Vec<OfferInfo>,
     pub reroll_cost: u32,
 }
 
@@ -222,13 +271,19 @@ pub struct Cheat {
     /// Adds a random joker not owned yet, with a random edition (or none).
     #[serde(default)]
     pub random_joker: bool,
+    /// Adds a random theme to the clipboard.
+    #[serde(default)]
+    pub random_theme: bool,
 }
 
-/// A joker for sale.
+/// Something for sale.
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct Offer {
-    joker: Joker,
-    edition: Option<Edition>,
+enum Offer {
+    Joker {
+        joker: Joker,
+        edition: Option<Edition>,
+    },
+    Consumable(Consumable),
 }
 
 pub struct Game {
@@ -261,6 +316,9 @@ pub struct Game {
     reward: Option<Reward>,
     offers: Vec<Offer>,
     reroll_cost: u32,
+    consumables: Vec<Consumable>,
+    /// Distinct themes applied (r/unixporn).
+    themes_used: HashSet<Theme>,
     /// Beta Release broke: it is gone from the shop, Stable Release shows up.
     beta_broken: bool,
 }
@@ -295,6 +353,8 @@ impl Game {
             reward: None,
             offers: Vec::new(),
             reroll_cost: REROLL_COST,
+            consumables: Vec::new(),
+            themes_used: HashSet::new(),
             beta_broken: false,
         };
         game.await_blind();
@@ -307,6 +367,14 @@ impl Game {
 
     fn count(&self, joker: Joker) -> usize {
         self.jokers.iter().filter(|j| j.joker == joker).count()
+    }
+
+    /// How many jokers use this ability, Forks copying it included.
+    fn abilities(&self, joker: Joker) -> usize {
+        (0..self.jokers.len())
+            .filter_map(|i| copy_target(&self.jokers, i))
+            .filter(|&t| self.jokers[t].joker == joker)
+            .count()
     }
 
     fn hand_size(&self) -> usize {
@@ -426,6 +494,17 @@ impl Game {
         let four_fingers = self.four_fingers();
         let evaluated = evaluate_with(&played, four_fingers);
         self.plays.add(evaluated.kind);
+        let mut notes = Vec::new();
+        let updates = (0..self.abilities(Joker::AutoUpdate))
+            .filter(|_| self.score_rng.chance(4))
+            .count() as u32;
+        if updates > 0 {
+            self.levels.raise(evaluated.kind, updates);
+            notes.push(format!(
+                "Auto Update: {} leveled up.",
+                evaluated.kind.name()
+            ));
+        }
         let scoring: Vec<Card> = evaluated.scoring.iter().map(|&i| played[i]).collect();
         for joker in &mut self.jokers {
             joker.before_hand(&evaluated, &scoring);
@@ -439,6 +518,7 @@ impl Game {
             four_fingers,
         };
         let mut breakdown = score(&table, &mut self.score_rng);
+        breakdown.notes = notes;
         self.money += breakdown.money;
         let notes = &mut breakdown.notes;
         self.jokers.retain_mut(|joker| {
@@ -497,7 +577,14 @@ impl Game {
         if self.phase == Phase::Playing && self.discards_left == 0 {
             return Err(GameError::NoDiscardsLeft);
         }
-        self.take(indices)?;
+        let discarded = self.take(indices)?;
+        if self.discards_used == 0 {
+            let reloads = self.abilities(Joker::ConfigReload) as u32;
+            if reloads > 0 {
+                let kind = evaluate_with(&discarded, self.four_fingers()).kind;
+                self.levels.raise(kind, reloads);
+            }
+        }
         self.discards_left -= 1;
         self.discards_used += 1;
         for joker in &mut self.jokers {
@@ -514,9 +601,11 @@ impl Game {
         let jokers = (0..self.jokers.len())
             .filter_map(|i| copy_target(&self.jokers, i))
             .map(|t| {
-                self.jokers[t]
-                    .joker
-                    .blind_money(self.discards_left, self.discards_used)
+                self.jokers[t].joker.blind_money(
+                    self.discards_left,
+                    self.discards_used,
+                    self.themes_used.len() as u32,
+                )
             })
             .sum();
         Reward {
@@ -546,7 +635,10 @@ impl Game {
     /// Whether a joker may show up in the shop.
     fn on_sale(&self, joker: Joker) -> bool {
         let owned = self.jokers.iter().any(|j| j.joker == joker);
-        let offered = self.offers.iter().any(|o| o.joker == joker);
+        let offered = self
+            .offers
+            .iter()
+            .any(|o| matches!(o, Offer::Joker { joker: j, .. } if *j == joker));
         let lifecycle = match joker {
             Joker::BetaRelease => !self.beta_broken,
             Joker::StableRelease => self.beta_broken,
@@ -555,43 +647,79 @@ impl Game {
         !owned && !offered && lifecycle && joker.rarity() != Rarity::Legendary
     }
 
-    /// Draws new offers: a rarity for each slot (70% core, 25% extra, 5% AUR),
-    /// a joker of that rarity not owned yet, and sometimes an edition.
+    /// Draws new offers: for each slot, a joker (weight 20) or a theme (4).
     fn roll_offers(&mut self) {
         self.offers.clear();
         for _ in 0..SHOP_OFFERS {
-            let roll = self.shop_rng.unit();
-            let mut odds = 0.0;
-            let rarity = Rarity::ALL
-                .into_iter()
-                .find(|r| {
-                    odds += r.odds();
-                    roll < odds
-                })
-                .unwrap_or(Rarity::Core);
-            let of_rarity: Vec<Joker> = Joker::ALL
-                .into_iter()
-                .filter(|&j| j.rarity() == rarity && self.on_sale(j))
-                .collect();
-            let pool = if of_rarity.is_empty() {
-                Joker::ALL
-                    .into_iter()
-                    .filter(|&j| self.on_sale(j))
-                    .collect()
+            let offer = if self.shop_rng.below(24) < 20 {
+                self.roll_joker()
             } else {
-                of_rarity
+                self.roll_theme()
             };
-            if pool.is_empty() {
-                break;
+            match offer {
+                Some(offer) => self.offers.push(offer),
+                None => break,
             }
-            let joker = pool[self.shop_rng.below(pool.len() as u64) as usize];
-            let roll = self.shop_rng.unit();
-            let mut odds = 0.0;
-            let edition = Edition::ALL.into_iter().rev().find(|e| {
-                odds += e.odds();
+        }
+    }
+
+    /// A theme whose hand type is known (secret hands once played), not on
+    /// offer yet.
+    fn roll_theme(&mut self) -> Option<Offer> {
+        let pool: Vec<Theme> = Theme::ALL
+            .into_iter()
+            .filter(|t| !t.hand().secret() || self.plays.get(t.hand()) > 0)
+            .filter(|&t| {
+                !self
+                    .offers
+                    .contains(&Offer::Consumable(Consumable::Theme(t)))
+            })
+            .collect();
+        let theme = *pool.get(self.shop_rng.below(pool.len() as u64) as usize)?;
+        Some(Offer::Consumable(Consumable::Theme(theme)))
+    }
+
+    /// A rarity (70% core, 25% extra, 5% AUR), a joker of that rarity not owned
+    /// yet, and sometimes an edition.
+    fn roll_joker(&mut self) -> Option<Offer> {
+        let roll = self.shop_rng.unit();
+        let mut odds = 0.0;
+        let rarity = Rarity::ALL
+            .into_iter()
+            .find(|r| {
+                odds += r.odds();
                 roll < odds
-            });
-            self.offers.push(Offer { joker, edition });
+            })
+            .unwrap_or(Rarity::Core);
+        let of_rarity: Vec<Joker> = Joker::ALL
+            .into_iter()
+            .filter(|&j| j.rarity() == rarity && self.on_sale(j))
+            .collect();
+        let pool = if of_rarity.is_empty() {
+            Joker::ALL
+                .into_iter()
+                .filter(|&j| self.on_sale(j))
+                .collect()
+        } else {
+            of_rarity
+        };
+        if pool.is_empty() {
+            return None;
+        }
+        let joker = pool[self.shop_rng.below(pool.len() as u64) as usize];
+        let roll = self.shop_rng.unit();
+        let mut odds = 0.0;
+        let edition = Edition::ALL.into_iter().rev().find(|e| {
+            odds += e.odds();
+            roll < odds
+        });
+        Some(Offer::Joker { joker, edition })
+    }
+
+    fn consumable_price(&self, consumable: Consumable) -> u32 {
+        match consumable {
+            Consumable::Theme(_) if self.count(Joker::FreeAsInBeer) > 0 => 0,
+            _ => consumable.price(),
         }
     }
 
@@ -618,17 +746,29 @@ impl Game {
 
     pub fn buy(&mut self, offer: usize) -> Result<(), GameError> {
         self.in_shop()?;
-        let Offer { joker, edition } = *self
+        let index = offer;
+        let offer = *self
             .offers
-            .get(offer)
-            .ok_or_else(|| GameError::BadSelection(format!("no offer #{offer}")))?;
-        if !self.has_room(edition) {
-            return Err(GameError::JokerSlotsFull);
+            .get(index)
+            .ok_or_else(|| GameError::BadSelection(format!("no offer #{index}")))?;
+        match offer {
+            Offer::Joker { joker, edition } => {
+                if !self.has_room(edition) {
+                    return Err(GameError::JokerSlotsFull);
+                }
+                let owned = OwnedJoker::new(joker, edition);
+                self.spend(owned.price())?;
+                self.jokers.push(owned);
+            }
+            Offer::Consumable(consumable) => {
+                if self.consumables.len() >= CONSUMABLE_SLOTS {
+                    return Err(GameError::ClipboardFull);
+                }
+                self.spend(self.consumable_price(consumable))?;
+                self.consumables.push(consumable);
+            }
         }
-        let owned = OwnedJoker::new(joker, edition);
-        self.spend(owned.price())?;
-        self.offers.remove(offer);
-        self.jokers.push(owned);
+        self.offers.remove(index);
         Ok(())
     }
 
@@ -656,6 +796,55 @@ impl Game {
         let joker = self.jokers.remove(from);
         self.jokers.insert(to, joker);
         Ok(())
+    }
+
+    fn consumable(&self, index: usize) -> Result<Consumable, GameError> {
+        self.consumables
+            .get(index)
+            .copied()
+            .ok_or_else(|| GameError::BadSelection(format!("no consumable #{index}")))
+    }
+
+    /// Uses a consumable from the clipboard, at any time but after a loss.
+    pub fn use_consumable(&mut self, index: usize) -> Result<(), GameError> {
+        if self.phase == Phase::Lost {
+            return Err(GameError::NotPlaying);
+        }
+        let consumable = self.consumable(index)?;
+        self.consumables.remove(index);
+        match consumable {
+            Consumable::Theme(theme) => {
+                self.levels.raise(theme.hand(), 1);
+                self.themes_used.insert(theme);
+                for joker in &mut self.jokers {
+                    joker.on_theme_used();
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn sell_consumable(&mut self, index: usize) -> Result<(), GameError> {
+        if self.phase == Phase::Lost {
+            return Err(GameError::NotPlaying);
+        }
+        let consumable = self.consumable(index)?;
+        self.consumables.remove(index);
+        self.money += consumable.sell_value();
+        for joker in &mut self.jokers {
+            joker.on_card_sold();
+        }
+        Ok(())
+    }
+
+    /// Each joker's badge if the hand type were played now (Muscle Memory
+    /// depends on it).
+    pub fn bonuses_for(&self, kind: HandKind) -> Vec<Option<Bonus>> {
+        let plays = self.plays.get(kind) + 1;
+        self.jokers
+            .iter()
+            .map(|j| j.bonus(Some(plays), self.themes_used.len() as u32))
+            .collect()
     }
 
     /// New offers; each reroll costs $1 more than the previous one.
@@ -712,6 +901,14 @@ impl Game {
             }
             self.jokers.push(OwnedJoker::new(joker, edition));
         }
+        if cheat.random_theme {
+            if self.consumables.len() >= CONSUMABLE_SLOTS {
+                return Err(GameError::ClipboardFull);
+            }
+            let mut rng = Rng::stream(self.seed ^ self.consumables.len() as u64, "cheat-theme");
+            let theme = Theme::ALL[rng.below(9) as usize];
+            self.consumables.push(Consumable::Theme(theme));
+        }
         for kind in cheat.level_up {
             self.levels.raise(kind, 1);
         }
@@ -761,9 +958,13 @@ impl Game {
                 None => "Nothing to copy".to_string(),
             })
         } else {
-            owned.current()
+            None
         };
-        JokerInfo::new(owned, current)
+        JokerInfo::new(
+            owned,
+            current,
+            owned.bonus(None, self.themes_used.len() as u32),
+        )
     }
 
     pub fn state(&self) -> State {
@@ -820,10 +1021,26 @@ impl Game {
             max_jokers: self.joker_slots(),
             money: self.money,
             reward: self.reward.clone(),
+            consumables: self
+                .consumables
+                .iter()
+                .map(|&c| ConsumableInfo::new(c, c.price()))
+                .collect(),
+            consumable_slots: CONSUMABLE_SLOTS,
+            unique_themes: self.themes_used.len() as u32,
             shop: self
                 .offers
                 .iter()
-                .map(|o| JokerInfo::new(&OwnedJoker::new(o.joker, o.edition), None))
+                .map(|&o| match o {
+                    Offer::Joker { joker, edition } => OfferInfo::Joker(JokerInfo::new(
+                        &OwnedJoker::new(joker, edition),
+                        None,
+                        None,
+                    )),
+                    Offer::Consumable(c) => {
+                        OfferInfo::Consumable(ConsumableInfo::new(c, self.consumable_price(c)))
+                    }
+                })
                 .collect(),
             reroll_cost: self.reroll_cost,
         }
@@ -1169,8 +1386,14 @@ mod tests {
         let mut game = won_game(9, vec![]);
         game.cash_out().unwrap();
         game.money = 20;
-        let offer = game.offers[0];
-        let owned = OwnedJoker::new(offer.joker, offer.edition);
+        game.offers = vec![
+            Offer::Joker {
+                joker: Joker::Hotwire,
+                edition: None,
+            },
+            Offer::Consumable(Consumable::Theme(Theme::Nord)),
+        ];
+        let owned = OwnedJoker::new(Joker::Hotwire, None);
         game.buy(0).unwrap();
         assert_eq!(game.jokers, [owned.clone()]);
         assert_eq!(game.money, 20 - owned.price());
@@ -1193,20 +1416,24 @@ mod tests {
             .iter()
             .map(|&j| OwnedJoker::new(j, None))
             .collect();
-        game.offers = vec![Offer {
+        game.offers = vec![Offer::Joker {
             joker: Joker::Fork,
             edition: None,
         }];
         assert_eq!(game.buy(0), Err(GameError::JokerSlotsFull));
         // A transparent joker brings its own slot.
-        game.offers[0].edition = Some(Edition::Transparent);
+        game.offers = vec![Offer::Joker {
+            joker: Joker::Fork,
+            edition: Some(Edition::Transparent),
+        }];
         game.buy(0).unwrap();
         assert_eq!(game.state().max_jokers, MAX_JOKERS + 1);
         game.roll_offers();
         assert!(
             game.offers
                 .iter()
-                .all(|o| game.jokers.iter().all(|j| j.joker != o.joker))
+                .filter_map(offered_joker)
+                .all(|o| game.jokers.iter().all(|j| j.joker != o))
         );
     }
 
@@ -1287,8 +1514,8 @@ mod tests {
         game.sell(1).unwrap();
         assert_eq!(game.jokers[0].counter, 1.25);
         assert_eq!(
-            game.state().jokers[0].current.as_deref(),
-            Some("Currently ×1.25 mult")
+            game.state().jokers[0].bonus.as_ref().unwrap().text,
+            "×1.25 mult"
         );
     }
 
@@ -1316,14 +1543,112 @@ mod tests {
         let mut counts = std::collections::HashMap::new();
         for _ in 0..2000 {
             game.roll_offers();
-            for offer in &game.offers {
-                *counts.entry(offer.joker.rarity()).or_insert(0) += 1;
+            for joker in game.offers.iter().filter_map(offered_joker) {
+                *counts.entry(joker.rarity()).or_insert(0) += 1;
             }
         }
-        let share = |r| counts.get(&r).copied().unwrap_or(0) as f64 / 4000.0;
+        let total: usize = counts.values().sum();
+        // Themes take about 1 slot in 6.
+        assert!(
+            (total as f64 / 4000.0 - 20.0 / 24.0).abs() < 0.03,
+            "{total}"
+        );
+        let share = |r| counts.get(&r).copied().unwrap_or(0) as f64 / total as f64;
         assert!((share(Rarity::Core) - 0.70).abs() < 0.03, "{counts:?}");
         assert!((share(Rarity::Aur) - 0.05).abs() < 0.02, "{counts:?}");
         assert_eq!(share(Rarity::Legendary), 0.0);
+    }
+
+    fn offered_joker(offer: &Offer) -> Option<Joker> {
+        match *offer {
+            Offer::Joker { joker, .. } => Some(joker),
+            Offer::Consumable(_) => None,
+        }
+    }
+
+    #[test]
+    fn themes_level_up_hands_and_feed_jokers() {
+        let mut game = won_game(21, vec![Joker::ThemeCollector, Joker::Unixporn]);
+        game.cash_out().unwrap();
+        game.money = 20;
+        let rose_pine = Offer::Consumable(Consumable::Theme(Theme::RosePine));
+        game.offers = vec![rose_pine, rose_pine, rose_pine];
+        game.buy(0).unwrap();
+        game.buy(0).unwrap();
+        assert_eq!(game.buy(0), Err(GameError::ClipboardFull));
+        assert_eq!(game.money, 14);
+        game.use_consumable(0).unwrap();
+        game.use_consumable(0).unwrap();
+        let s = game.state();
+        assert_eq!(s.hands[1].level, 3);
+        assert_eq!(s.jokers[0].bonus.as_ref().unwrap().text, "×1.2 mult");
+        assert_eq!(s.jokers[1].bonus.as_ref().unwrap().text, "+$1 / blind");
+        assert!(game.use_consumable(0).is_err());
+    }
+
+    #[test]
+    fn free_as_in_beer_makes_themes_free() {
+        let mut game = won_game(22, vec![Joker::FreeAsInBeer]);
+        game.cash_out().unwrap();
+        game.money = 0;
+        game.offers = vec![Offer::Consumable(Consumable::Theme(Theme::Nord))];
+        game.buy(0).unwrap();
+        game.sell_consumable(0).unwrap();
+        assert_eq!(game.money, 1);
+    }
+
+    #[test]
+    fn secret_themes_wait_for_their_hand() {
+        let mut game = Game::new(23, vec![]);
+        for _ in 0..300 {
+            game.offers.clear();
+            let Some(Offer::Consumable(Consumable::Theme(theme))) = game.roll_theme() else {
+                panic!("no theme");
+            };
+            assert!(!theme.hand().secret());
+        }
+    }
+
+    #[test]
+    fn config_reload_levels_up_the_first_discard() {
+        let mut game = playing(24, vec![Joker::ConfigReload]);
+        game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
+        game.discard(&[0, 1]).unwrap();
+        game.hand = cards("QH QD 9S 7C 5H 4D 3S 2C");
+        game.discard(&[0, 1]).unwrap();
+        assert_eq!(game.levels.level(HandKind::Pair), 2);
+    }
+
+    #[test]
+    fn auto_update_sometimes_levels_up_the_hand() {
+        let mut game = playing(25, vec![Joker::AutoUpdate]);
+        // A huge target, so that the blind never ends.
+        game.ante = 30;
+        game.hands_left = 100;
+        for _ in 0..40 {
+            game.hand = cards("2H 3D 5S 7C 9H 2D 3S 5C");
+            game.play(&[0]).unwrap();
+        }
+        // 1 in 4 over 40 hands: about 10 levels.
+        let level = game.levels.level(HandKind::HighCard);
+        assert!((4..=20).contains(&level), "{level}");
+        assert_eq!(game.bonuses_for(HandKind::Pair), [None]);
+    }
+
+    #[test]
+    fn muscle_memory_badge_follows_the_selected_hand() {
+        let mut game = playing(26, vec![Joker::MuscleMemory]);
+        assert_eq!(game.state().jokers[0].bonus, None);
+        game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
+        game.play(&[0, 1]).unwrap();
+        assert_eq!(
+            game.bonuses_for(HandKind::Pair)[0].as_ref().unwrap().text,
+            "+2 mult"
+        );
+        assert_eq!(
+            game.bonuses_for(HandKind::Flush)[0].as_ref().unwrap().text,
+            "+1 mult"
+        );
     }
 
     #[test]

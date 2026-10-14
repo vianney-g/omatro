@@ -6,6 +6,8 @@ Item {
   id: root
 
   property var joker: null
+  // What a growing joker gives right now: {kind, text}.
+  property var bonus: joker ? joker.bonus : null
 
   width: Style.space(120)
   height: Style.space(230)
@@ -60,6 +62,7 @@ Item {
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
       }
+      // Fork: what it copies.
       Text {
         width: parent.width
         visible: text !== ""
@@ -70,6 +73,35 @@ Item {
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
         font.bold: true
+      }
+      // Badge: the bonus a growing joker gives right now; pulses when it changes.
+      Rectangle {
+        id: badge
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: root.bonus !== null && root.bonus !== undefined
+        readonly property color tint: !visible ? Color.accent
+          : root.bonus.kind === "mult" || root.bonus.kind === "x_mult" ? Color.urgent : Color.accent
+        width: badgeText.implicitWidth + 2 * Style.space(8)
+        height: badgeText.implicitHeight + 2 * Style.space(3)
+        radius: height / 2
+        color: Util.alpha(tint, 0.18)
+        border.width: Style.normalBorderWidth
+        border.color: tint
+        Text {
+          id: badgeText
+          anchors.centerIn: parent
+          text: badge.visible ? root.bonus.text : ""
+          color: badge.tint
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          font.bold: true
+          onTextChanged: if (badge.visible) pulse.restart()
+        }
+        SequentialAnimation {
+          id: pulse
+          NumberAnimation { target: badge; property: "scale"; to: 1.25; duration: 120 }
+          NumberAnimation { target: badge; property: "scale"; to: 1; duration: 220; easing.type: Easing.OutBack }
+        }
       }
       Text {
         width: parent.width

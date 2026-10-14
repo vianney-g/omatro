@@ -79,7 +79,9 @@ A Cargo workspace with two crates:
 
 `OMATRO_DEBUG=1` makes `Session::from_env()` accept the `debug` command (`Cheat` in
 `game.rs`: money, jokers, jump to an ante or blind, win the blind in progress); the app
-binds F5 / F6 / F7 / F8 to it (F8 raises every known hand one level). To check the interface, run the app with it, float and size the
+binds F5 / F6 / F7 / F8 / F9 / F10 to it (F8 raises every known hand one level, F9 adds a
+random joker, F10 a random theme). `OMATRO_JOKERS=uptime,fork` (debug only) sets the
+jokers new games start with, to screenshot specific jokers. To check the interface, run the app with it, float and size the
 window, drive it with `wtype` and capture it with `grim`. Hyprland 0.56 dispatchers use
 Lua: `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'`,
 `'hl.dsp.window.resize({ x = 1100, y = 800 })'`, `'hl.dsp.window.center()'`; the window
@@ -100,7 +102,20 @@ Add a variant to the `Joker` enum and to `Joker::ALL` (fixed-size array), then `
 - rule changers (hand size, discards, four-card hands) are read by `Game` with
   `count(Joker::…)`; mark them, and anything else Fork must not copy, in `copyable`.
 
-Fork copies through `score::copy_target`. Then run `make docs`.
+Every joker that grows, shrinks or depends on the game must show what it gives right
+now: add it to `OwnedJoker::bonus()`, which feeds the badge on the joker card (the
+state, and the preview for the selected hand). The player must always see the bonus
+actually applied.
+
+Fork copies through `score::copy_target`; `Game::abilities(joker)` counts a joker's
+ability with the Forks copying it. Then run `make docs`.
+
+## Consumables
+
+`consumable.rs` holds the consumables (`Consumable::Theme` for now; commands and sudo
+cards will join it), kept in the clipboard (`Game::consumables`, 2 slots) and used by
+`Game::use_consumable`. The shop draws a joker (weight 20) or a theme (weight 4) for
+each slot (`Offer`); the state sends offers as `OfferInfo`, told apart by `kind`.
 
 ## Generated references
 
