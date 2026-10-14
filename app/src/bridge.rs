@@ -50,9 +50,16 @@ use omatro_engine::protocol::Session;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-#[derive(Default)]
 pub struct EngineRust {
     session: Session,
+}
+
+impl Default for EngineRust {
+    fn default() -> Self {
+        EngineRust {
+            session: Session::from_env(),
+        }
+    }
 }
 
 impl qobject::Engine {

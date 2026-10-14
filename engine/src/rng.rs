@@ -10,6 +10,16 @@ impl Rng {
         Rng(seed)
     }
 
+    /// An independent stream of the game seed, one per use (shuffles, shop…),
+    /// so that drawing from one never shifts the others.
+    pub fn stream(seed: u64, name: &str) -> Self {
+        // FNV-1a hash of the name, mixed into the seed.
+        let hash = name.bytes().fold(0xCBF2_9CE4_8422_2325_u64, |h, b| {
+            (h ^ b as u64).wrapping_mul(0x0100_0000_01B3)
+        });
+        Rng(Rng(seed ^ hash).next_u64())
+    }
+
     pub fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
@@ -43,6 +53,14 @@ mod tests {
         for _ in 0..100 {
             assert_eq!(a.next_u64(), b.next_u64());
         }
+    }
+
+    #[test]
+    fn streams_are_independent() {
+        let first = |seed, name| Rng::stream(seed, name).next_u64();
+        assert_eq!(first(42, "shop"), first(42, "shop"));
+        assert_ne!(first(42, "shop"), first(42, "deck"));
+        assert_ne!(first(42, "shop"), first(43, "shop"));
     }
 
     #[test]

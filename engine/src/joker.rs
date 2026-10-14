@@ -165,7 +165,10 @@ mod tests {
             assert!(joker.sell_value() >= 1 && joker.sell_value() < joker.price());
             // Longer quips overflow the joker card in the interface.
             let quip = joker.quip();
-            assert!(!quip.is_empty() && quip.len() <= 50 && !quip.contains('|'), "{quip}");
+            assert!(
+                !quip.is_empty() && quip.len() <= 50 && !quip.contains('|'),
+                "{quip}"
+            );
         }
     }
 

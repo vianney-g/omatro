@@ -37,11 +37,16 @@ To poke at the engine by hand:
 A Cargo workspace with two crates:
 
 - `engine/` (`omatro-engine`): all the rules, with no Qt dependency. `Game` (`game.rs`)
-  holds the state and the phases `playing` → `won` → `shop` → `playing` (or `lost`).
+  holds the state and the phases `blind_select` → `playing` → `won` → `shop` →
+  `blind_select` (or `lost`); `blind.rs` has the antes (small, big, boss blinds), their
+  targets and the endless-mode formula. Scores are `f64`, as endless targets outgrow
+  integers.
   `hand.rs` recognizes the poker hand, `score.rs` scores it as a list of `steps` that the
   UI replays to animate chips × mult, `joker.rs` defines the jokers and their triggers.
   `rng.rs` is a hand-written generator, deterministic from the seed (no `rand` crate):
-  the same `seed` gives the same game.
+  the same `seed` gives the same game. Each use draws from its own stream
+  (`Rng::stream(seed, "deck")`, `"shop"`…) so that, say, a shop reroll never changes
+  the next deal; give new random features their own stream.
 - `protocol.rs`: `Session::handle(&str) -> Response` is the only entry point into the
   engine. It is used both by the `omatro-engine` binary (stdin/stdout) and by the app.
   Commands and responses are serde enums (`tag = "cmd"` / `tag = "event"`,
@@ -64,6 +69,16 @@ A Cargo workspace with two crates:
   size). The window's own size must use `Style.themeScale`, never `Style.space()`, or it
   makes a binding loop. If the layout gets wider (e.g. more cards in the hand), raise
   `designWidth`.
+
+## Debugging and screenshots
+
+`OMATRO_DEBUG=1` makes `Session::from_env()` accept the `debug` command (`Cheat` in
+`game.rs`: money, jokers, jump to an ante or blind, win the blind in progress); the app
+binds F5 / F6 / F7 to it. To check the interface, run the app with it, float and size the
+window, drive it with `wtype` and capture it with `grim`. Hyprland 0.56 dispatchers use
+Lua: `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'`,
+`'hl.dsp.window.resize({ x = 1100, y = 800 })'`, `'hl.dsp.window.center()'`; the window
+geometry comes from `hyprctl clients -j`. Check that stderr has no QML warnings.
 
 ## Adding a joker
 

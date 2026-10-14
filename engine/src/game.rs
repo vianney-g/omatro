@@ -1,11 +1,12 @@
-//! How a game unfolds: successive blinds, hands and discards.
+//! How a game unfolds: antes of three blinds, hands and discards, the shop.
 
+use crate::blind::{self, BlindKind, WINNING_ANTE};
 use crate::card::{Card, standard_deck};
 use crate::hand::{Evaluated, evaluate};
 use crate::joker::Joker;
 use crate::rng::Rng;
 use crate::score::{Breakdown, score};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 pub const HAND_SIZE: usize = 8;
@@ -13,7 +14,6 @@ pub const MAX_PLAY: usize = 5;
 pub const HANDS_PER_BLIND: u32 = 4;
 pub const DISCARDS_PER_BLIND: u32 = 3;
 pub const START_MONEY: u32 = 4;
-pub const BLIND_REWARD: u32 = 4;
 pub const MAX_INTEREST: u32 = 5;
 pub const MAX_JOKERS: usize = 5;
 pub const SHOP_OFFERS: usize = 2;
@@ -22,6 +22,8 @@ pub const REROLL_COST: u32 = 5;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
+    /// Before a blind: play it, or skip it if it is not the boss.
+    BlindSelect,
     Playing,
     /// Blind won, reward not cashed out yet.
     Won,
@@ -31,9 +33,11 @@ pub enum Phase {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GameError {
+    NotSelecting,
     NotPlaying,
     NotWon,
     NotInShop,
+    CannotSkipBoss,
     NoDiscardsLeft,
     NotEnoughMoney,
     JokerSlotsFull,
@@ -43,9 +47,11 @@ pub enum GameError {
 impl fmt::Display for GameError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            GameError::NotPlaying => write!(f, "the blind is over"),
+            GameError::NotSelecting => write!(f, "no blind to choose right now"),
+            GameError::NotPlaying => write!(f, "no blind in progress"),
             GameError::NotWon => write!(f, "the blind is not won yet"),
             GameError::NotInShop => write!(f, "the shop is closed"),
+            GameError::CannotSkipBoss => write!(f, "the boss blind cannot be skipped"),
             GameError::NoDiscardsLeft => write!(f, "no discards left"),
             GameError::NotEnoughMoney => write!(f, "not enough money"),
             GameError::JokerSlotsFull => {
@@ -81,6 +87,28 @@ impl From<Joker> for JokerInfo {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlindStatus {
+    Upcoming,
+    /// The next blind, waiting to be played or skipped.
+    Select,
+    Current,
+    Defeated,
+    Skipped,
+}
+
+/// One of the three blinds of the current ante.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct BlindInfo {
+    pub kind: BlindKind,
+    pub name: &'static str,
+    pub quip: &'static str,
+    pub target: f64,
+    pub reward: u32,
+    pub status: BlindStatus,
+}
+
 /// Money earned at the end of a blind.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Reward {
@@ -97,12 +125,19 @@ pub struct Reward {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct State {
     pub seed: u64,
-    pub blind: u32,
-    pub target: u64,
-    pub score: u64,
+    pub ante: u32,
+    pub winning_ante: u32,
+    /// The blind being chosen, played or just beaten.
+    pub blind: BlindKind,
+    /// The three blinds of the ante.
+    pub blinds: Vec<BlindInfo>,
+    pub target: f64,
+    pub score: f64,
     pub hands_left: u32,
     pub discards_left: u32,
     pub phase: Phase,
+    /// The winning ante's boss was just beaten; cashing out goes on in endless mode.
+    pub victory: bool,
     pub hand: Vec<Card>,
     pub deck_left: usize,
     pub jokers: Vec<JokerInfo>,
@@ -115,22 +150,39 @@ pub struct State {
     pub reroll_cost: u32,
 }
 
-/// Score needed to beat blind `n` (starting at 1).
-pub fn blind_target(n: u32) -> u64 {
-    (300.0 * 1.5_f64.powi(n as i32 - 1)).round() as u64
+/// Shortcuts for testing the interface, only accepted with `OMATRO_DEBUG=1`.
+#[derive(Debug, Default, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Cheat {
+    /// Sets the money.
+    pub money: Option<u32>,
+    /// Adds jokers, within the joker slots.
+    #[serde(default)]
+    pub jokers: Vec<Joker>,
+    /// Jumps to the choice of a blind (ante and blind default to the current ones).
+    pub ante: Option<u32>,
+    pub blind: Option<BlindKind>,
+    /// Wins the blind in progress.
+    #[serde(default)]
+    pub win: bool,
 }
 
 pub struct Game {
     seed: u64,
-    rng: Rng,
+    deck_rng: Rng,
+    shop_rng: Rng,
     deck: Vec<Card>,
     hand: Vec<Card>,
     jokers: Vec<Joker>,
-    blind: u32,
-    score: u64,
+    ante: u32,
+    blind: BlindKind,
+    /// Blinds skipped in the current ante.
+    skipped: Vec<BlindKind>,
+    score: f64,
     hands_left: u32,
     discards_left: u32,
     phase: Phase,
+    victory: bool,
     money: u32,
     reward: Option<Reward>,
     offers: Vec<Joker>,
@@ -141,33 +193,80 @@ impl Game {
     pub fn new(seed: u64, jokers: Vec<Joker>) -> Self {
         let mut game = Game {
             seed,
-            rng: Rng::new(seed),
+            deck_rng: Rng::stream(seed, "deck"),
+            shop_rng: Rng::stream(seed, "shop"),
             deck: Vec::new(),
             hand: Vec::new(),
             jokers,
-            blind: 1,
-            score: 0,
+            ante: 1,
+            blind: BlindKind::Small,
+            skipped: Vec::new(),
+            score: 0.0,
             hands_left: 0,
             discards_left: 0,
-            phase: Phase::Playing,
+            phase: Phase::BlindSelect,
+            victory: false,
             money: START_MONEY,
             reward: None,
             offers: Vec::new(),
             reroll_cost: REROLL_COST,
         };
-        game.start_blind();
+        game.await_blind();
         game
     }
 
-    fn start_blind(&mut self) {
+    fn target(&self) -> f64 {
+        blind::target(self.ante, self.blind)
+    }
+
+    /// Waits for the player to choose the current blind, with a fresh deck.
+    fn await_blind(&mut self) {
         self.deck = standard_deck();
-        self.rng.shuffle(&mut self.deck);
         self.hand.clear();
-        self.score = 0;
+        self.score = 0.0;
         self.hands_left = HANDS_PER_BLIND;
         self.discards_left = DISCARDS_PER_BLIND;
+        self.phase = Phase::BlindSelect;
+    }
+
+    /// Moves on to the next blind, or to the next ante after the boss.
+    fn advance(&mut self) {
+        match self.blind.next() {
+            Some(next) => self.blind = next,
+            None => {
+                self.ante += 1;
+                self.blind = BlindKind::Small;
+                self.skipped.clear();
+            }
+        }
+        self.await_blind();
+    }
+
+    fn selecting(&self) -> Result<(), GameError> {
+        if self.phase == Phase::BlindSelect {
+            Ok(())
+        } else {
+            Err(GameError::NotSelecting)
+        }
+    }
+
+    /// Plays the blind on offer: shuffles the deck and deals a hand.
+    pub fn select_blind(&mut self) -> Result<(), GameError> {
+        self.selecting()?;
+        self.deck_rng.shuffle(&mut self.deck);
         self.phase = Phase::Playing;
         self.draw();
+        Ok(())
+    }
+
+    pub fn skip_blind(&mut self) -> Result<(), GameError> {
+        self.selecting()?;
+        if !self.blind.skippable() {
+            return Err(GameError::CannotSkipBoss);
+        }
+        self.skipped.push(self.blind);
+        self.advance();
+        Ok(())
     }
 
     fn draw(&mut self) {
@@ -216,15 +315,20 @@ impl Game {
         let breakdown = score(&played, &self.jokers);
         self.score += breakdown.total;
         self.hands_left -= 1;
-        if self.score >= blind_target(self.blind) {
-            self.phase = Phase::Won;
-            self.reward = Some(self.reward());
+        if self.score >= self.target() {
+            self.win_blind();
         } else if self.hands_left == 0 {
             self.phase = Phase::Lost;
         } else {
             self.draw();
         }
         Ok(breakdown)
+    }
+
+    fn win_blind(&mut self) {
+        self.phase = Phase::Won;
+        self.reward = Some(self.reward());
+        self.victory = self.ante == WINNING_ANTE && self.blind == BlindKind::Boss;
     }
 
     /// The hand the chosen cards would make, without playing them.
@@ -251,6 +355,7 @@ impl Game {
     }
 
     fn reward(&self) -> Reward {
+        let blind = self.blind.reward();
         let hands = self.hands_left;
         let interest = (self.money / 5).min(MAX_INTEREST);
         let jokers = self
@@ -259,20 +364,22 @@ impl Game {
             .map(|j| j.on_blind_won(self.discards_left))
             .sum();
         Reward {
-            blind: BLIND_REWARD,
+            blind,
             hands,
             interest,
             jokers,
-            total: BLIND_REWARD + hands + interest + jokers,
+            total: blind + hands + interest + jokers,
         }
     }
 
-    /// Cashes out the reward and opens the shop.
+    /// Cashes out the reward and opens the shop (after a victory, this goes on
+    /// in endless mode).
     pub fn cash_out(&mut self) -> Result<(), GameError> {
         if self.phase != Phase::Won {
             return Err(GameError::NotWon);
         }
         self.money += self.reward.take().map_or(0, |r| r.total);
+        self.victory = false;
         self.phase = Phase::Shop;
         self.reroll_cost = REROLL_COST;
         self.roll_offers();
@@ -285,7 +392,7 @@ impl Game {
             .into_iter()
             .filter(|j| !self.jokers.contains(j))
             .collect();
-        self.rng.shuffle(&mut pool);
+        self.shop_rng.shuffle(&mut pool);
         pool.truncate(SHOP_OFFERS);
         self.offers = pool;
     }
@@ -339,11 +446,45 @@ impl Game {
         Ok(())
     }
 
+    /// Leaves the shop for the choice of the next blind.
     pub fn next_blind(&mut self) -> Result<(), GameError> {
         self.in_shop()?;
         self.offers.clear();
-        self.blind += 1;
-        self.start_blind();
+        self.advance();
+        Ok(())
+    }
+
+    pub fn cheat(&mut self, cheat: Cheat) -> Result<(), GameError> {
+        if let Some(money) = cheat.money {
+            self.money = money;
+        }
+        for joker in cheat.jokers {
+            if self.jokers.len() >= MAX_JOKERS {
+                return Err(GameError::JokerSlotsFull);
+            }
+            self.jokers.push(joker);
+        }
+        if cheat.ante.is_some() || cheat.blind.is_some() {
+            if let Some(ante) = cheat.ante {
+                self.ante = ante.max(1);
+                self.blind = BlindKind::Small;
+            }
+            if let Some(blind) = cheat.blind {
+                self.blind = blind;
+            }
+            self.skipped.clear();
+            self.reward = None;
+            self.victory = false;
+            self.offers.clear();
+            self.await_blind();
+        }
+        if cheat.win {
+            if self.phase != Phase::Playing {
+                return Err(GameError::NotPlaying);
+            }
+            self.score = self.score.max(self.target());
+            self.win_blind();
+        }
         Ok(())
     }
 
@@ -352,15 +493,48 @@ impl Game {
         self.hand = hand;
     }
 
+    fn blind_status(&self, kind: BlindKind) -> BlindStatus {
+        let order = |k| BlindKind::ALL.iter().position(|&b| b == k);
+        if order(kind) < order(self.blind) {
+            if self.skipped.contains(&kind) {
+                BlindStatus::Skipped
+            } else {
+                BlindStatus::Defeated
+            }
+        } else if kind == self.blind {
+            match self.phase {
+                Phase::BlindSelect => BlindStatus::Select,
+                Phase::Won | Phase::Shop => BlindStatus::Defeated,
+                Phase::Playing | Phase::Lost => BlindStatus::Current,
+            }
+        } else {
+            BlindStatus::Upcoming
+        }
+    }
+
     pub fn state(&self) -> State {
         State {
             seed: self.seed,
+            ante: self.ante,
+            winning_ante: WINNING_ANTE,
             blind: self.blind,
-            target: blind_target(self.blind),
+            blinds: BlindKind::ALL
+                .iter()
+                .map(|&kind| BlindInfo {
+                    kind,
+                    name: kind.name(),
+                    quip: kind.quip(),
+                    target: blind::target(self.ante, kind),
+                    reward: kind.reward(),
+                    status: self.blind_status(kind),
+                })
+                .collect(),
+            target: self.target(),
             score: self.score,
             hands_left: self.hands_left,
             discards_left: self.discards_left,
             phase: self.phase,
+            victory: self.victory,
             hand: self.hand.clone(),
             deck_left: self.deck.len(),
             jokers: self.jokers.iter().map(|&j| j.into()).collect(),
@@ -378,31 +552,71 @@ mod tests {
     use super::*;
     use crate::card::cards;
 
+    /// A game in its first blind, hand dealt.
+    fn playing(seed: u64, jokers: Vec<Joker>) -> Game {
+        let mut game = Game::new(seed, jokers);
+        game.select_blind().unwrap();
+        game
+    }
+
+    fn statuses(game: &Game) -> Vec<BlindStatus> {
+        game.state().blinds.iter().map(|b| b.status).collect()
+    }
+
+    #[test]
+    fn new_game_waits_for_the_small_blind() {
+        let game = Game::new(3, vec![]);
+        let s = game.state();
+        assert_eq!(
+            (s.phase, s.ante, s.blind, s.target),
+            (Phase::BlindSelect, 1, BlindKind::Small, 300.0)
+        );
+        assert!(s.hand.is_empty());
+        use BlindStatus::*;
+        assert_eq!(statuses(&game), [Select, Upcoming, Upcoming]);
+    }
+
     #[test]
     fn same_seed_same_hand() {
         assert_eq!(
-            Game::new(1, vec![]).state().hand,
-            Game::new(1, vec![]).state().hand
+            playing(1, vec![]).state().hand,
+            playing(1, vec![]).state().hand
         );
         assert_ne!(
-            Game::new(1, vec![]).state().hand,
-            Game::new(2, vec![]).state().hand
+            playing(1, vec![]).state().hand,
+            playing(2, vec![]).state().hand
         );
     }
 
     #[test]
-    fn new_game_deals_a_full_hand() {
-        let s = Game::new(3, vec![]).state();
+    fn selecting_deals_a_full_hand() {
+        let s = playing(3, vec![]).state();
+        assert_eq!(s.phase, Phase::Playing);
         assert_eq!((s.hand.len(), s.deck_left), (HAND_SIZE, 52 - HAND_SIZE));
         assert_eq!(
-            (s.hands_left, s.discards_left, s.target),
-            (HANDS_PER_BLIND, DISCARDS_PER_BLIND, 300)
+            (s.hands_left, s.discards_left),
+            (HANDS_PER_BLIND, DISCARDS_PER_BLIND)
         );
+        assert_eq!(s.blinds[0].status, BlindStatus::Current);
+    }
+
+    #[test]
+    fn skipping_moves_to_the_next_blind_but_not_past_the_boss() {
+        let mut game = Game::new(3, vec![]);
+        game.skip_blind().unwrap();
+        game.skip_blind().unwrap();
+        let s = game.state();
+        assert_eq!((s.blind, s.target), (BlindKind::Boss, 600.0));
+        use BlindStatus::*;
+        assert_eq!(statuses(&game), [Skipped, Skipped, Select]);
+        assert_eq!(game.skip_blind(), Err(GameError::CannotSkipBoss));
+        game.select_blind().unwrap();
+        assert_eq!(game.skip_blind(), Err(GameError::NotSelecting));
     }
 
     #[test]
     fn playing_scores_and_refills() {
-        let mut game = Game::new(4, vec![]);
+        let mut game = playing(4, vec![]);
         let first = game.state().hand[0];
         let b = game.play(&[0]).unwrap();
         assert_eq!(b.cards, [first]);
@@ -415,14 +629,14 @@ mod tests {
 
     #[test]
     fn played_cards_keep_hand_order() {
-        let mut game = Game::new(5, vec![]);
+        let mut game = playing(5, vec![]);
         let hand = game.state().hand;
         assert_eq!(game.play(&[4, 1]).unwrap().cards, [hand[1], hand[4]]);
     }
 
     #[test]
     fn bad_selections_are_refused_without_side_effects() {
-        let mut game = Game::new(6, vec![]);
+        let mut game = playing(6, vec![]);
         let before = game.state();
         assert!(matches!(game.play(&[]), Err(GameError::BadSelection(_))));
         assert!(matches!(
@@ -438,14 +652,20 @@ mod tests {
     }
 
     #[test]
+    fn no_play_before_selecting() {
+        let mut game = Game::new(6, vec![]);
+        assert_eq!(game.play(&[0]).unwrap_err(), GameError::NotPlaying);
+    }
+
+    #[test]
     fn hand_is_sorted_by_rank() {
-        let hand = Game::new(10, vec![]).state().hand;
+        let hand = playing(10, vec![]).state().hand;
         assert!(hand.windows(2).all(|w| w[0].rank >= w[1].rank));
     }
 
     #[test]
     fn preview_does_not_play() {
-        let mut game = Game::new(11, vec![]);
+        let mut game = playing(11, vec![]);
         game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
         let before = game.state();
         let preview = game.preview(&[0, 1]).unwrap().unwrap();
@@ -457,7 +677,7 @@ mod tests {
 
     #[test]
     fn discards_run_out() {
-        let mut game = Game::new(7, vec![]);
+        let mut game = playing(7, vec![]);
         for _ in 0..DISCARDS_PER_BLIND {
             game.discard(&[0, 1]).unwrap();
         }
@@ -467,7 +687,7 @@ mod tests {
 
     #[test]
     fn losing_after_last_hand() {
-        let mut game = Game::new(8, vec![]);
+        let mut game = playing(8, vec![]);
         game.hand = cards("2H 3D 5S 7C 9H 2D 3S 5C");
         game.hands_left = 1;
         game.play(&[0]).unwrap();
@@ -476,11 +696,16 @@ mod tests {
         assert_eq!(game.next_blind(), Err(GameError::NotInShop));
     }
 
-    /// A game whose first blind was just won with a royal flush.
-    fn won_game(seed: u64, jokers: Vec<Joker>) -> Game {
-        let mut game = Game::new(seed, jokers);
+    /// Wins the blind in progress with a royal flush (1,208 points).
+    fn win(game: &mut Game) {
         game.hand = cards("AS KS QS JS 10S 2H 3D 4C");
         game.play(&[0, 1, 2, 3, 4]).unwrap();
+    }
+
+    /// A game whose first blind was just won.
+    fn won_game(seed: u64, jokers: Vec<Joker>) -> Game {
+        let mut game = playing(seed, jokers);
+        win(&mut game);
         game
     }
 
@@ -489,15 +714,16 @@ mod tests {
         let game = won_game(9, vec![Joker::CloudExit]);
         let s = game.state();
         assert_eq!(s.phase, Phase::Won);
-        // $4 + 3 hands left + 0 interest ($4) + 3 discards (Cloud Exit).
+        assert!(!s.victory);
+        // $3 (small blind) + 3 hands left + 0 interest ($4) + 3 discards (Cloud Exit).
         assert_eq!(
             s.reward,
             Some(Reward {
-                blind: 4,
+                blind: 3,
                 hands: 3,
                 interest: 0,
                 jokers: 3,
-                total: 10
+                total: 9
             })
         );
     }
@@ -510,24 +736,86 @@ mod tests {
     }
 
     #[test]
-    fn cash_out_opens_the_shop_then_next_blind() {
+    fn cash_out_opens_the_shop_then_the_next_blind() {
         let mut game = won_game(9, vec![]);
         assert_eq!(game.next_blind(), Err(GameError::NotInShop));
         game.cash_out().unwrap();
         let s = game.state();
         assert_eq!(
             (s.phase, s.money, s.reward),
-            (Phase::Shop, START_MONEY + 7, None)
+            (Phase::Shop, START_MONEY + 6, None)
         );
         assert_eq!(s.shop.len(), SHOP_OFFERS);
         assert_eq!(game.cash_out(), Err(GameError::NotWon));
         game.next_blind().unwrap();
         let s = game.state();
         assert_eq!(
-            (s.blind, s.target, s.score, s.phase),
-            (2, 450, 0, Phase::Playing)
+            (s.ante, s.blind, s.target, s.score, s.phase),
+            (1, BlindKind::Big, 450.0, 0.0, Phase::BlindSelect)
         );
-        assert_eq!((s.hand.len(), s.shop.len()), (HAND_SIZE, 0));
+        assert_eq!((s.hand.len(), s.shop.len()), (0, 0));
+        use BlindStatus::*;
+        assert_eq!(statuses(&game), [Defeated, Select, Upcoming]);
+    }
+
+    #[test]
+    fn the_boss_leads_to_the_next_ante() {
+        let mut game = Game::new(9, vec![]);
+        game.skip_blind().unwrap();
+        game.skip_blind().unwrap();
+        game.select_blind().unwrap();
+        win(&mut game);
+        game.cash_out().unwrap();
+        game.next_blind().unwrap();
+        let s = game.state();
+        assert_eq!((s.ante, s.blind, s.target), (2, BlindKind::Small, 800.0));
+        use BlindStatus::*;
+        assert_eq!(statuses(&game), [Select, Upcoming, Upcoming]);
+    }
+
+    #[test]
+    fn beating_the_winning_boss_is_a_victory_then_endless() {
+        let mut game = Game::new(9, vec![]);
+        game.cheat(Cheat {
+            ante: Some(WINNING_ANTE),
+            blind: Some(BlindKind::Boss),
+            ..Cheat::default()
+        })
+        .unwrap();
+        game.select_blind().unwrap();
+        game.cheat(Cheat {
+            win: true,
+            ..Cheat::default()
+        })
+        .unwrap();
+        assert!(game.state().victory);
+        game.cash_out().unwrap();
+        assert!(!game.state().victory);
+        game.next_blind().unwrap();
+        let s = game.state();
+        assert_eq!((s.ante, s.target), (WINNING_ANTE + 1, 110_000.0));
+    }
+
+    #[test]
+    fn cheats_set_money_jokers_and_blind() {
+        let mut game = Game::new(9, vec![]);
+        game.cheat(Cheat {
+            money: Some(99),
+            jokers: vec![Joker::Hotwire],
+            ante: Some(3),
+            ..Cheat::default()
+        })
+        .unwrap();
+        let s = game.state();
+        assert_eq!((s.money, s.jokers.len(), s.ante), (99, 1, 3));
+        assert_eq!((s.blind, s.phase), (BlindKind::Small, Phase::BlindSelect));
+        assert_eq!(
+            game.cheat(Cheat {
+                win: true,
+                ..Cheat::default()
+            }),
+            Err(GameError::NotPlaying)
+        );
     }
 
     #[test]
@@ -572,8 +860,24 @@ mod tests {
     }
 
     #[test]
+    fn rerolling_does_not_change_the_next_deal() {
+        let next_hand = |rerolls| {
+            let mut game = won_game(9, vec![]);
+            game.cash_out().unwrap();
+            game.money = 100;
+            for _ in 0..rerolls {
+                game.reroll().unwrap();
+            }
+            game.next_blind().unwrap();
+            game.select_blind().unwrap();
+            game.state().hand
+        };
+        assert_eq!(next_hand(0), next_hand(3));
+    }
+
+    #[test]
     fn shop_actions_need_the_shop() {
-        let mut game = Game::new(9, vec![Joker::Dotfiles]);
+        let mut game = playing(9, vec![Joker::Dotfiles]);
         assert_eq!(game.buy(0), Err(GameError::NotInShop));
         assert_eq!(game.sell(0), Err(GameError::NotInShop));
         assert_eq!(game.reroll(), Err(GameError::NotInShop));

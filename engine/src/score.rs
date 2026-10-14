@@ -33,7 +33,8 @@ pub struct Breakdown {
     pub steps: Vec<Step>,
     pub chips: u64,
     pub mult: f64,
-    pub total: u64,
+    /// A float, like the blind targets: endless mode outgrows any integer.
+    pub total: f64,
 }
 
 pub fn score(played: &[Card], jokers: &[Joker]) -> Breakdown {
@@ -80,7 +81,7 @@ pub fn score(played: &[Card], jokers: &[Joker]) -> Breakdown {
         steps,
         chips,
         mult,
-        total: (chips as f64 * mult).floor() as u64,
+        total: (chips as f64 * mult).floor(),
     }
 }
 
@@ -94,7 +95,7 @@ mod tests {
         // Pair: 10 chips × 2, plus 10 + 10 for the kings.
         let b = score(&cards("KH 4D KS"), &[]);
         assert_eq!(b.hand, HandKind::Pair);
-        assert_eq!((b.chips, b.mult, b.total), (30, 2.0, 60));
+        assert_eq!((b.chips, b.mult, b.total), (30, 2.0, 60.0));
         assert_eq!(b.steps.len(), 2);
     }
 
@@ -102,7 +103,7 @@ mod tests {
     fn hand_jokers_apply_in_order() {
         // (30 + 30) × 2 × 2
         let b = score(&cards("KH 4D KS"), &[Joker::Dotfiles, Joker::NoBuild]);
-        assert_eq!(b.total, 240);
+        assert_eq!(b.total, 240.0);
         let last = b.steps.last().unwrap();
         assert_eq!(last.source, Source::Joker { index: 1 });
         assert_eq!(last.effect, Effect::XMult(2.0));
@@ -113,17 +114,17 @@ mod tests {
         // Three queens, two of them diamonds: 30 + 3×10 + 3×20 chips, 3 + 2×2 mult.
         let b = score(&cards("QD QH 2D QD"), &[Joker::RubyGem, Joker::RailsWorld]);
         assert_eq!((b.chips, b.mult), (120, 7.0));
-        assert_eq!(b.total, 840);
+        assert_eq!(b.total, 840.0);
     }
 
     #[test]
     fn hand_kind_jokers() {
         // Three of a kind: (30 + 3×5) × 3, then ×3 for Hotwire.
-        assert_eq!(score(&cards("5H 5D 5S"), &[Joker::Hotwire]).total, 405);
+        assert_eq!(score(&cards("5H 5D 5S"), &[Joker::Hotwire]).total, 405.0);
         // Straight: (30 + 2+3+4+5+6) × (4 + 12).
         assert_eq!(
             score(&cards("2H 3D 4S 5C 6H"), &[Joker::TilingManager]).total,
-            800
+            800.0
         );
         assert!(
             score(&cards("2H 2D 4S"), &[Joker::TilingManager])

@@ -76,6 +76,14 @@ Window {
   readonly property bool busy: scoring !== null
   readonly property bool playing: game !== null && game.phase === "playing" && !busy
   readonly property bool shopping: game !== null && game.phase === "shop" && !busy
+  readonly property bool choosing: game !== null && game.phase === "blind_select"
+  readonly property var currentBlind: {
+    if (!game) return null
+    for (var i = 0; i < game.blinds.length; i++)
+      if (game.blinds[i].kind === game.blind) return game.blinds[i]
+    return null
+  }
+  readonly property bool endless: game !== null && game.ante > game.winning_ante
   readonly property string handName: scoring ? Labels.hand(scoring.hand)
     : (preview && preview.hand ? Labels.hand(preview.hand) : "")
 
@@ -124,14 +132,28 @@ Window {
     send({ cmd: "discard", cards: selected })
   }
 
-  // Enter: play, cash out, leave the shop or start over.
+  // Enter: play the blind or the hand, cash out, leave the shop or start over.
   function confirm() {
     if (busy || !game) return
     notice = ""
-    if (game.phase === "won") send({ cmd: "cash_out" })
+    if (game.phase === "blind_select") send({ cmd: "select_blind" })
+    else if (game.phase === "won") send({ cmd: "cash_out" })
     else if (game.phase === "shop") send({ cmd: "next_blind" })
     else if (game.phase === "lost") newGame()
     else play()
+  }
+
+  function skipBlind() {
+    if (busy || !choosing) return
+    notice = ""
+    send({ cmd: "skip_blind" })
+  }
+
+  // Shortcuts for testing, refused by the engine unless OMATRO_DEBUG=1.
+  function cheat(c) {
+    if (busy || !game) return
+    c.cmd = "debug"
+    send(c)
   }
 
   // ---- shop --------------------------------------------------------------
@@ -237,6 +259,10 @@ Window {
         else root.toggleCard(k - Qt.Key_1)
       }
       else if (k === Qt.Key_R) root.reroll()
+      else if (k === Qt.Key_S) root.skipBlind()
+      else if (k === Qt.Key_F5) root.cheat({ win: true })
+      else if (k === Qt.Key_F6) root.cheat({ money: root.game.money + 100 })
+      else if (k === Qt.Key_F7) root.cheat({ ante: root.game.winning_ante, blind: "boss" })
       else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) root.confirm()
       else if (k === Qt.Key_D || k === Qt.Key_Delete) root.discard()
       else if (k === Qt.Key_N) root.newGame()
@@ -274,7 +300,12 @@ Window {
             id: blindCol
             anchors { fill: parent; margins: Style.spacing.xxl }
             spacing: Style.spacing.xs
-            Caption { text: root.game ? "Blind " + root.game.blind + " · target" : "Blind" }
+            Caption {
+              text: root.game
+                ? "Ante " + root.game.ante + (root.endless ? "" : " / " + root.game.winning_ante)
+                  + " · " + (root.currentBlind ? root.currentBlind.name : "")
+                : "Ante"
+            }
             Value { text: root.game ? Labels.number(root.game.target) : "–" }
           }
         }
@@ -395,6 +426,8 @@ Window {
           wrapMode: Text.WordWrap
           text: root.shopping
             ? "1, 2: buy · R: reroll\nEnter: next blind · Ctrl+Q: quit"
+            : root.choosing
+            ? "Enter: play the blind · S: skip it\nN: new game · Ctrl+Q: quit"
             : "1 to 8: choose · Enter: play\nD: discard · N: new game\nCtrl+Q: quit"
         }
       }
@@ -508,11 +541,38 @@ Window {
           }
         }
 
+        // Choice of the next blind.
+        ColumnLayout {
+          Layout.fillWidth: true
+          Layout.fillHeight: true
+          visible: root.choosing
+          spacing: Style.spacing.huge
+
+          Item { Layout.fillHeight: true }
+
+          BlindSelect {
+            Layout.alignment: Qt.AlignHCenter
+            blinds: root.game ? root.game.blinds : []
+            onPlay: root.confirm()
+            onSkip: root.skipBlind()
+          }
+
+          Text {
+            Layout.alignment: Qt.AlignHCenter
+            text: root.notice
+            color: Color.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.title
+          }
+
+          Item { Layout.fillHeight: true }
+        }
+
         // Table: cards being scored, or the last result.
         Item {
           Layout.fillWidth: true
           Layout.fillHeight: true
-          visible: !root.shopping
+          visible: !root.shopping && !root.choosing
 
           Row {
             anchors.centerIn: parent
@@ -555,7 +615,7 @@ Window {
         Row {
           Layout.alignment: Qt.AlignHCenter
           Layout.topMargin: Style.space(24)
-          visible: !root.shopping
+          visible: !root.shopping && !root.choosing
           spacing: Style.spacing.lg
           Repeater {
             model: root.hand
@@ -572,7 +632,7 @@ Window {
         Row {
           Layout.alignment: Qt.AlignHCenter
           Layout.topMargin: Style.space(16)
-          visible: !root.shopping
+          visible: !root.shopping && !root.choosing
           spacing: Style.spacing.xxl
           Button {
             text: "Play hand"
@@ -612,19 +672,33 @@ Window {
           anchors { fill: parent; margins: Style.spacing.huge }
           spacing: Style.spacing.xxl
           readonly property bool won: root.game !== null && root.game.phase === "won"
+          readonly property bool victory: endCol.won && root.game.victory
 
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: endCol.won ? "Blind won!" : "Game over"
+            text: endCol.victory ? "Omarchy achieved!" : endCol.won ? "Blind won!" : "Game over"
             color: endCol.won ? Color.accent : Color.urgent
             font.family: Style.font.family
             font.pixelSize: Style.font.displayLarge
             font.bold: true
           }
           Text {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            visible: endCol.victory || !endCol.won
+            text: endCol.victory
+              ? "Ante " + root.game.winning_ante + " beaten. Go post your setup on r/unixporn."
+              : "Have you tried rebooting?"
+            color: Color.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            font.italic: true
+          }
+          Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: root.game ? Labels.number(root.game.score) + " / " + Labels.number(root.game.target)
-              + (endCol.won ? "" : " · blind " + root.game.blind) : ""
+              + (endCol.won ? "" : " · ante " + root.game.ante) : ""
             color: Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.title
@@ -660,11 +734,20 @@ Window {
             }
           }
 
-          Button {
+          Row {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: endCol.won ? "Cash out (Enter)" : "New game (Enter)"
-            bordered: true
-            onClicked: root.confirm()
+            spacing: Style.spacing.xxl
+            Button {
+              text: endCol.victory ? "Endless mode (Enter)" : endCol.won ? "Cash out (Enter)" : "New game (Enter)"
+              bordered: true
+              onClicked: root.confirm()
+            }
+            Button {
+              visible: endCol.victory
+              text: "New game (N)"
+              bordered: true
+              onClicked: root.newGame()
+            }
           }
         }
       }

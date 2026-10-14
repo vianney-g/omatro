@@ -1,7 +1,7 @@
 //! Protocol between the engine and the display: one JSON command per line
 //! in, one JSON response per line out.
 
-use crate::game::{Game, State};
+use crate::game::{Cheat, Game, State};
 use crate::hand::HandKind;
 use crate::joker::Joker;
 use crate::score::Breakdown;
@@ -17,6 +17,8 @@ pub enum Command {
         jokers: Vec<Joker>,
     },
     State,
+    SelectBlind,
+    SkipBlind,
     Play {
         cards: Vec<usize>,
     },
@@ -35,6 +37,8 @@ pub enum Command {
     },
     Reroll,
     NextBlind,
+    /// Only accepted when the session allows debugging.
+    Debug(Cheat),
 }
 
 #[derive(Debug, Serialize)]
@@ -63,9 +67,18 @@ pub enum Response {
 #[derive(Default)]
 pub struct Session {
     game: Option<Game>,
+    debug: bool,
 }
 
 impl Session {
+    /// A session that accepts `debug` commands when `OMATRO_DEBUG=1`.
+    pub fn from_env() -> Self {
+        Session {
+            game: None,
+            debug: std::env::var("OMATRO_DEBUG").is_ok_and(|v| v == "1"),
+        }
+    }
+
     pub fn handle(&mut self, line: &str) -> Response {
         match serde_json::from_str(line) {
             Ok(command) => self
@@ -85,10 +98,15 @@ impl Session {
                 state: game.state(),
             });
         }
+        if matches!(command, Command::Debug(_)) && !self.debug {
+            return Err("debug commands are off (set OMATRO_DEBUG=1)".into());
+        }
         let game = self.game.as_mut().ok_or("no game in progress")?;
         match command {
             Command::NewGame { .. } => unreachable!(),
             Command::State => {}
+            Command::SelectBlind => game.select_blind().map_err(|e| e.to_string())?,
+            Command::SkipBlind => game.skip_blind().map_err(|e| e.to_string())?,
             Command::Play { cards } => {
                 let score = game.play(&cards).map_err(|e| e.to_string())?;
                 return Ok(Response::Scored {
@@ -116,6 +134,7 @@ impl Session {
             Command::Sell { joker } => game.sell(joker).map_err(|e| e.to_string())?,
             Command::Reroll => game.reroll().map_err(|e| e.to_string())?,
             Command::NextBlind => game.next_blind().map_err(|e| e.to_string())?,
+            Command::Debug(cheat) => game.cheat(cheat).map_err(|e| e.to_string())?,
         }
         Ok(Response::State {
             state: game.state(),
@@ -166,6 +185,7 @@ mod tests {
     fn preview_scoring_points_into_the_hand() {
         let mut session = Session::default();
         session.handle(r#"{"cmd":"new_game","seed":1}"#);
+        session.handle(r#"{"cmd":"select_blind"}"#);
         let game = session.game.as_mut().unwrap();
         game.set_hand(crate::card::cards("KH 9D 9S 7C 5H 4D 3S 2C"));
         let r = send(&mut session, r#"{"cmd":"preview","cards":[2,0,1]}"#);
@@ -193,10 +213,18 @@ mod tests {
         );
         assert_eq!(r["event"], "state");
         assert_eq!(r["state"]["seed"], 42);
-        assert_eq!(r["state"]["hand"].as_array().unwrap().len(), 8);
+        assert_eq!(r["state"]["phase"], "blind_select");
+        assert_eq!(r["state"]["blinds"][0]["status"], "select");
+        assert_eq!(r["state"]["target"], 300.0);
         assert_eq!(r["state"]["jokers"][0]["name"], "Rails World");
         assert_eq!(r["state"]["money"], 4);
         assert_eq!(r["state"]["shop"], serde_json::json!([]));
+
+        let r = send(&mut session, r#"{"cmd":"skip_blind"}"#);
+        assert_eq!(r["state"]["blind"], "big");
+        let r = send(&mut session, r#"{"cmd":"select_blind"}"#);
+        assert_eq!(r["state"]["phase"], "playing");
+        assert_eq!(r["state"]["hand"].as_array().unwrap().len(), 8);
 
         let r = send(&mut session, r#"{"cmd":"play","cards":[0,1]}"#);
         assert_eq!(r["event"], "scored");
@@ -218,5 +246,40 @@ mod tests {
         }
         let r = send(&mut session, r#"{"cmd":"buy","offer":0}"#);
         assert_eq!(r["message"], "the shop is closed");
+    }
+
+    #[test]
+    fn debug_needs_the_debug_session() {
+        let cheat = r#"{"cmd":"debug","money":50,"ante":8,"blind":"boss"}"#;
+        let mut session = Session::default();
+        send(&mut session, r#"{"cmd":"new_game","seed":1}"#);
+        assert_eq!(send(&mut session, cheat)["event"], "error");
+
+        let mut session = Session {
+            debug: true,
+            ..Session::default()
+        };
+        send(&mut session, r#"{"cmd":"new_game","seed":1}"#);
+        let r = send(&mut session, cheat);
+        assert_eq!(
+            (
+                &r["state"]["money"],
+                &r["state"]["ante"],
+                &r["state"]["blind"]
+            ),
+            (
+                &serde_json::json!(50),
+                &serde_json::json!(8),
+                &serde_json::json!("boss")
+            )
+        );
+        send(&mut session, r#"{"cmd":"select_blind"}"#);
+        let r = send(&mut session, r#"{"cmd":"debug","win":true}"#);
+        assert_eq!(
+            (&r["state"]["phase"], &r["state"]["victory"]),
+            (&serde_json::json!("won"), &serde_json::json!(true))
+        );
+        let r = send(&mut session, r#"{"cmd":"debug","mony":1}"#);
+        assert_eq!(r["event"], "error");
     }
 }

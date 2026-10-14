@@ -5,7 +5,7 @@ use omatro_engine::protocol::Session;
 use std::io::{self, BufRead, Write};
 
 fn main() -> io::Result<()> {
-    let mut session = Session::default();
+    let mut session = Session::from_env();
     let mut out = io::stdout().lock();
     for line in io::stdin().lock().lines() {
         let line = line?;

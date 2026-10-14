@@ -1,5 +1,6 @@
 //! omatro's engine: a Balatro-like card game.
 
+pub mod blind;
 pub mod card;
 pub mod game;
 pub mod hand;
