@@ -72,6 +72,8 @@ Fork copies the joker on its right.
 | `rma_department` | RMA Department | extra | $6 | Gains ×0.75 mult per Overclocked card that breaks | *We've seen worse. Probably.* |
 | `code_signing` | Code Signing | extra | $6 | When a blind starts, adds a random card with a random seal to the hand | *Signed, sealed, delivered.* |
 | `alias_collection` | Alias Collection | extra | $6 | Creates a command when a blind starts (if there is room) | *alias ll='ls -la'. And 400 more.* |
+| `seed_round` | Seed Round | extra | $6 | Creates an oligarchy card if the hand is a Straight Flush | *Straight to the top. Then raise again.* |
+| `angel_investor` | Angel Investor | extra | $6 | If the first hand of a blind is a single 6, destroys it and creates an oligarchy card | *Sacrifices a six. Expects a unicorn.* |
 | `no_build` | No Build | extra | $7 | ×2 mult if the played hand has 3 cards or fewer | *Webpack? Never heard of her.* |
 | `heartbleed` | Heartbleed | extra | $7 | 1 in 2 chance of ×1.5 mult for each scoring heart | *Your heart leaks, 64 KB at a time.* |
 | `mvp` | MVP | extra | $7 | Flushes and Straights can be made with 4 cards | *Minimum viable flush.* |
@@ -91,3 +93,8 @@ Fork copies the joker on its right.
 | `benevolent_dictator` | Benevolent Dictator | AUR | $8 | ×1.5 mult for each king held in hand | *For life. Or until the fork.* |
 | `orphan_cleanup` | Orphan Cleanup | AUR | $9 | Gains ×0.25 mult per card sold; resets after a boss | *pacman -Rns $(pacman -Qdtq)* |
 | `fork` | Fork | AUR | $10 | Copies the ability of the joker on its right | *Same features. MIT licensed.* |
+| `dhh` | DHH | Legendary | $20 | Played kings and queens each give ×2 mult | *Strong opinions, loosely held. Mostly strong.* |
+| `the_primeagen` | ThePrimeagen | Legendary | $20 | Gains ×1 mult when a face card is destroyed | *Blazingly fast. Skill issue for everyone else.* |
+| `mailing_list` | Mailing List | Legendary | $20 | Gains ×1 mult every 23 cards discarded | *23 replies later, still no consensus.* |
+| `kill9` | kill -9 | Legendary | $20 | Disables every boss blind's effect | *No signal handlers. No mercy.* |
+| `copy_on_write` | Copy-on-Write | Legendary | $20 | At the end of the shop, adds a Transparent copy of a random consumable | *Free copies until someone writes.* |

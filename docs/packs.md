@@ -13,6 +13,7 @@ join the deck, jokers the row.
 | `base16` | base16 | themes | *Sixteen colors. Pick a vibe.* |
 | `base_devel` | base-devel | cards | *Everything you need to build a deck.* |
 | `jokers_git` | jokers-git | jokers | *Unstable, untested, irresistible.* |
+| `oligarchy` | oligarchy | oligarchy cards | *Elite capital. Public code.* |
 
 | Size | Suffix | Picks | Price |
 |---|---|---|---|
@@ -22,15 +23,18 @@ join the deck, jokers the row.
 
 | Pack | Shop odds |
 |---|---|
-| coreutils | 18.6% |
-| coreutils-full | 9.3% |
-| coreutils-meta | 2.3% |
-| base16 | 18.6% |
-| base16-full | 9.3% |
-| base16-meta | 2.3% |
-| base-devel | 18.6% |
-| base-devel-full | 9.3% |
-| base-devel-meta | 2.3% |
-| jokers-git | 5.6% |
-| jokers-git-full | 2.8% |
+| coreutils | 17.8% |
+| coreutils-full | 8.9% |
+| coreutils-meta | 2.2% |
+| base16 | 17.8% |
+| base16-full | 8.9% |
+| base16-meta | 2.2% |
+| base-devel | 17.8% |
+| base-devel-full | 8.9% |
+| base-devel-meta | 2.2% |
+| jokers-git | 5.4% |
+| jokers-git-full | 2.7% |
 | jokers-git-meta | 0.7% |
+| oligarchy | 2.7% |
+| oligarchy-full | 1.3% |
+| oligarchy-meta | 0.3% |

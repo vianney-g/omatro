@@ -2,7 +2,7 @@
 
 use crate::blind::{self, BlindKind, WINNING_ANTE};
 use crate::card::{ACE, Card, Suit, standard_deck};
-use crate::consumable::{CONSUMABLE_SLOTS, Command, Consumable, Theme};
+use crate::consumable::{CONSUMABLE_SLOTS, Command, Consumable, Oligarchy, Theme};
 use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, evaluate_with};
 use crate::joker::{Bonus, Joker, OwnedJoker, Rarity};
 use crate::modifier::{Edition, Enhancement, Seal};
@@ -146,6 +146,10 @@ pub struct ConsumableInfo {
     /// Cards of the hand to select before using it (both 0 when none).
     pub min_cards: usize,
     pub max_cards: usize,
+    /// A Transparent consumable takes no clipboard slot.
+    pub transparent: bool,
+    /// Works on the cards in hand: only during a blind, or in a pack with a hand.
+    pub needs_hand: bool,
 }
 
 impl ConsumableInfo {
@@ -159,6 +163,8 @@ impl ConsumableInfo {
             sell_value: consumable.sell_value(),
             min_cards: consumable.targets().map_or(0, |t| t.0),
             max_cards: consumable.targets().map_or(0, |t| t.1),
+            transparent: false,
+            needs_hand: consumable.needs_hand(),
         }
     }
 }
@@ -395,12 +401,47 @@ pub struct Cheat {
     /// Adds a random command to the clipboard.
     #[serde(default)]
     pub random_command: bool,
+    /// Adds a random oligarchy card to the clipboard.
+    #[serde(default)]
+    pub random_oligarchy: bool,
     /// Opens a random pack (in the shop).
     #[serde(default)]
     pub random_pack: bool,
     /// Gives the cards in hand random enhancements, seals and editions.
     #[serde(default)]
     pub enhance_hand: bool,
+}
+
+/// A consumable in the clipboard; a Transparent one takes no slot (Copy-on-Write).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Held {
+    pub consumable: Consumable,
+    pub transparent: bool,
+}
+
+impl From<Consumable> for Held {
+    fn from(consumable: Consumable) -> Self {
+        Held {
+            consumable,
+            transparent: false,
+        }
+    }
+}
+
+/// A random oligarchy card: `card su` and `card pacman -Syu` are rare (0.3% each).
+fn roll_oligarchy(rng: &mut Rng) -> Oligarchy {
+    let roll = rng.unit();
+    if roll < 0.003 {
+        Oligarchy::AspiringBillionaire
+    } else if roll < 0.006 {
+        Oligarchy::PraiseTheOligarchy
+    } else {
+        let common: Vec<Oligarchy> = Oligarchy::ALL
+            .into_iter()
+            .filter(|s| !matches!(s, Oligarchy::AspiringBillionaire | Oligarchy::PraiseTheOligarchy))
+            .collect();
+        common[rng.below(common.len() as u64) as usize]
+    }
 }
 
 /// A card of an open pack.
@@ -477,9 +518,11 @@ pub struct Game {
     reward: Option<Reward>,
     offers: Vec<Offer>,
     reroll_cost: u32,
-    consumables: Vec<Consumable>,
+    consumables: Vec<Held>,
     /// Distinct themes applied (r/unixporn).
     themes_used: HashSet<Theme>,
+    /// Hand size lost to Consolidation and Offshore Account.
+    hand_size_penalty: usize,
     /// Beta Release broke: it is gone from the shop, Stable Release shows up.
     beta_broken: bool,
 }
@@ -524,6 +567,7 @@ impl Game {
             reroll_cost: REROLL_COST,
             consumables: Vec::new(),
             themes_used: HashSet::new(),
+            hand_size_penalty: 0,
             beta_broken: false,
         };
         game.await_blind();
@@ -546,14 +590,17 @@ impl Game {
             .count()
     }
 
-    /// Ultrawide jokers and Transparent cards in hand each add one card.
+    /// Ultrawide jokers and Transparent cards in hand each add one card;
+    /// Consolidation and Offshore Account take one away.
     fn hand_size(&self) -> usize {
         let transparent = self
             .hand
             .iter()
             .filter(|c| c.edition == Some(Edition::Transparent))
             .count();
-        HAND_SIZE + self.count(Joker::Ultrawide) + transparent
+        (HAND_SIZE + self.count(Joker::Ultrawide) + transparent)
+            .saturating_sub(self.hand_size_penalty)
+            .max(1)
     }
 
     /// Changes a card for good: in the deck, and in the draw pile or the hand.
@@ -746,7 +793,13 @@ impl Game {
         breakdown.notes = notes;
         self.money += breakdown.money;
         self.after_scoring(&mut breakdown, &scoring);
-        self.create_from_hand(&evaluated, &scoring, money_before, &mut breakdown.notes);
+        self.create_from_hand(
+            &evaluated,
+            &played,
+            &scoring,
+            money_before,
+            &mut breakdown.notes,
+        );
         let notes = &mut breakdown.notes;
         self.jokers.retain_mut(|joker| {
             let kept = joker.after_hand();
@@ -811,8 +864,9 @@ impl Game {
                     .notes
                     .push(format!("Overclocked {} broke.", card_label(card)));
             }
-            self.deck.retain(|c| c.id != id);
         }
+        let broken = breakdown.broken.clone();
+        self.destroy_cards(&broken);
         let chips = 5 * self.abilities(Joker::IncrementalBuild) as u64;
         if chips > 0 {
             for card in scoring {
@@ -821,15 +875,27 @@ impl Game {
         }
     }
 
-    /// Jokers that create commands from the hand played: Vim Golf (an ace and a
+    /// Jokers that create consumables from the hand played: Seed Round (a
+    /// Straight Flush), Angel Investor (a lone 6 first), Vim Golf (an ace and a
     /// Straight), Free Tier ($4 or less), man 8 (1 in 4 per scoring 8).
     fn create_from_hand(
         &mut self,
         evaluated: &Evaluated,
+        played: &[Card],
         scoring: &[Card],
         money: u32,
         notes: &mut Vec<String>,
     ) {
+        if evaluated.contains(HandKind::StraightFlush) {
+            self.create_oligarchy_cards(self.abilities(Joker::SeedRound), "Seed Round", notes);
+        }
+        let first = self.hands_left == HANDS_PER_BLIND;
+        let six = matches!(played, [card] if card.has_rank() && card.rank == 6);
+        let chmods = self.abilities(Joker::AngelInvestor);
+        if first && six && chmods > 0 {
+            self.destroy_cards(&[played[0].id]);
+            self.create_oligarchy_cards(chmods, "Angel Investor", notes);
+        }
         let ace = scoring.iter().any(|c| c.has_rank() && c.rank == ACE);
         if ace && evaluated.contains(HandKind::Straight) {
             self.create_commands(self.abilities(Joker::VimGolf), "Vim Golf", notes);
@@ -869,8 +935,8 @@ impl Game {
         if let Some(kind) = self.last_hand {
             let theme = Theme::ALL[kind as usize];
             for _ in 0..syncs {
-                if self.consumables.len() < CONSUMABLE_SLOTS {
-                    self.consumables.push(Consumable::Theme(theme));
+                if self.clipboard_room() {
+                    self.consumables.push(Consumable::Theme(theme).into());
                     reward.notes.push(format!(
                         "Theme Sync: {} added to the clipboard.",
                         theme.name()
@@ -922,6 +988,7 @@ impl Game {
         self.discards_used += 1;
         for joker in &mut self.jokers {
             joker.on_discard();
+            joker.on_cards_discarded(discarded.len());
         }
         self.draw();
         Ok(())
@@ -1111,11 +1178,11 @@ impl Game {
                 self.jokers.push(owned);
             }
             Offer::Consumable(consumable) => {
-                if self.consumables.len() >= CONSUMABLE_SLOTS {
+                if !self.clipboard_room() {
                     return Err(GameError::ClipboardFull);
                 }
                 self.spend(self.consumable_price(consumable))?;
-                self.consumables.push(consumable);
+                self.consumables.push(consumable.into());
             }
         }
         self.offers.remove(index);
@@ -1151,17 +1218,176 @@ impl Game {
     fn consumable(&self, index: usize) -> Result<Consumable, GameError> {
         self.consumables
             .get(index)
-            .copied()
+            .map(|held| held.consumable)
             .ok_or_else(|| GameError::BadSelection(format!("no consumable #{index}")))
+    }
+
+    /// Whether the clipboard has a free slot (Transparent consumables take none).
+    fn clipboard_room(&self) -> bool {
+        self.consumables.iter().filter(|h| !h.transparent).count() < CONSUMABLE_SLOTS
     }
 
     /// Adds a consumable to the clipboard if there is room.
     fn create(&mut self, consumable: Consumable) -> bool {
-        let room = self.consumables.len() < CONSUMABLE_SLOTS;
+        let room = self.clipboard_room();
         if room {
-            self.consumables.push(consumable);
+            self.consumables.push(consumable.into());
         }
         room
+    }
+
+    /// Creates a random oligarchy card for each of `times`, while there is room; says so.
+    fn create_oligarchy_cards(&mut self, times: usize, source: &str, notes: &mut Vec<String>) {
+        for _ in 0..times {
+            let card = Consumable::Oligarchy(roll_oligarchy(&mut self.command_rng));
+            if self.create(card) {
+                notes.push(format!("{source}: {} added to the clipboard.", card.name()));
+            }
+        }
+    }
+
+    /// Destroys cards for good (deck, draw pile, hand); ThePrimeagen grows with
+    /// the face cards among them.
+    fn destroy_cards(&mut self, ids: &[u32]) {
+        let faces = self
+            .deck
+            .iter()
+            .filter(|c| ids.contains(&c.id) && c.is_face())
+            .count();
+        self.deck.retain(|c| !ids.contains(&c.id));
+        self.draw_pile.retain(|c| !ids.contains(&c.id));
+        self.hand.retain(|c| !ids.contains(&c.id));
+        if faces > 0 {
+            for joker in &mut self.jokers {
+                joker.on_faces_destroyed(faces);
+            }
+        }
+    }
+
+    /// Destroys up to `count` random cards of the hand.
+    fn destroy_random_in_hand(&mut self, count: usize) {
+        let mut ids: Vec<u32> = self.hand.iter().map(|c| c.id).collect();
+        self.card_rng.shuffle(&mut ids);
+        ids.truncate(count);
+        self.destroy_cards(&ids);
+    }
+
+    /// A new enhanced card of one of these ranks, added to the deck and the hand.
+    fn add_enhanced_card(&mut self, ranks: &[u8]) {
+        let rank = ranks[self.card_rng.below(ranks.len() as u64) as usize];
+        let suit = Suit::ALL[self.card_rng.below(4) as usize];
+        let enhancement = Enhancement::ALL[self.card_rng.below(8) as usize];
+        self.next_card_id += 1;
+        let card = Card::new(rank, suit)
+            .with_id(self.next_card_id - 1)
+            .with_enhancement(enhancement);
+        self.deck.push(card);
+        self.hand.push(card);
+    }
+
+    /// A random joker of this rarity not owned yet.
+    fn random_joker_of(&mut self, rarity: Rarity) -> Option<Joker> {
+        let pool: Vec<Joker> = Joker::ALL
+            .into_iter()
+            .filter(|&j| j.rarity() == rarity && !self.jokers.iter().any(|o| o.joker == j))
+            .filter(|&j| rarity == Rarity::Legendary || self.on_sale(j))
+            .collect();
+        pool.get(self.command_rng.below(pool.len().max(1) as u64) as usize)
+            .copied()
+    }
+
+    fn run_oligarchy(&mut self, oligarchy: Oligarchy, targets: &[usize]) {
+        let target = targets.first().map(|&i| self.hand[i].id);
+        let seal = |seal| move |card: &mut Card| card.seal = Some(seal);
+        match oligarchy {
+            Oligarchy::BoardAppointment | Oligarchy::HostileTakeover | Oligarchy::HiringSpree => {
+                self.destroy_random_in_hand(1);
+                let (count, ranks): (usize, Vec<u8>) = match oligarchy {
+                    Oligarchy::BoardAppointment => (3, vec![11, 12, 13]),
+                    Oligarchy::HostileTakeover => (2, vec![ACE]),
+                    _ => (4, (2..=10).collect()),
+                };
+                for _ in 0..count {
+                    self.add_enhanced_card(&ranks);
+                }
+            }
+            Oligarchy::GoldenHandshake => self.modify_card(target.unwrap_or_default(), seal(Seal::GoldStar)),
+            Oligarchy::OligarchyHarness => self.modify_card(target.unwrap_or_default(), seal(Seal::Retry)),
+            Oligarchy::BrandGuidelines => self.modify_card(target.unwrap_or_default(), seal(Seal::ThemeSync)),
+            Oligarchy::Surveillance => self.modify_card(target.unwrap_or_default(), seal(Seal::ShellHistory)),
+            Oligarchy::OligarchyTheme => {
+                let edition = Edition::ALL[self.card_rng.below(3) as usize];
+                self.modify_card(target.unwrap_or_default(), |c| c.edition = Some(edition));
+            }
+            Oligarchy::LeveragedBuyout => {
+                if let Some(joker) = self.random_joker_of(Rarity::Aur) {
+                    self.jokers.push(OwnedJoker::new(joker, None));
+                }
+                self.money = 0;
+            }
+            Oligarchy::Monopoly => {
+                let suit = Suit::ALL[self.card_rng.below(4) as usize];
+                let ids: Vec<u32> = self.hand.iter().map(|c| c.id).collect();
+                for id in ids {
+                    self.modify_card(id, |c| c.suit = suit);
+                }
+            }
+            Oligarchy::Consolidation => {
+                let rank = 2 + self.card_rng.below(13) as u8;
+                let ids: Vec<u32> = self.hand.iter().map(|c| c.id).collect();
+                for id in ids {
+                    self.modify_card(id, |c| c.rank = rank);
+                }
+                self.hand_size_penalty += 1;
+            }
+            Oligarchy::OffshoreAccount | Oligarchy::Restructuring => {
+                let bare: Vec<usize> = (0..self.jokers.len())
+                    .filter(|&j| self.jokers[j].edition.is_none())
+                    .collect();
+                let j = bare[self.command_rng.below(bare.len() as u64) as usize];
+                if oligarchy == Oligarchy::OffshoreAccount {
+                    self.jokers[j].edition = Some(Edition::Transparent);
+                    self.hand_size_penalty += 1;
+                } else {
+                    self.jokers[j].edition = Some(Edition::Animated);
+                    self.jokers = vec![self.jokers[j].clone()];
+                }
+            }
+            Oligarchy::MassLayoffs => {
+                self.destroy_random_in_hand(5);
+                self.money += 20;
+            }
+            Oligarchy::Merger => {
+                let j = self.command_rng.below(self.jokers.len() as u64) as usize;
+                let original = self.jokers[j].clone();
+                let mut copy = original.clone();
+                if copy.edition == Some(Edition::Transparent) {
+                    copy.edition = None;
+                }
+                self.jokers = vec![original, copy];
+            }
+            Oligarchy::StockSplit => {
+                if let Some(card) = self.hand.iter().find(|c| Some(c.id) == target).copied() {
+                    for _ in 0..2 {
+                        self.next_card_id += 1;
+                        let copy = card.with_id(self.next_card_id - 1);
+                        self.deck.push(copy);
+                        self.hand.push(copy);
+                    }
+                }
+            }
+            Oligarchy::AspiringBillionaire => {
+                if let Some(joker) = self.random_joker_of(Rarity::Legendary) {
+                    self.jokers.push(OwnedJoker::new(joker, None));
+                }
+            }
+            Oligarchy::PraiseTheOligarchy => {
+                for kind in HandKind::ALL {
+                    self.levels.raise(kind, 1);
+                }
+            }
+        }
+        self.sort_hand();
     }
 
     fn random_command(&mut self) -> Consumable {
@@ -1223,6 +1449,7 @@ impl Game {
                     joker.on_theme_used();
                 }
             }
+            Consumable::Oligarchy(oligarchy) => self.run_oligarchy(oligarchy, targets),
             Consumable::Command(command) => {
                 self.run_command(command, targets);
                 for joker in &mut self.jokers {
@@ -1230,7 +1457,11 @@ impl Game {
                 }
             }
         }
-        if consumable != Consumable::Command(Command::UpArrow) {
+        // Up Arrow recalls themes and commands, but itself or oligarchy cards.
+        if !matches!(
+            consumable,
+            Consumable::Command(Command::UpArrow) | Consumable::Oligarchy(_)
+        ) {
             self.last_used = Some(consumable);
         }
     }
@@ -1249,6 +1480,24 @@ impl Game {
             }
             Consumable::Command(Command::YayS) if !self.has_room(None) => {
                 Err(GameError::JokerSlotsFull)
+            }
+            Consumable::Oligarchy(card)
+                if card.needs_hand()
+                    && (self.hand.is_empty()
+                        || !matches!(self.phase, Phase::Playing | Phase::Pack)) =>
+            {
+                refuse("it needs cards in hand: use it during a blind")
+            }
+            Consumable::Oligarchy(Oligarchy::LeveragedBuyout | Oligarchy::AspiringBillionaire) if !self.has_room(None) => {
+                Err(GameError::JokerSlotsFull)
+            }
+            Consumable::Oligarchy(Oligarchy::OffshoreAccount | Oligarchy::Restructuring)
+                if self.jokers.iter().all(|j| j.edition.is_some()) =>
+            {
+                refuse("no joker without an edition")
+            }
+            Consumable::Oligarchy(Oligarchy::Merger) if self.jokers.is_empty() => {
+                refuse("no joker to copy")
             }
             _ => Ok(()),
         }
@@ -1317,10 +1566,7 @@ impl Game {
                     self.jokers[j].edition = Some(edition);
                 }
             }
-            Command::RmRf => {
-                self.deck.retain(|c| !ids.contains(&c.id));
-                self.hand.retain(|c| !ids.contains(&c.id));
-            }
+            Command::RmRf => self.destroy_cards(&ids),
             Command::CpF => {
                 let (left, right) = (self.hand[targets[0]], self.hand[targets[1]]);
                 self.modify_card(left.id, |card| *card = right.with_id(left.id));
@@ -1441,6 +1687,9 @@ impl Game {
                     }
                     _ => None,
                 },
+                PackKind::Oligarchy => {
+                    Some(PackItem::Consumable(Consumable::Oligarchy(roll_oligarchy(&mut rng))))
+                }
                 PackKind::BaseDevel => None,
             };
             self.pack_rng = rng;
@@ -1459,7 +1708,7 @@ impl Game {
                 items.push(item);
             }
         }
-        if pack.kind == PackKind::Coreutils {
+        if pack.kind.with_hand() {
             let mut cards = self.deck.clone();
             self.pack_rng.shuffle(&mut cards);
             cards.truncate(self.hand_size());
@@ -1540,7 +1789,7 @@ impl Game {
             description: opened.pack.description(),
             quip: opened.pack.kind.quip(),
             picks_left: opened.picks_left,
-            with_hand: opened.pack.kind == PackKind::Coreutils,
+            with_hand: opened.pack.kind.with_hand(),
             choices: opened
                 .items
                 .iter()
@@ -1569,6 +1818,15 @@ impl Game {
     /// Leaves the shop for the choice of the next blind.
     pub fn next_blind(&mut self) -> Result<(), GameError> {
         self.in_shop()?;
+        for _ in 0..self.abilities(Joker::CopyOnWrite) {
+            if !self.consumables.is_empty() {
+                let i = self.command_rng.below(self.consumables.len() as u64) as usize;
+                self.consumables.push(Held {
+                    consumable: self.consumables[i].consumable,
+                    transparent: true,
+                });
+            }
+        }
         self.offers.clear();
         self.packs.clear();
         self.advance();
@@ -1628,6 +1886,12 @@ impl Game {
             let pack = self.roll_pack();
             self.open_pack(pack);
         }
+        if cheat.random_oligarchy {
+            let card = Consumable::Oligarchy(roll_oligarchy(&mut self.command_rng));
+            if !self.create(card) {
+                return Err(GameError::ClipboardFull);
+            }
+        }
         if cheat.random_command {
             let command = self.random_command();
             if !self.create(command) {
@@ -1635,12 +1899,12 @@ impl Game {
             }
         }
         if cheat.random_theme {
-            if self.consumables.len() >= CONSUMABLE_SLOTS {
+            if !self.clipboard_room() {
                 return Err(GameError::ClipboardFull);
             }
             let mut rng = Rng::stream(self.seed ^ self.consumables.len() as u64, "cheat-theme");
             let theme = Theme::ALL[rng.below(9) as usize];
-            self.consumables.push(Consumable::Theme(theme));
+            self.consumables.push(Consumable::Theme(theme).into());
         }
         for kind in cheat.level_up {
             self.levels.raise(kind, 1);
@@ -1757,7 +2021,10 @@ impl Game {
             consumables: self
                 .consumables
                 .iter()
-                .map(|&c| ConsumableInfo::new(c, c.price()))
+                .map(|held| ConsumableInfo {
+                    transparent: held.transparent,
+                    ..ConsumableInfo::new(held.consumable, held.consumable.price())
+                })
                 .collect(),
             consumable_slots: CONSUMABLE_SLOTS,
             unique_themes: self.themes_used.len() as u32,
@@ -2501,7 +2768,7 @@ mod tests {
     /// A game in its first blind with this command in the clipboard.
     fn with_command(seed: u64, command: Command, jokers: Vec<Joker>) -> Game {
         let mut game = playing(seed, jokers);
-        game.consumables = vec![Consumable::Command(command)];
+        game.consumables = vec![Consumable::Command(command).into()];
         game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
         game.deck = game.hand.clone();
         game
@@ -2567,7 +2834,7 @@ mod tests {
         game.money = 15;
         game.use_consumable(0, &[]).unwrap();
         assert_eq!(game.money, 30);
-        game.consumables = vec![Consumable::Command(Command::Rsync)];
+        game.consumables = vec![Consumable::Command(Command::Rsync).into()];
         game.use_consumable(0, &[]).unwrap();
         assert_eq!(game.money, 50);
 
@@ -2581,10 +2848,14 @@ mod tests {
     fn up_arrow_recalls_the_last_consumable() {
         let mut game = with_command(47, Command::UpArrow, vec![]);
         assert!(game.use_consumable(0, &[]).is_err());
-        game.consumables.insert(0, Consumable::Theme(Theme::Nord));
+        game.consumables
+            .insert(0, Consumable::Theme(Theme::Nord).into());
         game.use_consumable(0, &[]).unwrap();
         game.use_consumable(0, &[]).unwrap();
-        assert_eq!(game.consumables, [Consumable::Theme(Theme::Nord)]);
+        assert_eq!(
+            game.consumables,
+            [Held::from(Consumable::Theme(Theme::Nord))]
+        );
     }
 
     #[test]
@@ -2614,7 +2885,13 @@ mod tests {
         let id = game.hand[0].id;
         game.modify_card(id, |c| c.seal = Some(Seal::ShellHistory));
         game.discard(&[0]).unwrap();
-        assert!(matches!(game.consumables[..], [Consumable::Command(_)]));
+        assert!(matches!(
+            game.consumables[..],
+            [Held {
+                consumable: Consumable::Command(_),
+                ..
+            }]
+        ));
     }
 
     #[test]
@@ -2710,6 +2987,170 @@ mod tests {
         game.skip_pack().unwrap();
         assert_eq!((game.phase, game.jokers[0].counter), (Phase::Shop, 3.0));
         assert_eq!(game.skip_pack(), Err(GameError::NotInPack));
+    }
+
+    /// A game in its first blind with this oligarchy card in the clipboard.
+    fn with_oligarchy(seed: u64, card: Oligarchy, jokers: Vec<Joker>) -> Game {
+        let mut game = playing(seed, jokers);
+        game.consumables = vec![Consumable::Oligarchy(card).into()];
+        game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
+        game.deck = game.hand.clone();
+        game
+    }
+
+    #[test]
+    fn oligarchy_cards_destroy_and_add_cards() {
+        let mut game = with_oligarchy(70, Oligarchy::BoardAppointment, vec![Joker::ThePrimeagen]);
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!((game.hand.len(), game.deck.len()), (10, 10));
+        assert_eq!(
+            game.hand.iter().filter(|c| c.enhancement.is_some()).count(),
+            3
+        );
+
+        let mut game = with_oligarchy(71, Oligarchy::MassLayoffs, vec![]);
+        game.money = 0;
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!((game.hand.len(), game.deck.len(), game.money), (3, 3, 20));
+
+        let mut game = with_oligarchy(72, Oligarchy::StockSplit, vec![]);
+        game.use_consumable(0, &[0]).unwrap();
+        assert_eq!(
+            game.deck
+                .iter()
+                .filter(|c| c.rank == 13 && c.suit == Suit::Hearts)
+                .count(),
+            3
+        );
+    }
+
+    #[test]
+    fn oligarchy_cards_need_a_hand_and_the_right_targets() {
+        let mut game = with_oligarchy(73, Oligarchy::GoldenHandshake, vec![]);
+        assert!(game.use_consumable(0, &[]).is_err());
+        game.use_consumable(0, &[2]).unwrap();
+        assert_eq!(game.hand[2].seal, Some(Seal::GoldStar));
+
+        let mut game = won_game(74, vec![]);
+        game.cash_out().unwrap();
+        game.consumables = vec![Consumable::Oligarchy(Oligarchy::Monopoly).into()];
+        assert!(game.use_consumable(0, &[]).is_err());
+    }
+
+    #[test]
+    fn consolidation_shrinks_the_hand() {
+        let mut game = with_oligarchy(75, Oligarchy::Consolidation, vec![]);
+        game.use_consumable(0, &[]).unwrap();
+        let rank = game.hand[0].rank;
+        assert!(game.hand.iter().all(|c| c.rank == rank));
+        assert_eq!(game.hand_size(), HAND_SIZE - 1);
+    }
+
+    #[test]
+    fn oligarchy_cards_on_jokers() {
+        let mut game = with_oligarchy(
+            76,
+            Oligarchy::Merger,
+            vec![Joker::Dotfiles, Joker::Hotwire, Joker::Omakase],
+        );
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!(game.jokers.len(), 2);
+        assert_eq!(game.jokers[0].joker, game.jokers[1].joker);
+
+        let mut game = with_oligarchy(77, Oligarchy::Restructuring, vec![Joker::Dotfiles, Joker::Hotwire]);
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!(game.jokers.len(), 1);
+        assert_eq!(game.jokers[0].edition, Some(Edition::Animated));
+
+        let mut game = with_oligarchy(78, Oligarchy::AspiringBillionaire, vec![]);
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!(game.jokers[0].joker.rarity(), Rarity::Legendary);
+
+        let mut game = with_oligarchy(79, Oligarchy::LeveragedBuyout, vec![]);
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!(
+            (game.jokers[0].joker.rarity(), game.money),
+            (Rarity::Aur, 0)
+        );
+
+        let mut game = with_oligarchy(80, Oligarchy::PraiseTheOligarchy, vec![]);
+        game.use_consumable(0, &[]).unwrap();
+        assert!(HandKind::ALL.iter().all(|&k| game.levels.level(k) == 2));
+    }
+
+    #[test]
+    fn legendaries_grow() {
+        let mut game = with_command(
+            81,
+            Command::RmRf,
+            vec![Joker::ThePrimeagen, Joker::MailingList],
+        );
+        game.use_consumable(0, &[0, 1]).unwrap();
+        assert_eq!(game.jokers[0].counter, 3.0);
+        game.hand = cards("2H 3D 4S 5C 6H 7D 8S 9C");
+        for _ in 0..3 {
+            game.discard(&[0, 1, 2, 3, 4]).unwrap();
+        }
+        assert_eq!((game.jokers[1].counter, game.jokers[1].progress), (1.0, 15));
+        game.jokers[1].on_cards_discarded(10);
+        let s = game.state();
+        assert_eq!(s.jokers[1].bonus.as_ref().unwrap().text, "×2 mult · 2/23");
+    }
+
+    #[test]
+    fn dhh_doubles_kings_and_queens() {
+        let mut game = playing(82, vec![Joker::Dhh]);
+        game.hand = cards("KH QD 9S 7C 5H 4D 3S 2C");
+        // Kings and queens are not a pair: high card king, which DHH doubles.
+        let b = game.play(&[0]).unwrap();
+        assert_eq!(b.mult, 2.0);
+    }
+
+    #[test]
+    fn copy_on_write_adds_a_transparent_consumable() {
+        let mut game = shopping(83, vec![Joker::CopyOnWrite]);
+        game.consumables = vec![
+            Consumable::Theme(Theme::Nord).into(),
+            Consumable::Theme(Theme::Nord).into(),
+        ];
+        game.next_blind().unwrap();
+        assert_eq!(game.consumables.len(), 3);
+        assert!(game.consumables[2].transparent);
+        assert!(!game.clipboard_room());
+        assert!(game.state().consumables[2].transparent);
+    }
+
+    #[test]
+    fn seed_round_and_angel_investor_create_oligarchy_cards() {
+        let mut game = playing(84, vec![Joker::SeedRound]);
+        game.hand = cards("9S 8S 7S 6S 5S 4D 3S 2C");
+        game.play(&[0, 1, 2, 3, 4]).unwrap();
+        assert!(matches!(
+            game.consumables[0].consumable,
+            Consumable::Oligarchy(_)
+        ));
+
+        let mut game = playing(85, vec![Joker::AngelInvestor]);
+        game.hand = cards("6H 5D 4S 3C 2H 9D 8S 7C");
+        game.deck = game.hand.clone();
+        game.play(&[0]).unwrap();
+        assert!(matches!(
+            game.consumables[0].consumable,
+            Consumable::Oligarchy(_)
+        ));
+        assert!(game.deck.iter().all(|c| c.rank != 6));
+    }
+
+    #[test]
+    fn oligarchy_packs_draw_a_hand() {
+        use crate::pack::PackSize;
+        let mut game = shopping(86, vec![]);
+        game.packs = vec![pack(PackKind::Oligarchy, PackSize::Full)];
+        game.buy_pack(0).unwrap();
+        let s = game.state();
+        let opened = s.opened.unwrap();
+        assert!(opened.with_hand);
+        assert_eq!((opened.choices.len(), s.hand.len()), (4, HAND_SIZE));
     }
 
     #[test]

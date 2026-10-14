@@ -49,7 +49,10 @@ Each poker hand type has a level, which raises its starting chips and mult (see
 ([docs/themes.md](docs/themes.md)) level up a hand type: bought in the shop, they wait
 in the clipboard (2 slots) until applied, at any time. Commands
 ([docs/commands.md](docs/commands.md)) change the selected cards, make money or create
-things; those that change cards are applied during a blind, with the cards selected. Your deck lasts
+things; those that change cards are applied during a blind, with the cards selected.
+Oligarchy cards ([docs/oligarchy.md](docs/oligarchy.md)): elite capital, public code.
+Powerful, at a price, they only come from oligarchy packs and a few jokers, and
+Aspiring Billionaire is the only way to a legendary joker. Your deck lasts
 the whole game: every played or discarded card comes back to it after each blind. Cards
 may carry an enhancement, a seal and an edition ([docs/modifiers.md](docs/modifiers.md));
 hover a card to read them.
@@ -61,7 +64,7 @@ a command ($3, 1 chance in 7 each) or a joker you don't own yet, of a rarity dra
 resold at half price; reroll for $5, then $1 more each time). Jokers trigger left to
 right, so their order matters. The shop also sells 2 packs ([docs/packs.md](docs/packs.md)),
 opened on the spot: coreutils (commands), base16 (themes), base-devel (cards) and
-jokers-git (jokers), in normal, `-full` and `-meta` sizes. You start with $4 and no
+jokers-git (jokers) and oligarchy (oligarchy cards), in normal, `-full` and `-meta` sizes. You start with $4 and no
 jokers.
 
 ## Engine alone
@@ -75,7 +78,7 @@ F5 (win the blind in progress), F6 (+$100), F7 (jump to the boss of ante 8), F8 
 every known hand type one level), F9 (add a random joker with a random edition), F10
 (add a random theme to the clipboard) and F11 (give the cards in hand random
 enhancements, seals and editions), F12 (add a random command to the clipboard) and F3 (open a random pack, in the
-shop). `OMATRO_JOKERS=uptime,fork` sets the jokers
+shop), F2 (add a random oligarchy card). `OMATRO_JOKERS=uptime,fork` sets the jokers
 every new game starts with.
 
 ## Protocol
@@ -102,7 +105,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"sell_consumable","index":0}` | Sells a consumable of the clipboard |
 | `{"cmd":"reroll"}` | Rerolls the shop offers |
 | `{"cmd":"next_blind"}` | Leaves the shop for the choice of the next blind |
-| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true,"random_command":true,"random_pack":true}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
+| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true,"random_command":true,"random_pack":true,"random_oligarchy":true}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
 
 Responses:
 
@@ -116,8 +119,9 @@ Responses:
   jokers (`id`, `name`, `description`, `quip`, `rarity`, `edition`, `price`,
   `sell_value`, `bonus` for what a growing joker gives now, `current` for what a Fork
   copies), `max_jokers`, `modifiers` (names and effects of every enhancement, seal and
-  edition), `consumables` (`kind` = `theme` / `command`, `id`, `name`,
-  `description`, `quip`, `price`, `sell_value`, and `min_cards` / `max_cards` to select), `consumable_slots`, `unique_themes`, `money`,
+  edition), `consumables` (`kind` = `theme` / `command` / `oligarchy`, `id`, `name`,
+  `description`, `quip`, `price`, `sell_value`, `min_cards` / `max_cards` to select,
+  `needs_hand` when it works on the cards in hand, `transparent` when it takes no slot), `consumable_slots`, `unique_themes`, `money`,
   `reward` in the `won` phase (with `cards` for Enterprise cards held, and `notes` such
   as "Beta Release broke."), `shop` offers
   (jokers or consumables, told apart by `kind`), `packs` for sale, and `opened`: the

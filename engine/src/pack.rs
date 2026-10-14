@@ -18,14 +18,17 @@ pub enum PackKind {
     BaseDevel,
     /// Jokers.
     JokersGit,
+    /// Oligarchy cards, used on the spot on a hand drawn from the deck.
+    Oligarchy,
 }
 
 impl PackKind {
-    pub const ALL: [PackKind; 4] = [
+    pub const ALL: [PackKind; 5] = [
         PackKind::Coreutils,
         PackKind::Base16,
         PackKind::BaseDevel,
         PackKind::JokersGit,
+        PackKind::Oligarchy,
     ];
 
     pub fn name(self) -> &'static str {
@@ -34,6 +37,7 @@ impl PackKind {
             PackKind::Base16 => "base16",
             PackKind::BaseDevel => "base-devel",
             PackKind::JokersGit => "jokers-git",
+            PackKind::Oligarchy => "oligarchy",
         }
     }
 
@@ -43,7 +47,13 @@ impl PackKind {
             PackKind::Base16 => "Sixteen colors. Pick a vibe.",
             PackKind::BaseDevel => "Everything you need to build a deck.",
             PackKind::JokersGit => "Unstable, untested, irresistible.",
+            PackKind::Oligarchy => "Elite capital. Public code.",
         }
+    }
+
+    /// Whether opening it draws a hand from the deck, for the cards to target.
+    pub fn with_hand(self) -> bool {
+        matches!(self, PackKind::Coreutils | PackKind::Oligarchy)
     }
 
     /// What the cards are called, for "Pick 1 of 3 commands".
@@ -53,6 +63,7 @@ impl PackKind {
             PackKind::Base16 => "themes",
             PackKind::BaseDevel => "cards",
             PackKind::JokersGit => "jokers",
+            PackKind::Oligarchy => "oligarchy cards",
         }
     }
 
@@ -61,6 +72,7 @@ impl PackKind {
         match self {
             PackKind::Coreutils | PackKind::Base16 | PackKind::BaseDevel => 4.0,
             PackKind::JokersGit => 1.2,
+            PackKind::Oligarchy => 0.6,
         }
     }
 }
@@ -133,16 +145,18 @@ impl Pack {
         self.size.price()
     }
 
-    /// Cards shown; jokers come one fewer.
+    /// Cards shown; jokers come one fewer, oligarchy cards 2 or 4.
     pub fn shown(self) -> usize {
         let shown = match self.size {
             PackSize::Normal => 3,
             PackSize::Full | PackSize::Meta => 5,
         };
-        if self.kind == PackKind::JokersGit {
-            shown - 1
-        } else {
-            shown
+        match self.kind {
+            PackKind::JokersGit => shown - 1,
+            // Oligarchy packs: 2 or 4.
+            PackKind::Oligarchy if self.size == PackSize::Normal => 2,
+            PackKind::Oligarchy => 4,
+            _ => shown,
         }
     }
 

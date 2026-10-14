@@ -1,7 +1,7 @@
 //! Human-readable references in `docs/`, generated from the code. A test fails
 //! when one no longer matches; `make docs` rewrites them.
 
-use crate::consumable::{Command, Theme};
+use crate::consumable::{Command, Oligarchy, Theme};
 use crate::hand::HandKind;
 use crate::joker::{Edition, Joker};
 use crate::modifier::{Enhancement, Seal};
@@ -233,15 +233,45 @@ fn packs() -> String {
     doc
 }
 
+fn oligarchy() -> String {
+    let mut doc = header(
+        "Oligarchy cards",
+        "Oligarchy cards are consumables: elite capital, public code (spectral cards, in\n\
+         the original). Powerful, at a price. The shop never sells them: they come from\n\
+         oligarchy packs, which draw a hand from the deck, and from a few jokers.\n\
+         Aspiring Billionaire and Praise the Oligarchy are rare (0.3% each); Aspiring\n\
+         Billionaire is the only way to get a legendary joker.",
+    );
+    doc += "| Id | Card | Effect | Cards | Quip |\n|---|---|---|---|---|\n";
+    for card in Oligarchy::ALL {
+        let cards = match card.targets() {
+            Some((min, max)) if min == max => min.to_string(),
+            Some((min, max)) => format!("{min} to {max}"),
+            None if card.needs_hand() => "hand".to_string(),
+            None => String::new(),
+        };
+        doc += &format!(
+            "| `{}` | {} | {} | {} | *{}* |\n",
+            id(card),
+            card.name(),
+            card.description(),
+            cards,
+            cell(card.quip())
+        );
+    }
+    doc
+}
+
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 7] = [
+    let docs: [(&str, fn() -> String); 8] = [
         ("jokers.md", jokers),
         ("editions.md", editions),
         ("hands.md", hands),
         ("themes.md", themes),
         ("commands.md", commands),
         ("packs.md", packs),
+        ("oligarchy.md", oligarchy),
         ("modifiers.md", modifiers),
     ];
     for (file, render) in docs {

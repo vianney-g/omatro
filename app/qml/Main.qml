@@ -180,8 +180,9 @@ Window {
   // the right number of them selected, during a blind.
   function canUse(c) {
     if (busy || !game || game.phase === "lost") return false
+    if (c.needs_hand && !selecting) return false
     if (c.max_cards === 0) return true
-    return selecting && selected.length >= c.min_cards && selected.length <= c.max_cards
+    return selected.length >= c.min_cards && selected.length <= c.max_cards
   }
   // ---- packs -------------------------------------------------------------
   function buyPack(i) {
@@ -221,6 +222,7 @@ Window {
     var c = game.consumables[i]
     if (!canUse(c)) {
       if (c.max_cards > 0) notice = c.name + ": select " + Labels.range(c.min_cards, c.max_cards) + " during a blind."
+      else if (c.needs_hand) notice = c.name + ": use it during a blind, on the cards in hand."
       return
     }
     send({ cmd: "use_consumable", index: i, cards: c.max_cards > 0 ? selected : [] })
@@ -345,6 +347,7 @@ Window {
       else if (k === Qt.Key_F5) root.cheat({ win: true })
       else if (k === Qt.Key_F6) root.cheat({ money: root.game.money + 100 })
       else if (k === Qt.Key_F7) root.cheat({ ante: root.game.winning_ante, blind: "boss" })
+      else if (k === Qt.Key_F2) root.cheat({ random_oligarchy: true })
       else if (k === Qt.Key_F3) root.cheat({ random_pack: true })
       else if (k === Qt.Key_F12) root.cheat({ random_command: true })
       else if (k === Qt.Key_F11) root.cheat({ enhance_hand: true })
@@ -512,18 +515,26 @@ Window {
           Layout.fillWidth: true
           spacing: Style.spacing.md
           Caption {
-            text: root.game ? "Clipboard " + root.game.consumables.length + " / " + root.game.consumable_slots : ""
+            // Transparent consumables take no slot.
+            text: root.game ? "Clipboard " + root.game.consumables.filter(function(c) { return !c.transparent }).length
+              + " / " + root.game.consumable_slots : ""
           }
           Row {
+            id: clipboardRow
             spacing: Style.spacing.md
+            // Narrower cards past two (Transparent copies take no slot, but room).
+            readonly property int count: Math.max(2, root.game ? root.game.consumables.length : 2)
+            readonly property real cardWidth: (Style.space(250) - (count - 1) * spacing) / count
             Repeater {
               model: root.game ? root.game.consumables : []
               Column {
                 spacing: Style.spacing.sm
-                ConsumableView { item: modelData; width: Style.space(117) }
+                ConsumableView { item: modelData; width: clipboardRow.cardWidth }
                 Caption {
-                  width: Style.space(117)
+                  width: clipboardRow.cardWidth
                   visible: modelData.max_cards > 0
+                  fontSizeMode: Text.HorizontalFit
+                  minimumPixelSize: Style.fontPx(0.6)
                   horizontalAlignment: Text.AlignHCenter
                   text: "select " + Labels.range(modelData.min_cards, modelData.max_cards)
                 }

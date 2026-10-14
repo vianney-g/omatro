@@ -87,7 +87,8 @@ Lua: `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'`,
 `'hl.dsp.window.resize({ x = 1100, y = 800 })'`, `'hl.dsp.window.center()'`; the window
 geometry comes from `hyprctl clients -j`; `'hl.dsp.cursor.move({ x = …, y = … })'`
 moves the pointer, to check hover tooltips. F11 gives the cards in hand random
-modifiers, F12 adds a random command, F3 opens a random pack (in the shop). Check that stderr has no QML warnings.
+modifiers, F12 adds a random command, F2 a random oligarchy card, F3 opens a random pack (in
+the shop). Check that stderr has no QML warnings.
 
 ## Adding a joker
 
@@ -132,11 +133,15 @@ Play and discard check for the `playing` phase themselves.
 
 ## Consumables
 
-`consumable.rs` holds the consumables (`Consumable::Theme` and `Consumable::Command`;
-sudo cards will join them), kept in the clipboard (`Game::consumables`, 2 slots) and
-used by `Game::use_consumable(index, cards)`: `targets()` says how many hand cards a
-command needs selected, `check_usable` refuses one that could do nothing, `run_command`
-applies it. Add things to the clipboard with `Game::create`, which respects the slots.
+`consumable.rs` holds the consumables (`Consumable::Theme`, `Command` and `Oligarchy`), kept
+in the clipboard (`Game::consumables`, 2 slots; a `Held` entry may be Transparent and
+take no slot) and used by `Game::use_consumable(index, cards)`: `targets()` says how
+many hand cards it needs selected, `needs_hand()` whether it works on the hand at all,
+`check_usable` refuses one that could do nothing, `run_command` / `run_oligarchy` apply it.
+Add things to the clipboard with `Game::create`, which respects the slots. Destroy cards
+with `Game::destroy_cards`, which keeps ThePrimeagen counting. Oligarchy cards (a running
+joke of DHH's, see oligarchy.fyi) never show up in the shop (`roll_oligarchy` draws
+them for packs and jokers).
 The shop draws a joker (weight 20), a theme (4) or a command (4) for each slot
 (`Offer`); the state sends offers as `OfferInfo`, told apart by `kind`. Random
 creations draw from the `commands` stream; `roll_joker` and `roll_theme` take the

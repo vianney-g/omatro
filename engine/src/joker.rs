@@ -144,6 +144,13 @@ pub enum Joker {
     Man8,
     MinimalInstall,
     OptionalDependencies,
+    Dhh,
+    ThePrimeagen,
+    MailingList,
+    Kill9,
+    CopyOnWrite,
+    SeedRound,
+    AngelInvestor,
 }
 
 /// What a joker sees of the hand being scored.
@@ -179,7 +186,7 @@ fn is_even(card: Card) -> bool {
 }
 
 impl Joker {
-    pub const ALL: [Joker; 76] = [
+    pub const ALL: [Joker; 83] = [
         Joker::Dotfiles,
         Joker::Omakase,
         Joker::RubyGem,
@@ -256,6 +263,13 @@ impl Joker {
         Joker::Man8,
         Joker::MinimalInstall,
         Joker::OptionalDependencies,
+        Joker::Dhh,
+        Joker::ThePrimeagen,
+        Joker::MailingList,
+        Joker::Kill9,
+        Joker::CopyOnWrite,
+        Joker::SeedRound,
+        Joker::AngelInvestor,
     ];
 
     pub fn name(self) -> &'static str {
@@ -336,6 +350,13 @@ impl Joker {
             Joker::Man8 => "man 8",
             Joker::MinimalInstall => "Minimal Install",
             Joker::OptionalDependencies => "Optional Dependencies",
+            Joker::Dhh => "DHH",
+            Joker::ThePrimeagen => "ThePrimeagen",
+            Joker::MailingList => "Mailing List",
+            Joker::Kill9 => "kill -9",
+            Joker::CopyOnWrite => "Copy-on-Write",
+            Joker::SeedRound => "Seed Round",
+            Joker::AngelInvestor => "Angel Investor",
         }
     }
 
@@ -423,6 +444,17 @@ impl Joker {
             Joker::OptionalDependencies => {
                 "1 in 2 chance to create a command when a pack is opened"
             }
+            Joker::Dhh => "Played kings and queens each give ×2 mult",
+            Joker::ThePrimeagen => "Gains ×1 mult when a face card is destroyed",
+            Joker::MailingList => "Gains ×1 mult every 23 cards discarded",
+            Joker::Kill9 => "Disables every boss blind's effect",
+            Joker::CopyOnWrite => {
+                "At the end of the shop, adds a Transparent copy of a random consumable"
+            }
+            Joker::SeedRound => "Creates an oligarchy card if the hand is a Straight Flush",
+            Joker::AngelInvestor => {
+                "If the first hand of a blind is a single 6, destroys it and creates an oligarchy card"
+            }
         }
     }
 
@@ -506,11 +538,24 @@ impl Joker {
             Joker::Man8 => "System administration commands.",
             Joker::MinimalInstall => "Fewer packages, more speed.",
             Joker::OptionalDependencies => "Optional, but you'll install them anyway.",
+            Joker::Dhh => "Strong opinions, loosely held. Mostly strong.",
+            Joker::ThePrimeagen => "Blazingly fast. Skill issue for everyone else.",
+            Joker::MailingList => "23 replies later, still no consensus.",
+            Joker::Kill9 => "No signal handlers. No mercy.",
+            Joker::CopyOnWrite => "Free copies until someone writes.",
+            Joker::SeedRound => "Straight to the top. Then raise again.",
+            Joker::AngelInvestor => "Sacrifices a six. Expects a unicorn.",
         }
     }
 
     pub fn rarity(self) -> Rarity {
         match self {
+            Joker::Dhh
+            | Joker::ThePrimeagen
+            | Joker::MailingList
+            | Joker::Kill9
+            | Joker::CopyOnWrite => Rarity::Legendary,
+            Joker::SeedRound | Joker::AngelInvestor => Rarity::Extra,
             Joker::SuperKey
             | Joker::NoBuild
             | Joker::Heartbleed
@@ -623,6 +668,12 @@ impl Joker {
             | Joker::ConfigReload => 8,
             Joker::OrphanCleanup => 9,
             Joker::Fork => 10,
+            Joker::SeedRound | Joker::AngelInvestor => 6,
+            Joker::Dhh
+            | Joker::ThePrimeagen
+            | Joker::MailingList
+            | Joker::Kill9
+            | Joker::CopyOnWrite => 20,
         }
     }
 
@@ -637,6 +688,7 @@ impl Joker {
                 | Joker::UndoHistory
                 | Joker::FreeAsInBeer
                 | Joker::EnterpriseSales
+                | Joker::Kill9
         )
     }
 
@@ -648,7 +700,9 @@ impl Joker {
             | Joker::ThemeCollector
             | Joker::GarbageCollector
             | Joker::FlakyCi
-            | Joker::RmaDepartment => 1.0,
+            | Joker::RmaDepartment
+            | Joker::ThePrimeagen
+            | Joker::MailingList => 1.0,
             _ => 0.0,
         }
     }
@@ -677,6 +731,9 @@ impl Joker {
             }
             Joker::ConsultingGig if face && rng.chance(2) => vec![Effect::Money(2)],
             Joker::SupportContract if card.is(Enhancement::Enterprise) => vec![Effect::Money(4)],
+            Joker::Dhh if card.has_rank() && matches!(card.rank, 12 | 13) => {
+                vec![Effect::XMult(2.0)]
+            }
             _ => Vec::new(),
         }
     }
@@ -737,7 +794,12 @@ impl Joker {
             Joker::FreeTrial | Joker::CiRunner if counter > 0.0 => Effect::Chips(counter as u64),
             Joker::MuscleMemory if hand.times_played > 0 => Effect::Mult(hand.times_played as f64),
             Joker::OrphanCleanup | Joker::ThemeCollector if counter > 1.0 => Effect::XMult(counter),
-            Joker::GarbageCollector | Joker::RmaDepartment if counter > 1.0 => {
+            Joker::GarbageCollector
+            | Joker::RmaDepartment
+            | Joker::ThePrimeagen
+            | Joker::MailingList
+                if counter > 1.0 =>
+            {
                 Effect::XMult(counter)
             }
             Joker::FlakyCi if counter + 0.25 * hand.lucky_hits as f64 > 1.0 => {
@@ -795,7 +857,12 @@ pub struct OwnedJoker {
     pub counter: f64,
     /// Added to the sell value (Vintage ThinkPad).
     pub sell_bonus: u32,
+    /// Progress towards the next gain (Mailing List: cards discarded).
+    pub progress: u32,
 }
+
+/// Cards Mailing List needs discarded to gain ×1 mult.
+pub const MAILING_LIST_DISCARDS: u32 = 23;
 
 impl OwnedJoker {
     pub fn new(joker: Joker, edition: Option<Edition>) -> Self {
@@ -804,6 +871,7 @@ impl OwnedJoker {
             edition,
             counter: joker.initial_counter(),
             sell_bonus: 0,
+            progress: 0,
         }
     }
 
@@ -829,9 +897,14 @@ impl OwnedJoker {
         let daemons = count(deck, Enhancement::Daemon);
         let enhanced = enhanced_cards(deck);
         let (kind, text) = match self.joker {
-            Joker::GarbageCollector | Joker::FlakyCi | Joker::RmaDepartment => {
-                ("x_mult", format!("×{c} mult"))
-            }
+            Joker::GarbageCollector
+            | Joker::FlakyCi
+            | Joker::RmaDepartment
+            | Joker::ThePrimeagen => ("x_mult", format!("×{c} mult")),
+            Joker::MailingList => (
+                "x_mult",
+                format!("×{c} mult · {}/{MAILING_LIST_DISCARDS}", self.progress),
+            ),
             Joker::Systemd => (
                 "x_mult",
                 format!("×{} mult", round(1.0 + 0.2 * daemons as f64)),
@@ -882,6 +955,22 @@ impl OwnedJoker {
     pub fn on_discard(&mut self) {
         if self.joker == Joker::GreenBuild {
             self.counter = (self.counter - 1.0).max(0.0);
+        }
+    }
+
+    /// Face cards were destroyed (ThePrimeagen grows).
+    pub fn on_faces_destroyed(&mut self, faces: usize) {
+        if self.joker == Joker::ThePrimeagen {
+            self.counter += faces as f64;
+        }
+    }
+
+    /// Cards were discarded (Mailing List grows every 23).
+    pub fn on_cards_discarded(&mut self, cards: usize) {
+        if self.joker == Joker::MailingList {
+            self.progress += cards as u32;
+            self.counter += (self.progress / MAILING_LIST_DISCARDS) as f64;
+            self.progress %= MAILING_LIST_DISCARDS;
         }
     }
 
