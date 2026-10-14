@@ -1,7 +1,7 @@
 //! Scoring a hand, step by step so the display can animate it.
 
 use crate::card::Card;
-use crate::hand::{HandKind, evaluate};
+use crate::hand::{HandKind, HandLevels, evaluate};
 use crate::joker::{Effect, Joker};
 use serde::Serialize;
 
@@ -27,6 +27,7 @@ pub struct Step {
 pub struct Breakdown {
     pub cards: Vec<Card>,
     pub hand: HandKind,
+    pub hand_name: &'static str,
     pub scoring: Vec<usize>,
     pub base_chips: u64,
     pub base_mult: f64,
@@ -37,9 +38,9 @@ pub struct Breakdown {
     pub total: f64,
 }
 
-pub fn score(played: &[Card], jokers: &[Joker]) -> Breakdown {
+pub fn score(played: &[Card], jokers: &[Joker], levels: &HandLevels) -> Breakdown {
     let evaluated = evaluate(played);
-    let (base_chips, base_mult) = evaluated.kind.base();
+    let (base_chips, base_mult) = levels.values(evaluated.kind);
     let (mut chips, mut mult) = (base_chips, base_mult);
     let mut steps = Vec::new();
     let mut push = |source, effect: Effect, chips: &mut u64, mult: &mut f64| {
@@ -75,6 +76,7 @@ pub fn score(played: &[Card], jokers: &[Joker]) -> Breakdown {
     Breakdown {
         cards: played.to_vec(),
         hand: evaluated.kind,
+        hand_name: evaluated.kind.name(),
         scoring: evaluated.scoring,
         base_chips,
         base_mult,
@@ -93,16 +95,29 @@ mod tests {
     #[test]
     fn pair_without_jokers() {
         // Pair: 10 chips × 2, plus 10 + 10 for the kings.
-        let b = score(&cards("KH 4D KS"), &[]);
+        let b = score(&cards("KH 4D KS"), &[], &HandLevels::default());
         assert_eq!(b.hand, HandKind::Pair);
         assert_eq!((b.chips, b.mult, b.total), (30, 2.0, 60.0));
         assert_eq!(b.steps.len(), 2);
     }
 
     #[test]
+    fn hand_levels_raise_the_base() {
+        let mut levels = HandLevels::default();
+        levels.raise(HandKind::Pair, 1);
+        // Pair at level 2: 25 chips × 3, plus 10 + 10 for the kings.
+        let b = score(&cards("KH 4D KS"), &[], &levels);
+        assert_eq!((b.base_chips, b.base_mult, b.total), (25, 3.0, 135.0));
+    }
+
+    #[test]
     fn hand_jokers_apply_in_order() {
         // (30 + 30) × 2 × 2
-        let b = score(&cards("KH 4D KS"), &[Joker::Dotfiles, Joker::NoBuild]);
+        let b = score(
+            &cards("KH 4D KS"),
+            &[Joker::Dotfiles, Joker::NoBuild],
+            &HandLevels::default(),
+        );
         assert_eq!(b.total, 240.0);
         let last = b.steps.last().unwrap();
         assert_eq!(last.source, Source::Joker { index: 1 });
@@ -112,7 +127,11 @@ mod tests {
     #[test]
     fn card_jokers_trigger_per_scoring_card() {
         // Three queens, two of them diamonds: 30 + 3×10 + 3×20 chips, 3 + 2×2 mult.
-        let b = score(&cards("QD QH 2D QD"), &[Joker::RubyGem, Joker::RailsWorld]);
+        let b = score(
+            &cards("QD QH 2D QD"),
+            &[Joker::RubyGem, Joker::RailsWorld],
+            &HandLevels::default(),
+        );
         assert_eq!((b.chips, b.mult), (120, 7.0));
         assert_eq!(b.total, 840.0);
     }
@@ -120,23 +139,44 @@ mod tests {
     #[test]
     fn hand_kind_jokers() {
         // Three of a kind: (30 + 3×5) × 3, then ×3 for Hotwire.
-        assert_eq!(score(&cards("5H 5D 5S"), &[Joker::Hotwire]).total, 405.0);
+        assert_eq!(
+            score(
+                &cards("5H 5D 5S"),
+                &[Joker::Hotwire],
+                &HandLevels::default()
+            )
+            .total,
+            405.0
+        );
         // Straight: (30 + 2+3+4+5+6) × (4 + 12).
         assert_eq!(
-            score(&cards("2H 3D 4S 5C 6H"), &[Joker::TilingManager]).total,
+            score(
+                &cards("2H 3D 4S 5C 6H"),
+                &[Joker::TilingManager],
+                &HandLevels::default()
+            )
+            .total,
             800.0
         );
         assert!(
-            score(&cards("2H 2D 4S"), &[Joker::TilingManager])
-                .steps
-                .len()
+            score(
+                &cards("2H 2D 4S"),
+                &[Joker::TilingManager],
+                &HandLevels::default()
+            )
+            .steps
+            .len()
                 == 2
         );
     }
 
     #[test]
     fn no_build_ignores_big_hands() {
-        let b = score(&cards("2H 9H KH 4H 6H"), &[Joker::NoBuild]);
+        let b = score(
+            &cards("2H 9H KH 4H 6H"),
+            &[Joker::NoBuild],
+            &HandLevels::default(),
+        );
         assert!(
             b.steps
                 .iter()

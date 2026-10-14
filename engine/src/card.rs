@@ -18,6 +18,8 @@ impl Suit {
 pub struct Card {
     pub rank: u8,
     pub suit: Suit,
+    /// Tells apart cards of the deck, which lasts the whole game.
+    pub id: u32,
 }
 
 pub const ACE: u8 = 14;
@@ -25,7 +27,11 @@ pub const ACE: u8 = 14;
 impl Card {
     pub fn new(rank: u8, suit: Suit) -> Self {
         assert!((2..=ACE).contains(&rank), "invalid rank: {rank}");
-        Card { rank, suit }
+        Card { rank, suit, id: 0 }
+    }
+
+    pub fn with_id(self, id: u32) -> Self {
+        Card { id, ..self }
     }
 
     /// Chips the card is worth when it scores.
@@ -42,19 +48,23 @@ impl Card {
     }
 }
 
-/// The 52-card deck, in order.
+/// The 52-card deck, in order, with ids 0 to 51.
 pub fn standard_deck() -> Vec<Card> {
     Suit::ALL
         .iter()
         .flat_map(|&suit| (2..=ACE).map(move |rank| Card::new(rank, suit)))
+        .enumerate()
+        .map(|(i, card)| card.with_id(i as u32))
         .collect()
 }
 
-/// Test cards written "AS KH 10D 2C" (rank, then suit H, D, C or S).
+/// Test cards written "AS KH 10D 2C" (rank, then suit H, D, C or S), with ids
+/// 100, 101… (apart from the standard deck's).
 #[cfg(test)]
 pub(crate) fn cards(text: &str) -> Vec<Card> {
     text.split_whitespace()
-        .map(|word| {
+        .enumerate()
+        .map(|(i, word)| {
             let (rank, suit) = word.split_at(word.len() - 1);
             let rank = match rank {
                 "J" => 11,
@@ -70,7 +80,7 @@ pub(crate) fn cards(text: &str) -> Vec<Card> {
                 "S" => Suit::Spades,
                 s => panic!("unknown suit: {s}"),
             };
-            Card::new(rank, suit)
+            Card::new(rank, suit).with_id(100 + i as u32)
         })
         .collect()
 }
@@ -85,6 +95,7 @@ mod tests {
         let deck = standard_deck();
         assert_eq!(deck.len(), 52);
         assert_eq!(deck.iter().collect::<HashSet<_>>().len(), 52);
+        assert!(deck.iter().enumerate().all(|(i, c)| c.id == i as u32));
     }
 
     #[test]

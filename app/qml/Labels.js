@@ -1,22 +1,8 @@
 .pragma library
 
-// Displayed text: hand names, ranks, suits, effects.
-
-var HANDS = {
-  high_card: "High card",
-  pair: "Pair",
-  two_pair: "Two pair",
-  three_of_a_kind: "Three of a kind",
-  straight: "Straight",
-  flush: "Flush",
-  full_house: "Full house",
-  four_of_a_kind: "Four of a kind",
-  straight_flush: "Straight flush"
-}
+// Displayed text: ranks, suits, effects, numbers (hand names come from the engine).
 
 var SUITS = { hearts: "♥", diamonds: "♦", clubs: "♣", spades: "♠" }
-
-function hand(kind) { return HANDS[kind] || "" }
 
 function rank(r) { return r <= 10 ? String(r) : ["J", "Q", "K", "A"][r - 11] }
 

@@ -2,6 +2,8 @@
 
 pub mod blind;
 pub mod card;
+#[cfg(test)]
+mod docs;
 pub mod game;
 pub mod hand;
 pub mod joker;

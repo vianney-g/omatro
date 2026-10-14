@@ -2,7 +2,7 @@
 
 use crate::blind::{self, BlindKind, WINNING_ANTE};
 use crate::card::{Card, standard_deck};
-use crate::hand::{Evaluated, evaluate};
+use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, evaluate};
 use crate::joker::Joker;
 use crate::rng::Rng;
 use crate::score::{Breakdown, score};
@@ -109,6 +109,18 @@ pub struct BlindInfo {
     pub status: BlindStatus,
 }
 
+/// A hand type's level and how often it was played, for the run info panel.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct HandInfo {
+    pub kind: HandKind,
+    pub name: &'static str,
+    pub quip: &'static str,
+    pub level: u32,
+    pub chips: u64,
+    pub mult: f64,
+    pub played: u32,
+}
+
 /// Money earned at the end of a blind.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Reward {
@@ -139,7 +151,12 @@ pub struct State {
     /// The winning ante's boss was just beaten; cashing out goes on in endless mode.
     pub victory: bool,
     pub hand: Vec<Card>,
-    pub deck_left: usize,
+    /// Cards left to draw during a blind, the whole deck otherwise; sorted by
+    /// suit, then descending rank.
+    pub remaining: Vec<Card>,
+    pub deck_size: usize,
+    /// Hand types weakest first, without the secret ones never played.
+    pub hands: Vec<HandInfo>,
     pub jokers: Vec<JokerInfo>,
     pub max_jokers: usize,
     pub money: u32,
@@ -165,14 +182,22 @@ pub struct Cheat {
     /// Wins the blind in progress.
     #[serde(default)]
     pub win: bool,
+    /// Raises each listed hand type by one level.
+    #[serde(default)]
+    pub level_up: Vec<HandKind>,
 }
 
 pub struct Game {
     seed: u64,
     deck_rng: Rng,
     shop_rng: Rng,
+    /// The player's deck, which lasts the whole game.
     deck: Vec<Card>,
+    /// Cards left to draw in the blind in progress.
+    draw_pile: Vec<Card>,
     hand: Vec<Card>,
+    levels: HandLevels,
+    plays: HandCounts,
     jokers: Vec<Joker>,
     ante: u32,
     blind: BlindKind,
@@ -195,8 +220,11 @@ impl Game {
             seed,
             deck_rng: Rng::stream(seed, "deck"),
             shop_rng: Rng::stream(seed, "shop"),
-            deck: Vec::new(),
+            deck: standard_deck(),
+            draw_pile: Vec::new(),
             hand: Vec::new(),
+            levels: HandLevels::default(),
+            plays: HandCounts::default(),
             jokers,
             ante: 1,
             blind: BlindKind::Small,
@@ -219,9 +247,10 @@ impl Game {
         blind::target(self.ante, self.blind)
     }
 
-    /// Waits for the player to choose the current blind, with a fresh deck.
+    /// Waits for the player to choose the current blind; every card is back in
+    /// the deck.
     fn await_blind(&mut self) {
-        self.deck = standard_deck();
+        self.draw_pile = self.deck.clone();
         self.hand.clear();
         self.score = 0.0;
         self.hands_left = HANDS_PER_BLIND;
@@ -253,7 +282,7 @@ impl Game {
     /// Plays the blind on offer: shuffles the deck and deals a hand.
     pub fn select_blind(&mut self) -> Result<(), GameError> {
         self.selecting()?;
-        self.deck_rng.shuffle(&mut self.deck);
+        self.deck_rng.shuffle(&mut self.draw_pile);
         self.phase = Phase::Playing;
         self.draw();
         Ok(())
@@ -271,7 +300,7 @@ impl Game {
 
     fn draw(&mut self) {
         while self.hand.len() < HAND_SIZE
-            && let Some(card) = self.deck.pop()
+            && let Some(card) = self.draw_pile.pop()
         {
             self.hand.push(card);
         }
@@ -312,7 +341,8 @@ impl Game {
 
     pub fn play(&mut self, indices: &[usize]) -> Result<Breakdown, GameError> {
         let played = self.take(indices)?;
-        let breakdown = score(&played, &self.jokers);
+        let breakdown = score(&played, &self.jokers, &self.levels);
+        self.plays.add(breakdown.hand);
         self.score += breakdown.total;
         self.hands_left -= 1;
         if self.score >= self.target() {
@@ -478,6 +508,9 @@ impl Game {
             self.offers.clear();
             self.await_blind();
         }
+        for kind in cheat.level_up {
+            self.levels.raise(kind, 1);
+        }
         if cheat.win {
             if self.phase != Phase::Playing {
                 return Err(GameError::NotPlaying);
@@ -486,6 +519,10 @@ impl Game {
             self.win_blind();
         }
         Ok(())
+    }
+
+    pub fn levels(&self) -> &HandLevels {
+        &self.levels
     }
 
     #[cfg(test)]
@@ -536,7 +573,31 @@ impl Game {
             phase: self.phase,
             victory: self.victory,
             hand: self.hand.clone(),
-            deck_left: self.deck.len(),
+            remaining: {
+                let mut cards = match self.phase {
+                    Phase::Playing | Phase::Won | Phase::Lost => self.draw_pile.clone(),
+                    Phase::BlindSelect | Phase::Shop => self.deck.clone(),
+                };
+                cards.sort_by_key(|c| (c.suit as u8, std::cmp::Reverse(c.rank)));
+                cards
+            },
+            deck_size: self.deck.len(),
+            hands: HandKind::ALL
+                .iter()
+                .filter(|k| !k.secret() || self.plays.get(**k) > 0)
+                .map(|&kind| {
+                    let (chips, mult) = self.levels.values(kind);
+                    HandInfo {
+                        kind,
+                        name: kind.name(),
+                        quip: kind.quip(),
+                        level: self.levels.level(kind),
+                        chips,
+                        mult,
+                        played: self.plays.get(kind),
+                    }
+                })
+                .collect(),
             jokers: self.jokers.iter().map(|&j| j.into()).collect(),
             max_jokers: MAX_JOKERS,
             money: self.money,
@@ -592,7 +653,10 @@ mod tests {
     fn selecting_deals_a_full_hand() {
         let s = playing(3, vec![]).state();
         assert_eq!(s.phase, Phase::Playing);
-        assert_eq!((s.hand.len(), s.deck_left), (HAND_SIZE, 52 - HAND_SIZE));
+        assert_eq!(
+            (s.hand.len(), s.remaining.len()),
+            (HAND_SIZE, 52 - HAND_SIZE)
+        );
         assert_eq!(
             (s.hands_left, s.discards_left),
             (HANDS_PER_BLIND, DISCARDS_PER_BLIND)
@@ -612,6 +676,65 @@ mod tests {
         assert_eq!(game.skip_blind(), Err(GameError::CannotSkipBoss));
         game.select_blind().unwrap();
         assert_eq!(game.skip_blind(), Err(GameError::NotSelecting));
+    }
+
+    #[test]
+    fn the_deck_lasts_and_every_card_comes_back() {
+        let mut game = playing(12, vec![]);
+        game.play(&[0, 1]).unwrap();
+        game.discard(&[0]).unwrap();
+        let s = game.state();
+        assert_eq!((s.remaining.len(), s.deck_size), (52 - HAND_SIZE - 3, 52));
+        let ids: std::collections::HashSet<u32> =
+            s.hand.iter().chain(&s.remaining).map(|c| c.id).collect();
+        assert_eq!(ids.len(), 52 - 3);
+        game.cheat(Cheat {
+            blind: Some(BlindKind::Big),
+            ..Cheat::default()
+        })
+        .unwrap();
+        assert_eq!(game.state().remaining, {
+            let mut deck = standard_deck();
+            deck.sort_by_key(|c| (c.suit as u8, std::cmp::Reverse(c.rank)));
+            deck
+        });
+    }
+
+    #[test]
+    fn hands_are_counted_and_secret_ones_revealed_once_played() {
+        let mut game = playing(13, vec![]);
+        let kinds = |game: &Game| {
+            game.state()
+                .hands
+                .iter()
+                .map(|h| h.kind)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(kinds(&game), HandKind::ALL[..9]);
+        game.hand = cards("7S 7S 7S 7S 7S 2H 3D 4C");
+        game.play(&[0, 1, 2, 3, 4]).unwrap();
+        let s = game.state();
+        let fork_bomb = s
+            .hands
+            .iter()
+            .find(|h| h.kind == HandKind::ForkBomb)
+            .unwrap();
+        assert_eq!((fork_bomb.played, fork_bomb.level), (1, 1));
+        assert_eq!(kinds(&game).len(), 10);
+    }
+
+    #[test]
+    fn levelled_hands_score_more() {
+        let mut game = playing(14, vec![]);
+        game.cheat(Cheat {
+            level_up: vec![HandKind::Pair, HandKind::Pair],
+            ..Cheat::default()
+        })
+        .unwrap();
+        let pair = game.state().hands[1].clone();
+        assert_eq!((pair.level, pair.chips, pair.mult), (3, 40, 4.0));
+        game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
+        assert_eq!(game.play(&[0, 1]).unwrap().total, (40.0 + 20.0) * 4.0);
     }
 
     #[test]

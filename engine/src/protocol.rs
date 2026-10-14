@@ -55,6 +55,7 @@ pub enum Response {
     Preview {
         cards: Vec<usize>,
         hand: Option<HandKind>,
+        hand_name: Option<&'static str>,
         scoring: Vec<usize>,
         base_chips: u64,
         base_mult: f64,
@@ -116,10 +117,12 @@ impl Session {
             }
             Command::Preview { cards } => {
                 let evaluated = game.preview(&cards).map_err(|e| e.to_string())?;
-                let (base_chips, base_mult) =
-                    evaluated.as_ref().map_or((0, 0.0), |e| e.kind.base());
+                let (base_chips, base_mult) = evaluated
+                    .as_ref()
+                    .map_or((0, 0.0), |e| game.levels().values(e.kind));
                 return Ok(Response::Preview {
                     hand: evaluated.as_ref().map(|e| e.kind),
+                    hand_name: evaluated.as_ref().map(|e| e.kind.name()),
                     scoring: evaluated.map_or_else(Vec::new, |e| {
                         e.scoring.iter().map(|&i| sorted_nth(&cards, i)).collect()
                     }),
@@ -189,7 +192,10 @@ mod tests {
         let game = session.game.as_mut().unwrap();
         game.set_hand(crate::card::cards("KH 9D 9S 7C 5H 4D 3S 2C"));
         let r = send(&mut session, r#"{"cmd":"preview","cards":[2,0,1]}"#);
-        assert_eq!(r["hand"], "pair");
+        assert_eq!(
+            (&r["hand"], &r["hand_name"]),
+            (&"pair".into(), &"Pair".into())
+        );
         assert_eq!(r["scoring"], serde_json::json!([1, 2]));
         assert_eq!(
             (r["base_chips"].as_u64(), r["base_mult"].as_f64()),

@@ -1,6 +1,6 @@
 # Jokers
 
-<!-- Generated from engine/src/joker.rs by `make jokers-doc`: do not edit by hand. -->
+<!-- Generated from the engine code by `make docs`: do not edit by hand. -->
 
 Jokers are bought in the shop between blinds (5 slots at most) and sell for
 half their price. While a hand is scored, card jokers trigger for each scoring

@@ -71,6 +71,7 @@ Window {
   property real liveMult: 0
   property real shownScore: 0
   property string notice: ""
+  property bool infoOpen: false   // fastfetch panel
   Behavior on shownScore { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
 
   readonly property bool busy: scoring !== null
@@ -84,8 +85,8 @@ Window {
     return null
   }
   readonly property bool endless: game !== null && game.ante > game.winning_ante
-  readonly property string handName: scoring ? Labels.hand(scoring.hand)
-    : (preview && preview.hand ? Labels.hand(preview.hand) : "")
+  readonly property string handName: scoring ? scoring.hand_name
+    : (preview && preview.hand ? preview.hand_name : "")
 
   function newGame() {
     notice = ""
@@ -210,7 +211,7 @@ Window {
       stepTimer.interval = 900
     } else {
       stepTimer.stop()
-      notice = Labels.hand(scoring.hand) + ": " + Labels.number(scoring.total) + " points"
+      notice = scoring.hand_name + ": " + Labels.number(scoring.total) + " points"
       var s = pendingState
       scoring = null
       pendingState = null
@@ -254,6 +255,11 @@ Window {
     Keys.onPressed: function(event) {
       var k = event.key
       if (k === Qt.Key_Q && (event.modifiers & Qt.ControlModifier)) Qt.quit()
+      else if (k === Qt.Key_I) root.infoOpen = !root.infoOpen
+      else if (root.infoOpen) {
+        if (k === Qt.Key_Escape) root.infoOpen = false
+        else return
+      }
       else if (k >= Qt.Key_1 && k <= Qt.Key_8) {
         if (root.shopping) root.buy(k - Qt.Key_1)
         else root.toggleCard(k - Qt.Key_1)
@@ -263,6 +269,7 @@ Window {
       else if (k === Qt.Key_F5) root.cheat({ win: true })
       else if (k === Qt.Key_F6) root.cheat({ money: root.game.money + 100 })
       else if (k === Qt.Key_F7) root.cheat({ ante: root.game.winning_ante, blind: "boss" })
+      else if (k === Qt.Key_F8) root.cheat({ level_up: root.game.hands.map(function(h) { return h.kind }) })
       else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) root.confirm()
       else if (k === Qt.Key_D || k === Qt.Key_Delete) root.discard()
       else if (k === Qt.Key_N) root.newGame()
@@ -417,7 +424,7 @@ Window {
           }
         }
 
-        Caption { text: root.game ? "Deck: " + root.game.deck_left + " / 52" : "" }
+        Caption { text: root.game ? "Deck: " + root.game.remaining.length + " / " + root.game.deck_size : "" }
 
         Item { Layout.fillHeight: true }
 
@@ -425,10 +432,10 @@ Window {
           Layout.fillWidth: true
           wrapMode: Text.WordWrap
           text: root.shopping
-            ? "1, 2: buy · R: reroll\nEnter: next blind · Ctrl+Q: quit"
+            ? "1, 2: buy · R: reroll\nEnter: next blind · I: fastfetch\nCtrl+Q: quit"
             : root.choosing
-            ? "Enter: play the blind · S: skip it\nN: new game · Ctrl+Q: quit"
-            : "1 to 8: choose · Enter: play\nD: discard · N: new game\nCtrl+Q: quit"
+            ? "Enter: play the blind · S: skip it\nN: new game · I: fastfetch\nCtrl+Q: quit"
+            : "1 to 8: choose · Enter: play\nD: discard · N: new game\nI: fastfetch · Ctrl+Q: quit"
         }
       }
 
@@ -751,6 +758,14 @@ Window {
           }
         }
       }
+    }
+
+    // ---- fastfetch: run info over everything
+    FastFetch {
+      anchors.fill: parent
+      visible: root.infoOpen
+      game: root.game
+      onClose: root.infoOpen = false
     }
   }
 }
