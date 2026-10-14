@@ -79,6 +79,11 @@ Window {
   readonly property bool playing: game !== null && game.phase === "playing" && !busy
   readonly property bool shopping: game !== null && game.phase === "shop" && !busy
   readonly property bool choosing: game !== null && game.phase === "blind_select"
+  // A pack is open; coreutils packs draw a hand to select cards from.
+  readonly property bool inPack: game !== null && game.phase === "pack"
+  readonly property bool packHand: inPack && game.opened !== null && game.opened.with_hand
+  // Cards of the hand can be selected: in a blind, or in a coreutils pack.
+  readonly property bool selecting: playing || (packHand && !busy)
   readonly property var currentBlind: {
     if (!game) return null
     for (var i = 0; i < game.blinds.length; i++)
@@ -105,7 +110,7 @@ Window {
   }
 
   function toggleCard(i) {
-    if (!playing || i < 0 || i >= hand.length) return
+    if (!selecting || i < 0 || i >= hand.length) return
     var s = selected.slice()
     var k = s.indexOf(i)
     if (k >= 0) s.splice(k, 1)
@@ -113,7 +118,7 @@ Window {
     else return
     selected = s
     notice = ""
-    send({ cmd: "preview", cards: s })
+    if (playing) send({ cmd: "preview", cards: s })
   }
 
   function showPreview(r) {
@@ -176,8 +181,41 @@ Window {
   function canUse(c) {
     if (busy || !game || game.phase === "lost") return false
     if (c.max_cards === 0) return true
-    return playing && selected.length >= c.min_cards && selected.length <= c.max_cards
+    return selecting && selected.length >= c.min_cards && selected.length <= c.max_cards
   }
+  // ---- packs -------------------------------------------------------------
+  function buyPack(i) {
+    if (shopping && i >= 0 && i < game.packs.length) send({ cmd: "buy_pack", pack: i })
+  }
+  function canBuyPack(pack) {
+    return shopping && game.money >= pack.price
+  }
+  // A pack's choice: jokers need a slot, commands that change cards a selection.
+  function canPick(choice) {
+    if (busy || !inPack) return false
+    if (choice.kind === "joker") {
+      var transparent = choice.edition !== null && choice.edition.id === "transparent"
+      return transparent || game.jokers.length < game.max_jokers
+    }
+    if (choice.max_cards > 0)
+      return selected.length >= choice.min_cards && selected.length <= choice.max_cards
+    return true
+  }
+  function pickChoice(i) {
+    if (!inPack || i < 0 || i >= game.opened.choices.length) return
+    var choice = game.opened.choices[i]
+    if (!canPick(choice)) {
+      notice = choice.max_cards > 0 ? choice.name + ": select " + Labels.range(choice.min_cards, choice.max_cards) + "."
+        : "No room for another joker."
+      return
+    }
+    notice = ""
+    send({ cmd: "pick", choice: i, cards: choice.max_cards > 0 ? selected : [] })
+  }
+  function skipPack() {
+    if (inPack && !busy) send({ cmd: "skip_pack" })
+  }
+
   function useConsumable(i) {
     if (!game || i >= game.consumables.length) return
     var c = game.consumables[i]
@@ -291,9 +329,15 @@ Window {
       }
       else if (k >= Qt.Key_1 && k <= Qt.Key_9 && (event.modifiers & Qt.ControlModifier))
         root.useConsumable(k - Qt.Key_1)
+      else if ((k === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) || (k === Qt.Key_Escape && root.inPack))
+        root.skipPack()
       else if (k >= Qt.Key_0 && k <= Qt.Key_9) {
         var i = k === Qt.Key_0 ? 9 : k - Qt.Key_1
-        if (root.shopping) root.buy(i)
+        if (root.shopping) {
+          if (i < 2) root.buy(i)
+          else root.buyPack(i - 2)
+        }
+        else if (root.inPack && !root.packHand) root.pickChoice(i)
         else root.toggleCard(i)
       }
       else if (k === Qt.Key_R) root.reroll()
@@ -301,6 +345,7 @@ Window {
       else if (k === Qt.Key_F5) root.cheat({ win: true })
       else if (k === Qt.Key_F6) root.cheat({ money: root.game.money + 100 })
       else if (k === Qt.Key_F7) root.cheat({ ante: root.game.winning_ante, blind: "boss" })
+      else if (k === Qt.Key_F3) root.cheat({ random_pack: true })
       else if (k === Qt.Key_F12) root.cheat({ random_command: true })
       else if (k === Qt.Key_F11) root.cheat({ enhance_hand: true })
       else if (k === Qt.Key_F10) root.cheat({ random_theme: true })
@@ -510,7 +555,9 @@ Window {
           Layout.fillWidth: true
           wrapMode: Text.WordWrap
           text: root.shopping
-            ? "1, 2: buy · R: reroll\nEnter: next blind · I: fastfetch\nCtrl+Q: quit"
+            ? "1, 2: buy · 3, 4: packs · R: reroll\nEnter: next blind · I: fastfetch\nCtrl+Q: quit"
+            : root.inPack
+            ? (root.packHand ? "1-9, 0: select cards\n" : "1-5: install\n") + "Ctrl+C: skip · I: fastfetch\nCtrl+Q: quit"
             : root.choosing
             ? "Enter: play the blind · S: skip it\nN: new game · I: fastfetch\nCtrl+Q: quit"
             : "1-9, 0: choose · Enter: play\nD: discard · N: new game\nI: fastfetch · Ctrl+Q: quit"
@@ -625,6 +672,24 @@ Window {
                 }
               }
             }
+            // Packs (keys 3 and 4), opened on the spot.
+            Repeater {
+              model: root.game ? root.game.packs : []
+              Column {
+                spacing: Style.spacing.md
+                PackView {
+                  pack: modelData
+                  opacity: root.canBuyPack(modelData) ? 1 : 0.5
+                }
+                Button {
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  text: (index + 3) + " · " + Labels.money(modelData.price)
+                  enabled: root.canBuyPack(modelData)
+                  opacity: enabled ? 1 : 0.5
+                  onClicked: root.buyPack(index)
+                }
+              }
+            }
           }
 
           Caption {
@@ -689,11 +754,35 @@ Window {
           Item { Layout.fillHeight: true }
         }
 
+        // An open pack.
+        ColumnLayout {
+          Layout.fillWidth: true
+          Layout.fillHeight: true
+          visible: root.inPack
+          Item { Layout.fillHeight: true }
+          PackOpening {
+            Layout.alignment: Qt.AlignHCenter
+            opened: root.inPack ? root.game.opened : null
+            modifiers: root.game ? root.game.modifiers : null
+            canPick: root.canPick
+            onPick: function(index) { root.pickChoice(index) }
+            onSkip: root.skipPack()
+          }
+          Text {
+            Layout.alignment: Qt.AlignHCenter
+            text: root.notice
+            color: Color.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.title
+          }
+          Item { Layout.fillHeight: true }
+        }
+
         // Table: cards being scored, or the last result.
         Item {
           Layout.fillWidth: true
           Layout.fillHeight: true
-          visible: !root.shopping && !root.choosing
+          visible: !root.shopping && !root.choosing && !root.inPack
 
           Row {
             anchors.centerIn: parent
@@ -738,7 +827,7 @@ Window {
           id: handRow
           Layout.alignment: Qt.AlignHCenter
           Layout.topMargin: Style.space(24)
-          visible: !root.shopping && !root.choosing
+          visible: !root.shopping && !root.choosing && (!root.inPack || root.packHand)
           spacing: Style.spacing.lg
           // Narrower cards for a bigger hand (Ultrawide).
           readonly property int count: Math.max(8, root.game ? root.game.hand_size : 8)
@@ -752,7 +841,7 @@ Window {
               width: handRow.cardWidth
               card: modelData
               selected: root.selected.indexOf(index) >= 0
-              interactive: root.playing
+              interactive: root.selecting
               shortcut: index < 9 ? String(index + 1) : index === 9 ? "0" : ""
               onClicked: root.toggleCard(index)
             }
@@ -762,7 +851,7 @@ Window {
         Row {
           Layout.alignment: Qt.AlignHCenter
           Layout.topMargin: Style.space(16)
-          visible: !root.shopping && !root.choosing
+          visible: !root.shopping && !root.choosing && !root.inPack
           spacing: Style.spacing.xxl
           Button {
             text: "Play hand"

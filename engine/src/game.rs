@@ -6,6 +6,7 @@ use crate::consumable::{CONSUMABLE_SLOTS, Command, Consumable, Theme};
 use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, evaluate_with};
 use crate::joker::{Bonus, Joker, OwnedJoker, Rarity};
 use crate::modifier::{Edition, Enhancement, Seal};
+use crate::pack::{Pack, PackKind, SHOP_PACKS};
 use crate::rng::Rng;
 use crate::score::{Breakdown, Table, copy_target, score};
 use serde::{Deserialize, Serialize};
@@ -31,6 +32,8 @@ pub enum Phase {
     /// Blind won, reward not cashed out yet.
     Won,
     Shop,
+    /// A pack bought in the shop is open: pick its cards, or skip.
+    Pack,
     Lost,
 }
 
@@ -40,6 +43,7 @@ pub enum GameError {
     NotPlaying,
     NotWon,
     NotInShop,
+    NotInPack,
     CannotSkipBoss,
     NoDiscardsLeft,
     NotEnoughMoney,
@@ -55,6 +59,7 @@ impl fmt::Display for GameError {
             GameError::NotPlaying => write!(f, "no blind in progress"),
             GameError::NotWon => write!(f, "the blind is not won yet"),
             GameError::NotInShop => write!(f, "the shop is closed"),
+            GameError::NotInPack => write!(f, "no pack is open"),
             GameError::CannotSkipBoss => write!(f, "the boss blind cannot be skipped"),
             GameError::NoDiscardsLeft => write!(f, "no discards left"),
             GameError::NotEnoughMoney => write!(f, "not enough money"),
@@ -216,6 +221,47 @@ pub struct Reward {
     pub notes: Vec<String>,
 }
 
+/// A pack for sale.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PackInfo {
+    #[serde(flatten)]
+    pub pack: Pack,
+    pub name: String,
+    pub description: String,
+    pub quip: &'static str,
+    pub price: u32,
+}
+
+/// A playing card offered by a base-devel pack.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CardChoice {
+    /// Always "card".
+    pub kind: &'static str,
+    pub card: Card,
+}
+
+/// A card of an open pack: a consumable, a joker or a playing card, told
+/// apart by `kind`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum ChoiceInfo {
+    Consumable(ConsumableInfo),
+    Joker(JokerInfo),
+    Card(CardChoice),
+}
+
+/// The pack being opened.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct OpenedInfo {
+    pub name: String,
+    pub description: String,
+    pub quip: &'static str,
+    pub picks_left: usize,
+    /// coreutils: commands apply to a hand drawn from the deck.
+    pub with_hand: bool,
+    pub choices: Vec<ChoiceInfo>,
+}
+
 /// Name, effect and quip of an enhancement, a seal or an edition.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ModifierInfo {
@@ -313,6 +359,10 @@ pub struct State {
     pub reward: Option<Reward>,
     /// Shop offers (empty outside the shop).
     pub shop: Vec<OfferInfo>,
+    /// Packs for sale in the shop.
+    pub packs: Vec<PackInfo>,
+    /// The pack being opened (`pack` phase).
+    pub opened: Option<OpenedInfo>,
     pub reroll_cost: u32,
 }
 
@@ -345,9 +395,31 @@ pub struct Cheat {
     /// Adds a random command to the clipboard.
     #[serde(default)]
     pub random_command: bool,
+    /// Opens a random pack (in the shop).
+    #[serde(default)]
+    pub random_pack: bool,
     /// Gives the cards in hand random enhancements, seals and editions.
     #[serde(default)]
     pub enhance_hand: bool,
+}
+
+/// A card of an open pack.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum PackItem {
+    Consumable(Consumable),
+    Joker {
+        joker: Joker,
+        edition: Option<Edition>,
+    },
+    /// A new card for the deck; it gets its id once picked.
+    Card(Card),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct OpenedPack {
+    pack: Pack,
+    items: Vec<PackItem>,
+    picks_left: usize,
 }
 
 /// Something for sale.
@@ -376,6 +448,11 @@ pub struct Game {
     command_rng: Rng,
     /// The last command or theme used, but Up Arrow (for Up Arrow).
     last_used: Option<Consumable>,
+    /// Packs for sale in this shop.
+    packs: Vec<Pack>,
+    /// What packs hold, and which packs a shop sells.
+    pack_rng: Rng,
+    opened: Option<OpenedPack>,
     /// The last hand type played (Theme Sync).
     last_hand: Option<HandKind>,
     /// The player's deck, which lasts the whole game.
@@ -419,6 +496,9 @@ impl Game {
             next_card_id: 52,
             command_rng: Rng::stream(seed, "commands"),
             last_used: None,
+            packs: Vec::new(),
+            pack_rng: Rng::stream(seed, "packs"),
+            opened: None,
             last_hand: None,
             deck: standard_deck(),
             draw_pile: Vec::new(),
@@ -595,9 +675,10 @@ impl Game {
             .sort_by_key(|c| (!c.has_rank(), std::cmp::Reverse(c.rank), c.suit as u8));
     }
 
-    /// Checks a selection and returns its sorted indices.
+    /// Checks a selection of the hand (the blind's, or an open coreutils
+    /// pack's) and returns its sorted indices.
     fn validate(&self, indices: &[usize]) -> Result<Vec<usize>, GameError> {
-        if self.phase != Phase::Playing {
+        if self.phase != Phase::Playing && self.phase != Phase::Pack {
             return Err(GameError::NotPlaying);
         }
         let mut sorted = indices.to_vec();
@@ -626,6 +707,9 @@ impl Game {
     }
 
     pub fn play(&mut self, indices: &[usize]) -> Result<Breakdown, GameError> {
+        if self.phase != Phase::Playing {
+            return Err(GameError::NotPlaying);
+        }
         let played = self.take(indices)?;
         let money_before = self.money;
         let four_fingers = self.four_fingers();
@@ -800,7 +884,7 @@ impl Game {
 
     /// The hand the chosen cards would make, without playing them.
     pub fn preview(&self, indices: &[usize]) -> Result<Option<Evaluated>, GameError> {
-        if indices.is_empty() {
+        if indices.is_empty() || self.phase == Phase::Pack {
             return Ok(None);
         }
         let cards: Vec<Card> = self
@@ -812,6 +896,9 @@ impl Game {
     }
 
     pub fn discard(&mut self, indices: &[usize]) -> Result<(), GameError> {
+        if self.phase != Phase::Playing {
+            return Err(GameError::NotPlaying);
+        }
         if self.phase == Phase::Playing && self.discards_left == 0 {
             return Err(GameError::NoDiscardsLeft);
         }
@@ -881,8 +968,10 @@ impl Game {
         self.money += self.reward.take().map_or(0, |r| r.total);
         self.victory = false;
         self.phase = Phase::Shop;
+        self.hand.clear();
         self.reroll_cost = REROLL_COST;
         self.roll_offers();
+        self.packs = (0..SHOP_PACKS).map(|_| self.roll_pack()).collect();
         Ok(())
     }
 
@@ -1101,7 +1190,16 @@ impl Game {
             return Err(GameError::NotPlaying);
         }
         let consumable = self.consumable(index)?;
-        let targets = match consumable.targets() {
+        let targets = self.targets(consumable, cards)?;
+        self.check_usable(consumable)?;
+        self.consumables.remove(index);
+        self.apply_consumable(consumable, &targets);
+        Ok(())
+    }
+
+    /// Checks the hand cards a consumable needs selected.
+    fn targets(&self, consumable: Consumable, cards: &[usize]) -> Result<Vec<usize>, GameError> {
+        match consumable.targets() {
             Some((min, max)) => {
                 let sorted = self.validate(cards)?;
                 if !(min..=max).contains(&sorted.len()) {
@@ -1110,12 +1208,13 @@ impl Game {
                         consumable.name()
                     )));
                 }
-                sorted
+                Ok(sorted)
             }
-            None => Vec::new(),
-        };
-        self.check_usable(consumable)?;
-        self.consumables.remove(index);
+            None => Ok(Vec::new()),
+        }
+    }
+
+    fn apply_consumable(&mut self, consumable: Consumable, targets: &[usize]) {
         match consumable {
             Consumable::Theme(theme) => {
                 self.levels.raise(theme.hand(), 1);
@@ -1125,7 +1224,7 @@ impl Game {
                 }
             }
             Consumable::Command(command) => {
-                self.run_command(command, &targets);
+                self.run_command(command, targets);
                 for joker in &mut self.jokers {
                     joker.on_command_used();
                 }
@@ -1134,7 +1233,6 @@ impl Game {
         if consumable != Consumable::Command(Command::UpArrow) {
             self.last_used = Some(consumable);
         }
-        Ok(())
     }
 
     /// Refuses a consumable that could do nothing.
@@ -1266,6 +1364,199 @@ impl Game {
             .collect()
     }
 
+    /// A pack for the shop, drawn by the original's weights.
+    fn roll_pack(&mut self) -> Pack {
+        let roll = self.pack_rng.unit();
+        let mut odds = 0.0;
+        let all = Pack::odds();
+        all.iter()
+            .find(|(_, w)| {
+                odds += w;
+                roll < odds
+            })
+            .unwrap_or(&all[0])
+            .0
+    }
+
+    fn pack_price(&self, pack: Pack) -> u32 {
+        if pack.kind == PackKind::Base16 && self.count(Joker::FreeAsInBeer) > 0 {
+            0
+        } else {
+            pack.price()
+        }
+    }
+
+    pub fn buy_pack(&mut self, index: usize) -> Result<(), GameError> {
+        self.in_shop()?;
+        let pack = *self
+            .packs
+            .get(index)
+            .ok_or_else(|| GameError::BadSelection(format!("no pack #{index}")))?;
+        self.spend(self.pack_price(pack))?;
+        self.packs.remove(index);
+        self.open_pack(pack);
+        Ok(())
+    }
+
+    /// A playing card for a base-devel pack: 40% enhanced, 20% sealed, and
+    /// sometimes an edition.
+    fn pack_card(&mut self) -> Card {
+        let rng = &mut self.pack_rng;
+        let mut card = Card::new(2 + rng.below(13) as u8, Suit::ALL[rng.below(4) as usize]);
+        if rng.unit() < 0.4 {
+            card.enhancement = Some(Enhancement::ALL[rng.below(8) as usize]);
+        }
+        if rng.unit() < 0.2 {
+            card.seal = Some(Seal::ALL[rng.below(Seal::ALL.len() as u64) as usize]);
+        }
+        let roll = rng.unit();
+        let mut odds = 0.0;
+        card.edition = Edition::ALL.into_iter().rev().find(|e| {
+            odds += e.odds();
+            roll < odds
+        });
+        card
+    }
+
+    /// Draws a pack's cards, without duplicates; a coreutils pack also draws a
+    /// hand from the deck for its commands.
+    fn open_pack(&mut self, pack: Pack) {
+        let mut items: Vec<PackItem> = Vec::new();
+        for _ in 0..pack.shown() * 10 {
+            if items.len() == pack.shown() {
+                break;
+            }
+            let mut rng = self.pack_rng.clone();
+            let item = match pack.kind {
+                PackKind::Coreutils => Some(PackItem::Consumable(Consumable::Command(
+                    Command::ALL[rng.below(Command::ALL.len() as u64) as usize],
+                ))),
+                PackKind::Base16 => match self.roll_theme(&mut rng) {
+                    Some(Offer::Consumable(theme)) => Some(PackItem::Consumable(theme)),
+                    _ => None,
+                },
+                PackKind::JokersGit => match self.roll_joker(&mut rng) {
+                    Some(Offer::Joker { joker, edition }) => {
+                        Some(PackItem::Joker { joker, edition })
+                    }
+                    _ => None,
+                },
+                PackKind::BaseDevel => None,
+            };
+            self.pack_rng = rng;
+            let item = match pack.kind {
+                PackKind::BaseDevel => Some(PackItem::Card(self.pack_card())),
+                _ => item,
+            };
+            let duplicate = |a: &PackItem, b: &PackItem| match (a, b) {
+                (PackItem::Joker { joker: x, .. }, PackItem::Joker { joker: y, .. }) => x == y,
+                (PackItem::Card(_), PackItem::Card(_)) => false,
+                _ => a == b,
+            };
+            if let Some(item) = item
+                && !items.iter().any(|i| duplicate(i, &item))
+            {
+                items.push(item);
+            }
+        }
+        if pack.kind == PackKind::Coreutils {
+            let mut cards = self.deck.clone();
+            self.pack_rng.shuffle(&mut cards);
+            cards.truncate(self.hand_size());
+            self.hand = cards;
+            self.sort_hand();
+        }
+        for _ in 0..self.abilities(Joker::OptionalDependencies) {
+            if self.command_rng.chance(2) {
+                let command = self.random_command();
+                self.create(command);
+            }
+        }
+        self.opened = Some(OpenedPack {
+            pack,
+            picks_left: pack.picks().min(items.len()),
+            items,
+        });
+        self.phase = Phase::Pack;
+    }
+
+    /// Takes a card of the open pack: a theme or a command is used on the spot
+    /// (commands on the selected `cards` of the drawn hand), a card joins the
+    /// deck, a joker the row.
+    pub fn pick(&mut self, choice: usize, cards: &[usize]) -> Result<(), GameError> {
+        let opened = self.opened.as_ref().ok_or(GameError::NotInPack)?;
+        let item = *opened
+            .items
+            .get(choice)
+            .ok_or_else(|| GameError::BadSelection(format!("no choice #{choice}")))?;
+        match item {
+            PackItem::Consumable(consumable) => {
+                let targets = self.targets(consumable, cards)?;
+                self.check_usable(consumable)?;
+                self.apply_consumable(consumable, &targets);
+            }
+            PackItem::Joker { joker, edition } => {
+                if !self.has_room(edition) {
+                    return Err(GameError::JokerSlotsFull);
+                }
+                self.jokers.push(OwnedJoker::new(joker, edition));
+            }
+            PackItem::Card(card) => {
+                self.next_card_id += 1;
+                self.deck.push(card.with_id(self.next_card_id - 1));
+            }
+        }
+        let opened = self.opened.as_mut().ok_or(GameError::NotInPack)?;
+        opened.items.remove(choice);
+        opened.picks_left -= 1;
+        if opened.picks_left == 0 || opened.items.is_empty() {
+            self.close_pack();
+        }
+        Ok(())
+    }
+
+    /// Leaves the open pack without taking (more of) its cards.
+    pub fn skip_pack(&mut self) -> Result<(), GameError> {
+        if self.opened.is_none() {
+            return Err(GameError::NotInPack);
+        }
+        for joker in &mut self.jokers {
+            joker.on_pack_skipped();
+        }
+        self.close_pack();
+        Ok(())
+    }
+
+    fn close_pack(&mut self) {
+        self.opened = None;
+        self.hand.clear();
+        self.phase = Phase::Shop;
+    }
+
+    fn opened_info(&self) -> Option<OpenedInfo> {
+        let opened = self.opened.as_ref()?;
+        Some(OpenedInfo {
+            name: opened.pack.name(),
+            description: opened.pack.description(),
+            quip: opened.pack.kind.quip(),
+            picks_left: opened.picks_left,
+            with_hand: opened.pack.kind == PackKind::Coreutils,
+            choices: opened
+                .items
+                .iter()
+                .map(|&item| match item {
+                    PackItem::Consumable(c) => ChoiceInfo::Consumable(ConsumableInfo::new(c, 0)),
+                    PackItem::Joker { joker, edition } => ChoiceInfo::Joker(JokerInfo::new(
+                        &OwnedJoker::new(joker, edition),
+                        None,
+                        None,
+                    )),
+                    PackItem::Card(card) => ChoiceInfo::Card(CardChoice { kind: "card", card }),
+                })
+                .collect(),
+        })
+    }
+
     /// New offers; each reroll costs $1 more than the previous one.
     pub fn reroll(&mut self) -> Result<(), GameError> {
         self.in_shop()?;
@@ -1279,6 +1570,7 @@ impl Game {
     pub fn next_blind(&mut self) -> Result<(), GameError> {
         self.in_shop()?;
         self.offers.clear();
+        self.packs.clear();
         self.advance();
         Ok(())
     }
@@ -1331,6 +1623,11 @@ impl Game {
                 });
             }
         }
+        if cheat.random_pack {
+            self.in_shop()?;
+            let pack = self.roll_pack();
+            self.open_pack(pack);
+        }
         if cheat.random_command {
             let command = self.random_command();
             if !self.create(command) {
@@ -1378,7 +1675,7 @@ impl Game {
         } else if kind == self.blind {
             match self.phase {
                 Phase::BlindSelect => BlindStatus::Select,
-                Phase::Won | Phase::Shop => BlindStatus::Defeated,
+                Phase::Won | Phase::Shop | Phase::Pack => BlindStatus::Defeated,
                 Phase::Playing | Phase::Lost => BlindStatus::Current,
             }
         } else {
@@ -1431,7 +1728,7 @@ impl Game {
             remaining: {
                 let mut cards = match self.phase {
                     Phase::Playing | Phase::Won | Phase::Lost => self.draw_pile.clone(),
-                    Phase::BlindSelect | Phase::Shop => self.deck.clone(),
+                    Phase::BlindSelect | Phase::Shop | Phase::Pack => self.deck.clone(),
                 };
                 cards.sort_by_key(|c| (c.suit as u8, std::cmp::Reverse(c.rank)));
                 cards
@@ -1465,6 +1762,18 @@ impl Game {
             consumable_slots: CONSUMABLE_SLOTS,
             unique_themes: self.themes_used.len() as u32,
             modifiers: Modifiers::catalog(),
+            packs: self
+                .packs
+                .iter()
+                .map(|&pack| PackInfo {
+                    pack,
+                    name: pack.name(),
+                    description: pack.description(),
+                    quip: pack.kind.quip(),
+                    price: self.pack_price(pack),
+                })
+                .collect(),
+            opened: self.opened_info(),
             shop: self
                 .offers
                 .iter()
@@ -2316,6 +2625,91 @@ mod tests {
         let b = game.play(&[0, 1, 2, 3, 4]).unwrap();
         assert_eq!(game.consumables.len(), 2);
         assert_eq!(b.notes.len(), 2);
+    }
+
+    /// A game in the shop, with money.
+    fn shopping(seed: u64, jokers: Vec<Joker>) -> Game {
+        let mut game = won_game(seed, jokers);
+        game.cash_out().unwrap();
+        game.money = 50;
+        game
+    }
+
+    fn pack(kind: PackKind, size: crate::pack::PackSize) -> Pack {
+        Pack { kind, size }
+    }
+
+    #[test]
+    fn the_shop_sells_two_packs_that_rerolls_keep() {
+        let mut game = shopping(60, vec![]);
+        let packs = game.packs.clone();
+        assert_eq!(packs.len(), SHOP_PACKS);
+        game.reroll().unwrap();
+        assert_eq!(game.packs, packs);
+        assert_eq!(game.state().packs.len(), 2);
+    }
+
+    #[test]
+    fn coreutils_draws_a_hand_for_its_commands() {
+        use crate::pack::PackSize;
+        let mut game = shopping(61, vec![]);
+        game.packs = vec![pack(PackKind::Coreutils, PackSize::Normal)];
+        game.buy_pack(0).unwrap();
+        assert_eq!(game.money, 46);
+        let s = game.state();
+        assert_eq!(s.phase, Phase::Pack);
+        assert_eq!(
+            (s.hand.len(), s.opened.as_ref().unwrap().choices.len()),
+            (HAND_SIZE, 3)
+        );
+        assert!(game.play(&[0]).is_err());
+        // Swap the first choice for a command that needs one card.
+        game.opened.as_mut().unwrap().items[0] =
+            PackItem::Consumable(Consumable::Command(Command::Strip));
+        assert!(game.pick(0, &[]).is_err());
+        let id = game.hand[0].id;
+        game.pick(0, &[0]).unwrap();
+        assert!(
+            game.deck
+                .iter()
+                .find(|c| c.id == id)
+                .unwrap()
+                .is(Enhancement::BinaryBlob)
+        );
+        assert_eq!(game.phase, Phase::Shop);
+        assert!(game.hand.is_empty() && game.opened.is_none());
+    }
+
+    #[test]
+    fn base_devel_and_jokers_git() {
+        use crate::pack::PackSize;
+        let mut game = shopping(62, vec![]);
+        game.packs = vec![
+            pack(PackKind::BaseDevel, PackSize::Meta),
+            pack(PackKind::JokersGit, PackSize::Normal),
+        ];
+        game.buy_pack(0).unwrap();
+        assert_eq!(game.state().opened.unwrap().choices.len(), 5);
+        game.pick(0, &[]).unwrap();
+        assert_eq!(game.phase, Phase::Pack);
+        game.pick(0, &[]).unwrap();
+        assert_eq!((game.phase, game.deck.len()), (Phase::Shop, 54));
+        game.buy_pack(0).unwrap();
+        assert_eq!(game.state().opened.unwrap().choices.len(), 2);
+        game.pick(1, &[]).unwrap();
+        assert_eq!(game.jokers.len(), 1);
+    }
+
+    #[test]
+    fn skipping_a_pack_grows_minimal_install() {
+        use crate::pack::PackSize;
+        let mut game = shopping(63, vec![Joker::MinimalInstall, Joker::FreeAsInBeer]);
+        game.packs = vec![pack(PackKind::Base16, PackSize::Full)];
+        game.money = 0;
+        game.buy_pack(0).unwrap();
+        game.skip_pack().unwrap();
+        assert_eq!((game.phase, game.jokers[0].counter), (Phase::Shop, 3.0));
+        assert_eq!(game.skip_pack(), Err(GameError::NotInPack));
     }
 
     #[test]

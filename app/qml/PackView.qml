@@ -1,0 +1,59 @@
+import QtQuick
+import omatro
+
+// A pack for sale: name, what it holds, quip.
+Rectangle {
+  id: root
+
+  property var pack: null
+
+  width: Style.space(120)
+  height: Style.space(150)
+  radius: Style.cornerRadius
+  color: Qt.tint(Color.background, Util.alpha(Color.urgent, 0.10))
+  border.width: Style.space(2)
+  border.color: Util.alpha(Color.urgent, 0.6)
+
+  Column {
+    anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(8) }
+    spacing: Style.space(4)
+
+    Text {
+      width: parent.width
+      horizontalAlignment: Text.AlignHCenter
+      text: "package"
+      color: Color.muted
+      font.family: Style.font.family
+      font.pixelSize: Style.font.caption
+    }
+    Text {
+      width: parent.width
+      horizontalAlignment: Text.AlignHCenter
+      wrapMode: Text.WrapAnywhere
+      text: root.pack ? root.pack.name : ""
+      color: Color.urgent
+      font.family: Style.font.family
+      font.pixelSize: Style.font.subtitle
+      font.bold: true
+    }
+    Text {
+      width: parent.width
+      horizontalAlignment: Text.AlignHCenter
+      wrapMode: Text.WordWrap
+      text: root.pack ? root.pack.description : ""
+      color: Color.foreground
+      font.family: Style.font.family
+      font.pixelSize: Style.font.caption
+    }
+    Text {
+      width: parent.width
+      horizontalAlignment: Text.AlignHCenter
+      wrapMode: Text.WordWrap
+      text: root.pack ? root.pack.quip : ""
+      color: Color.muted
+      font.family: Style.font.family
+      font.pixelSize: Style.font.caption
+      font.italic: true
+    }
+  }
+}

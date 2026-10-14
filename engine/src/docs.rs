@@ -5,6 +5,7 @@ use crate::consumable::{Command, Theme};
 use crate::hand::HandKind;
 use crate::joker::{Edition, Joker};
 use crate::modifier::{Enhancement, Seal};
+use crate::pack::{Pack, PackKind, PackSize};
 
 /// Snake-case id of a value, as in the protocol.
 fn id(value: impl serde::Serialize) -> String {
@@ -188,14 +189,59 @@ fn commands() -> String {
     doc
 }
 
+fn packs() -> String {
+    let mut doc = header(
+        "Packs",
+        "Each shop sells 2 packs besides its cards; rerolls keep them. A bought pack\n\
+         opens on the spot: pick its cards, or skip it. Themes and commands are used\n\
+         on the spot (coreutils draws a hand from the deck for its commands), cards\n\
+         join the deck, jokers the row.",
+    );
+    doc += "| Id | Pack | Holds | Quip |\n|---|---|---|---|\n";
+    for kind in PackKind::ALL {
+        doc += &format!(
+            "| `{}` | {} | {} | *{}* |\n",
+            id(kind),
+            kind.name(),
+            kind.contents(),
+            cell(kind.quip())
+        );
+    }
+    doc += "\n| Size | Suffix | Picks | Price |\n|---|---|---|---|\n";
+    for size in PackSize::ALL {
+        let pack = Pack {
+            kind: PackKind::Coreutils,
+            size,
+        };
+        doc += &format!(
+            "| `{}` | `{}` | {} of {} (jokers: one fewer) | ${} |\n",
+            id(size),
+            if size.suffix().is_empty() {
+                "—"
+            } else {
+                size.suffix()
+            },
+            pack.picks(),
+            pack.shown(),
+            pack.price()
+        );
+    }
+    doc += "\n| Pack | Shop odds |\n|---|---|\n";
+    for (pack, odds) in Pack::odds() {
+        doc += &format!("| {} | {:.1}% |\n", pack.name(), odds * 100.0);
+    }
+    doc
+}
+
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 6] = [
+    let docs: [(&str, fn() -> String); 7] = [
         ("jokers.md", jokers),
         ("editions.md", editions),
         ("hands.md", hands),
         ("themes.md", themes),
         ("commands.md", commands),
+        ("packs.md", packs),
         ("modifiers.md", modifiers),
     ];
     for (file, render) in docs {

@@ -39,6 +39,7 @@ Fork copies the joker on its right.
 | `ultrawide` | Ultrawide | core | $4 | +1 hand size | *More screen, more cards.* |
 | `undo_history` | Undo History | core | $4 | +1 discard each blind | *Ctrl+Z, but for cards.* |
 | `vim_golf` | Vim Golf | core | $4 | Creates a command if the hand contains an ace and a Straight | *Done in four keystrokes.* |
+| `optional_dependencies` | Optional Dependencies | core | $4 | 1 in 2 chance to create a command when a pack is opened | *Optional, but you'll install them anyway.* |
 | `ruby_gem` | Ruby Gem | core | $5 | +2 mult for each scoring diamond | *Optimized for programmer happiness.* |
 | `fan_mail` | Fan Mail | core | $5 | +15 chips for each scoring heart | *HEY, someone loves your pull request.* |
 | `rails_world` | Rails World | core | $5 | +20 chips for each scoring face card | *Everyone came for the keynote. And the opinions.* |
@@ -56,6 +57,7 @@ Fork copies the joker on its right.
 | `support_contract` | Support Contract | core | $5 | Enterprise cards give +$4 when scored | *Billed per incident.* |
 | `free_tier` | Free Tier | core | $5 | Creates a command when a hand is played with $4 or less | *Rate-limited, but it works.* |
 | `man8` | man 8 | core | $5 | 1 in 4 chance per scoring 8 to create a command | *System administration commands.* |
+| `minimal_install` | Minimal Install | core | $5 | Gains +3 mult per pack skipped | *Fewer packages, more speed.* |
 | `uptime` | Uptime | core | $6 | +1 mult per hand in a row without a scoring face card | *847 days without a reboot.* |
 | `sponsorware` | Sponsorware | core | $6 | +$4 at the end of each blind | *Thank you for your sponsorship.* |
 | `shell_fu` | Shell Fu | core | $6 | +1 mult per command used this game | *Pipes, loops, one-liners.* |
@@ -78,7 +80,7 @@ Fork copies the joker on its right.
 | `garbage_collector` | Garbage Collector | extra | $7 | Gains ×0.1 mult per enhanced card played, and removes the enhancement | *Frees memory. And your upgrades.* |
 | `systemd` | systemd | extra | $7 | ×0.2 mult per Daemon card in the deck | *One daemon to rule them all.* |
 | `recursion` | Recursion | extra | $8 | +8 mult for each scoring A, 2, 3, 5 or 8 | *To understand recursion, see Recursion.* |
-| `free_as_in_beer` | Free as in Beer | extra | $8 | Themes in the shop cost $0 | *Also free as in freedom.* |
+| `free_as_in_beer` | Free as in Beer | extra | $8 | Themes and base16 packs in the shop cost $0 | *Also free as in freedom.* |
 | `config_reload` | Config Reload | extra | $8 | Levels up the hand type of the first discard of each blind | *Super+Shift+R: everything, but fresher.* |
 | `senior_engineer` | Senior Engineer | AUR | $7 | ×3 mult if the deck holds at least 16 enhanced cards | *Has seen every config.* |
 | `hotwire` | Hotwire | AUR | $8 | ×3 mult if the hand is a three of a kind | *Three frameworks walk into a monolith.* |

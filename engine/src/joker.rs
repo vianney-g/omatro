@@ -142,6 +142,8 @@ pub enum Joker {
     VimGolf,
     FreeTier,
     Man8,
+    MinimalInstall,
+    OptionalDependencies,
 }
 
 /// What a joker sees of the hand being scored.
@@ -177,7 +179,7 @@ fn is_even(card: Card) -> bool {
 }
 
 impl Joker {
-    pub const ALL: [Joker; 74] = [
+    pub const ALL: [Joker; 76] = [
         Joker::Dotfiles,
         Joker::Omakase,
         Joker::RubyGem,
@@ -252,6 +254,8 @@ impl Joker {
         Joker::VimGolf,
         Joker::FreeTier,
         Joker::Man8,
+        Joker::MinimalInstall,
+        Joker::OptionalDependencies,
     ];
 
     pub fn name(self) -> &'static str {
@@ -330,6 +334,8 @@ impl Joker {
             Joker::VimGolf => "Vim Golf",
             Joker::FreeTier => "Free Tier",
             Joker::Man8 => "man 8",
+            Joker::MinimalInstall => "Minimal Install",
+            Joker::OptionalDependencies => "Optional Dependencies",
         }
     }
 
@@ -389,7 +395,7 @@ impl Joker {
             Joker::UndoHistory => "+1 discard each blind",
             Joker::ThemeCollector => "Gains ×0.1 mult per theme applied",
             Joker::Unixporn => "+$1 at the end of each blind per unique theme applied",
-            Joker::FreeAsInBeer => "Themes in the shop cost $0",
+            Joker::FreeAsInBeer => "Themes and base16 packs in the shop cost $0",
             Joker::AutoUpdate => "1 in 4 chance to level up the played hand type",
             Joker::ConfigReload => "Levels up the hand type of the first discard of each blind",
             Joker::ClosedSource => "Adds a Binary Blob card to the deck when a blind starts",
@@ -413,6 +419,10 @@ impl Joker {
             Joker::VimGolf => "Creates a command if the hand contains an ace and a Straight",
             Joker::FreeTier => "Creates a command when a hand is played with $4 or less",
             Joker::Man8 => "1 in 4 chance per scoring 8 to create a command",
+            Joker::MinimalInstall => "Gains +3 mult per pack skipped",
+            Joker::OptionalDependencies => {
+                "1 in 2 chance to create a command when a pack is opened"
+            }
         }
     }
 
@@ -494,6 +504,8 @@ impl Joker {
             Joker::VimGolf => "Done in four keystrokes.",
             Joker::FreeTier => "Rate-limited, but it works.",
             Joker::Man8 => "System administration commands.",
+            Joker::MinimalInstall => "Fewer packages, more speed.",
+            Joker::OptionalDependencies => "Optional, but you'll install them anyway.",
         }
     }
 
@@ -558,7 +570,8 @@ impl Joker {
             | Joker::BangBang
             | Joker::Ultrawide
             | Joker::UndoHistory
-            | Joker::VimGolf => 4,
+            | Joker::VimGolf
+            | Joker::OptionalDependencies => 4,
             Joker::RubyGem
             | Joker::FanMail
             | Joker::RailsWorld
@@ -577,7 +590,8 @@ impl Joker {
             | Joker::IncrementalBuild
             | Joker::CronJob
             | Joker::FreeTier
-            | Joker::Man8 => 5,
+            | Joker::Man8
+            | Joker::MinimalInstall => 5,
             Joker::SuperKey
             | Joker::Uptime
             | Joker::Sponsorware
@@ -715,7 +729,9 @@ impl Joker {
             Joker::QuadCore if has(HandKind::FourOfAKind) => Effect::XMult(4.0),
             Joker::GitBisect if has(HandKind::Straight) => Effect::XMult(3.0),
             Joker::Monorepo if has(HandKind::Flush) => Effect::XMult(2.0),
-            Joker::Uptime | Joker::GreenBuild | Joker::ShellFu if counter > 0.0 => {
+            Joker::Uptime | Joker::GreenBuild | Joker::ShellFu | Joker::MinimalInstall
+                if counter > 0.0 =>
+            {
                 Effect::Mult(counter)
             }
             Joker::FreeTrial | Joker::CiRunner if counter > 0.0 => Effect::Chips(counter as u64),
@@ -831,7 +847,9 @@ impl OwnedJoker {
                 "progress",
                 format!("{enhanced} / {SENIOR_THRESHOLD} enhanced"),
             ),
-            Joker::Uptime | Joker::GreenBuild | Joker::ShellFu => ("mult", format!("+{c} mult")),
+            Joker::Uptime | Joker::GreenBuild | Joker::ShellFu | Joker::MinimalInstall => {
+                ("mult", format!("+{c} mult"))
+            }
             Joker::FreeTrial | Joker::CiRunner => ("chips", format!("+{c} chips")),
             Joker::OrphanCleanup | Joker::ThemeCollector => ("x_mult", format!("×{c} mult")),
             Joker::MuscleMemory => ("mult", format!("+{} mult", hand_plays?)),
@@ -864,6 +882,12 @@ impl OwnedJoker {
     pub fn on_discard(&mut self) {
         if self.joker == Joker::GreenBuild {
             self.counter = (self.counter - 1.0).max(0.0);
+        }
+    }
+
+    pub fn on_pack_skipped(&mut self) {
+        if self.joker == Joker::MinimalInstall {
+            self.counter += 3.0;
         }
     }
 

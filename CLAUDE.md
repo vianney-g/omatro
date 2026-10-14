@@ -87,7 +87,7 @@ Lua: `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'`,
 `'hl.dsp.window.resize({ x = 1100, y = 800 })'`, `'hl.dsp.window.center()'`; the window
 geometry comes from `hyprctl clients -j`; `'hl.dsp.cursor.move({ x = …, y = … })'`
 moves the pointer, to check hover tooltips. F11 gives the cards in hand random
-modifiers, F12 adds a random command. Check that stderr has no QML warnings.
+modifiers, F12 adds a random command, F3 opens a random pack (in the shop). Check that stderr has no QML warnings.
 
 ## Adding a joker
 
@@ -119,6 +119,16 @@ jokers). A `Card` carries them for the whole game: change a card with
 `Game::modify_card(id, …)`, which updates the deck, the draw pile and the hand alike.
 Use `Card::is_suit`, `has_rank`, `is_face` and `chips` rather than reading `suit` or
 `rank`: a Binary Blob has neither, a Symlink counts as every suit.
+
+## Packs
+
+`pack.rs` defines the packs (kind × size, their names, prices and shop odds). The shop
+rolls 2 of them at cash-out (`Game::packs`, kept by rerolls). `buy_pack` opens one
+(`open_pack`): the `pack` phase, with `Game::opened` holding its items; a coreutils pack
+also puts a hand drawn from the deck in `Game::hand`, so commands target it through
+the usual `validate`. `pick` applies an item (`apply_consumable` for themes and
+commands, shared with the clipboard), `skip_pack` and `close_pack` go back to the shop.
+Play and discard check for the `playing` phase themselves.
 
 ## Consumables
 

@@ -32,8 +32,9 @@ make test
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, N for a new game, I for
 fastfetch (run info: hand levels, cards left), Ctrl+Q to quit. Before a blind: Enter to
 play it, S to skip it. Ctrl+1 and Ctrl+2 apply the consumables of the clipboard. In the
-shop: 1 and 2 to buy, R to reroll, Enter for the next blind; the buttons under each
-joker sell it or move it left and right.
+shop: 1 and 2 to buy, 3 and 4 to buy a pack, R to reroll, Enter for the next blind; the
+buttons under each joker sell it or move it left and right. In an open pack: Install
+takes a card, Ctrl+C (or Escape) skips.
 
 ## How a game goes
 
@@ -58,7 +59,10 @@ held ($5 at most). Cash out, then the shop offers 2 cards: each slot holds a the
 a command ($3, 1 chance in 7 each) or a joker you don't own yet, of a rarity drawn for each slot (core
 70%, extra 25%, AUR 5%), sometimes with an edition (5 joker slots,
 resold at half price; reroll for $5, then $1 more each time). Jokers trigger left to
-right, so their order matters. You start with $4 and no jokers.
+right, so their order matters. The shop also sells 2 packs ([docs/packs.md](docs/packs.md)),
+opened on the spot: coreutils (commands), base16 (themes), base-devel (cards) and
+jokers-git (jokers), in normal, `-full` and `-meta` sizes. You start with $4 and no
+jokers.
 
 ## Engine alone
 
@@ -70,7 +74,8 @@ With `OMATRO_DEBUG=1`, the engine accepts `debug` commands, and the app maps the
 F5 (win the blind in progress), F6 (+$100), F7 (jump to the boss of ante 8), F8 (raise
 every known hand type one level), F9 (add a random joker with a random edition), F10
 (add a random theme to the clipboard) and F11 (give the cards in hand random
-enhancements, seals and editions), F12 (add a random command to the clipboard). `OMATRO_JOKERS=uptime,fork` sets the jokers
+enhancements, seals and editions), F12 (add a random command to the clipboard) and F3 (open a random pack, in the
+shop). `OMATRO_JOKERS=uptime,fork` sets the jokers
 every new game starts with.
 
 ## Protocol
@@ -90,20 +95,24 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"buy","offer":0}` | Buys a shop offer |
 | `{"cmd":"sell","joker":0}` | Sells a joker (in the shop) |
 | `{"cmd":"move_joker","from":0,"to":2}` | Moves a joker within the row |
+| `{"cmd":"buy_pack","pack":0}` | Buys a pack of the shop and opens it |
+| `{"cmd":"pick","choice":0,"cards":[1]}` | Takes a card of the open pack (`cards`: the drawn hand's cards a command changes) |
+| `{"cmd":"skip_pack"}` | Leaves the open pack |
 | `{"cmd":"use_consumable","index":0,"cards":[1,3]}` | Uses a consumable of the clipboard (any time but after a loss); `cards`: the hand cards a command changes |
 | `{"cmd":"sell_consumable","index":0}` | Sells a consumable of the clipboard |
 | `{"cmd":"reroll"}` | Rerolls the shop offers |
 | `{"cmd":"next_blind"}` | Leaves the shop for the choice of the next blind |
-| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true,"random_command":true}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
+| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true,"random_command":true,"random_pack":true}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
 
 Responses:
 
 - `{"event":"state","state":{…}}`: game state: `ante`, `blind` (`small` / `big` /
   `boss`), the ante's three `blinds` (name, target, reward, `status`), `target`, `score`,
-  hands and discards left, `remaining` (cards left to draw, or the whole deck between
+  hands and discards left (in the `pack` phase, the hand is the one a coreutils pack
+  drew), `remaining` (cards left to draw, or the whole deck between
   blinds), `deck_size`, `hands` (each hand type's `level`, `chips`, `mult` and `played`
   count; secret hands only once played), `phase` = `blind_select` / `playing` / `won` / `shop` /
-  `lost`, `victory` (the winning ante's boss was just beaten), hand, `hand_size`,
+  `pack` / `lost`, `victory` (the winning ante's boss was just beaten), hand, `hand_size`,
   jokers (`id`, `name`, `description`, `quip`, `rarity`, `edition`, `price`,
   `sell_value`, `bonus` for what a growing joker gives now, `current` for what a Fork
   copies), `max_jokers`, `modifiers` (names and effects of every enhancement, seal and
@@ -111,7 +120,9 @@ Responses:
   `description`, `quip`, `price`, `sell_value`, and `min_cards` / `max_cards` to select), `consumable_slots`, `unique_themes`, `money`,
   `reward` in the `won` phase (with `cards` for Enterprise cards held, and `notes` such
   as "Beta Release broke."), `shop` offers
-  (jokers or consumables, told apart by `kind`) and `reroll_cost` in the shop. Scores and
+  (jokers or consumables, told apart by `kind`), `packs` for sale, and `opened`: the
+  pack being opened (`name`, `description`, `picks_left`, `with_hand`, and its
+  `choices`: consumables, jokers or `{"kind":"card","card":…}`) and `reroll_cost` in the shop. Scores and
   targets are floats; an infinite target (from ante 39) is `null`.
 - `{"event":"scored","score":{…},"state":{…}}` after `play`: played cards, recognized
   hand and its `hand_name`, scoring cards, base chips and mult, then `steps` (each

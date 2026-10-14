@@ -44,6 +44,16 @@ pub enum Command {
     SellConsumable {
         index: usize,
     },
+    BuyPack {
+        pack: usize,
+    },
+    Pick {
+        choice: usize,
+        /// Cards of the drawn hand a command changes.
+        #[serde(default)]
+        cards: Vec<usize>,
+    },
+    SkipPack,
     MoveJoker {
         from: usize,
         to: usize,
@@ -174,6 +184,11 @@ impl Session {
             Command::SellConsumable { index } => {
                 game.sell_consumable(index).map_err(|e| e.to_string())?
             }
+            Command::BuyPack { pack } => game.buy_pack(pack).map_err(|e| e.to_string())?,
+            Command::Pick { choice, cards } => {
+                game.pick(choice, &cards).map_err(|e| e.to_string())?
+            }
+            Command::SkipPack => game.skip_pack().map_err(|e| e.to_string())?,
             Command::MoveJoker { from, to } => {
                 game.move_joker(from, to).map_err(|e| e.to_string())?
             }
