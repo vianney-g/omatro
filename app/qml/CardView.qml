@@ -14,6 +14,12 @@ Item {
   property var modifiers: null
   property bool selected: false
   property bool dimmed: false
+  // Dealt face down by the boss: the card shows its back.
+  property bool faceDown: false
+  // The boss keeping the card from scoring ("" when none).
+  property string disabledBy: ""
+  // The Clippy keeps it selected.
+  property bool forced: false
   property bool interactive: true
   property string shortcut: ""
   signal clicked()
@@ -43,7 +49,10 @@ Item {
     : card.seal === "gold_star" ? "★" : card.seal === "retry" ? "↻"
     : card.seal === "theme_sync" ? "◐" : "❯"
   readonly property string details: {
+    if (faceDown) return "Face down: dealt by the boss."
     var lines = []
+    if (disabledBy) lines.push("Disabled by " + disabledBy + ": scores nothing.")
+    if (forced) lines.push("The Clippy keeps it selected.")
     if (enhancement) lines.push(enhancement.name + ": " + enhancement.description)
     if (seal) lines.push(seal.name + " seal: " + seal.description)
     if (edition) lines.push(edition.name + ": " + edition.description)
@@ -70,7 +79,7 @@ Item {
     border.width: root.selected || root.edition ? Style.space(2) : Style.normalBorderWidth
     border.color: root.selected ? Color.accent
       : root.edition ? Util.alpha(Color.accent, 0.6) : Style.normalBorderColor
-    opacity: root.dimmed ? 0.4 : 1
+    opacity: root.dimmed || (root.disabledBy && !root.faceDown) ? 0.45 : 1
     Behavior on opacity { NumberAnimation { duration: 150 } }
 
     Column {
@@ -172,6 +181,42 @@ Item {
           font.pixelSize: Style.font.caption
           font.bold: true
         }
+      }
+    }
+
+    // Disabled by the boss: crossed out.
+    Text {
+      anchors.centerIn: parent
+      visible: root.disabledBy !== "" && !root.faceDown
+      text: "✕"
+      color: Color.urgent
+      font.family: Style.font.family
+      font.pixelSize: Math.round(root.width * 0.6)
+      font.bold: true
+    }
+
+    // Face down: the back of the card, over everything.
+    Rectangle {
+      anchors.fill: parent
+      visible: root.faceDown
+      radius: Style.cornerRadius
+      color: Qt.tint(Color.background, Util.alpha(Color.accent, 0.25))
+      border.width: Style.space(2)
+      border.color: Util.alpha(Color.accent, 0.6)
+      Rectangle {
+        anchors { fill: parent; margins: Style.space(6) }
+        radius: Style.cornerRadius
+        color: "transparent"
+        border.width: Style.normalBorderWidth
+        border.color: Util.alpha(Color.accent, 0.5)
+      }
+      Text {
+        anchors.centerIn: parent
+        text: "?"
+        color: Color.accent
+        font.family: Style.font.family
+        font.pixelSize: Math.round(root.width * 0.5)
+        font.bold: true
       }
     }
   }

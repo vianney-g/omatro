@@ -6,6 +6,10 @@ Item {
   id: root
 
   property var joker: null
+  // The Kernel Panic: jokers face down.
+  property bool hidden: false
+  // The Windows Update: this joker does nothing this hand.
+  property bool disabled: false
   // What a growing joker gives right now: {kind, text}.
   property var bonus: joker ? joker.bonus : null
 
@@ -30,6 +34,7 @@ Item {
     color: Qt.tint(Color.background, Util.alpha(Color.accent, root.edition ? 0.20 : 0.10))
     border.width: root.edition ? Style.space(2) : Style.normalBorderWidth
     border.color: root.edition ? Color.accent : Util.alpha(Color.accent, Style.normalBorderAlpha)
+    opacity: root.disabled && !root.hidden ? 0.4 : 1
 
     Column {
       anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(8) }
@@ -127,6 +132,35 @@ Item {
       font.pixelSize: Style.font.caption
       font.bold: true
     }
+
+    // The Kernel Panic: face down.
+    Rectangle {
+      anchors.fill: parent
+      visible: root.hidden
+      radius: Style.cornerRadius
+      color: Qt.tint(Color.background, Util.alpha(Color.urgent, 0.25))
+      border.width: Style.space(2)
+      border.color: Util.alpha(Color.urgent, 0.6)
+      Text {
+        anchors.centerIn: parent
+        text: "?"
+        color: Color.urgent
+        font.family: Style.font.family
+        font.pixelSize: Style.font.displayLarge
+        font.bold: true
+      }
+    }
+  }
+
+  // The Windows Update: disabled this hand.
+  Text {
+    anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: Style.space(40) }
+    visible: root.disabled && !root.hidden
+    text: "disabled"
+    color: Color.urgent
+    font.family: Style.font.family
+    font.pixelSize: Style.font.subtitle
+    font.bold: true
   }
 
   Text {

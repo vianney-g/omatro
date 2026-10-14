@@ -65,6 +65,12 @@ pub struct Table<'a> {
     pub four_fingers: bool,
     /// The whole deck (systemd, Blob Storage, Senior Engineer).
     pub deck: &'a [Card],
+    /// Ids of the cards a boss keeps from scoring.
+    pub debuffed: &'a [u32],
+    /// The Thermal Throttle: base chips and mult are halved.
+    pub halve_base: bool,
+    /// The Windows Update: this joker does nothing this hand.
+    pub disabled_joker: Option<usize>,
 }
 
 /// The joker whose ability the one at `index` uses: itself, or for a Fork, the
@@ -104,14 +110,20 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
         ..
     } = *table;
     let evaluated = evaluate_with(played, table.four_fingers);
-    let (base_chips, base_mult) = table.levels.values(evaluated.kind);
+    let (mut base_chips, mut base_mult) = table.levels.values(evaluated.kind);
+    if table.halve_base {
+        base_chips = (base_chips as f64 / 2.0).round() as u64;
+        base_mult = (base_mult / 2.0).round().max(1.0);
+    }
     let mut run = Running {
         chips: base_chips,
         mult: base_mult,
         money: 0,
         steps: Vec::new(),
     };
-    let targets: Vec<Option<usize>> = (0..jokers.len()).map(|i| copy_target(jokers, i)).collect();
+    let targets: Vec<Option<usize>> = (0..jokers.len())
+        .map(|i| copy_target(jokers, i).filter(|_| table.disabled_joker != Some(i)))
+        .collect();
     // Each joker with the joker whose ability it uses.
     let abilities = || {
         targets
@@ -127,6 +139,10 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
     for (position, &index) in evaluated.scoring.iter().enumerate() {
         let card = played[index];
         let source = Source::Card { index };
+        if table.debuffed.contains(&card.id) {
+            run.push(source, Effect::Debuffed);
+            continue;
+        }
         let mut retriggers: Vec<Source> = Vec::new();
         if card.seal == Some(Seal::Retry) {
             retriggers.push(source);
@@ -187,6 +203,9 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
         .min_by_key(|(_, c)| c.rank)
         .map(|(i, _)| i);
     for (index, &card) in held.iter().enumerate() {
+        if table.debuffed.contains(&card.id) {
+            continue;
+        }
         let mut effects = Vec::new();
         if card.is(Enhancement::Daemon) {
             effects.push(Effect::XMult(1.5));
@@ -221,6 +240,9 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
         lucky_hits,
     };
     for (j, owned) in jokers.iter().enumerate() {
+        if table.disabled_joker == Some(j) {
+            continue;
+        }
         let source = Source::Joker { index: j };
         let edition = owned
             .edition
@@ -297,6 +319,9 @@ mod tests {
                 plays: &plays,
                 four_fingers: self.four_fingers,
                 deck: &self.deck,
+                debuffed: &[],
+                halve_base: false,
+                disabled_joker: None,
             };
             score(&table, &mut Rng::new(7))
         }
@@ -465,6 +490,9 @@ mod tests {
                     plays: &HandCounts::default(),
                     four_fingers: false,
                     deck: &[],
+                    debuffed: &[],
+                    halve_base: false,
+                    disabled_joker: None,
                 };
                 !score(&table, &mut Rng::new(seed)).broken.is_empty()
             })

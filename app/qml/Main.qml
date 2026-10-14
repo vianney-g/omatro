@@ -91,6 +91,14 @@ Window {
     return null
   }
   readonly property bool endless: game !== null && game.ante > game.winning_ante
+  // The boss at work: cards it hides or disables, by card id (the hand shown
+  // during the score animation is not the state's hand).
+  readonly property string bossName: game !== null && game.boss_active ? game.boss.name : ""
+  readonly property var faceDownIds: game ? game.hand.filter(function(c, i) { return game.face_down[i] })
+    .map(function(c) { return c.id }) : []
+  readonly property var debuffedIds: game ? game.hand.filter(function(c, i) { return game.debuffed[i] })
+    .map(function(c) { return c.id }) : []
+  readonly property int forcedId: game && game.forced !== null ? game.hand[game.forced].id : -1
   readonly property string handName: scoring ? scoring.hand_name
     : (preview && preview.hand ? preview.hand_name : "")
 
@@ -102,7 +110,8 @@ Window {
   function applyState(s) {
     game = s
     hand = s.hand
-    selected = []
+    // The Clippy's card stays selected.
+    selected = s.forced !== null ? [s.forced] : []
     preview = null
     liveChips = 0
     liveMult = 0
@@ -111,6 +120,7 @@ Window {
 
   function toggleCard(i) {
     if (!selecting || i < 0 || i >= hand.length) return
+    if (playing && game.forced === i) { notice = "The Clippy insists on this card."; return }
     var s = selected.slice()
     var k = s.indexOf(i)
     if (k >= 0) s.splice(k, 1)
@@ -268,7 +278,8 @@ Window {
       var step = steps[stepIndex]
       liveChips = step.chips
       liveMult = step.mult
-      var color = step.effect === "again" ? Color.foreground
+      var color = step.effect === "debuffed" ? Color.muted
+        : step.effect === "again" ? Color.foreground
         : Labels.isChips(step.effect) || Labels.isMoney(step.effect) ? Color.accent : Color.urgent
       var view = step.source.kind === "card" ? tableRepeater.itemAt(step.source.index)
         : step.source.kind === "held" ? handRepeater.itemAt(step.source.index)
@@ -348,6 +359,7 @@ Window {
       else if (k === Qt.Key_F6) root.cheat({ money: root.game.money + 100 })
       else if (k === Qt.Key_F7) root.cheat({ ante: root.game.winning_ante, blind: "boss" })
       else if (k === Qt.Key_F2) root.cheat({ random_oligarchy: true })
+      else if (k === Qt.Key_F4) root.cheat({ next_boss: true })
       else if (k === Qt.Key_F3) root.cheat({ random_pack: true })
       else if (k === Qt.Key_F12) root.cheat({ random_command: true })
       else if (k === Qt.Key_F11) root.cheat({ enhance_hand: true })
@@ -398,6 +410,16 @@ Window {
                 : "Ante"
             }
             Value { text: root.game ? Labels.number(root.game.target) : "–" }
+            // The boss's effect, while it applies.
+            Text {
+              width: parent.width
+              visible: root.bossName !== "" && root.game.phase === "playing"
+              wrapMode: Text.WordWrap
+              text: visible ? root.game.boss.description : ""
+              color: Color.urgent
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
           }
         }
 
@@ -607,6 +629,8 @@ Window {
                 id: view
                 joker: modelData
                 width: jokerRow.jokerWidth
+                hidden: root.game.jokers_hidden
+                disabled: root.game.disabled_joker === index
                 // The badge follows the selected hand (Muscle Memory).
                 bonus: root.preview && root.preview.bonuses.length > index
                   ? root.preview.bonuses[index] : modelData.bonus
@@ -807,6 +831,9 @@ Window {
                 card: modelData
                 interactive: false
                 dimmed: root.scoring !== null && root.scoring.scoring.indexOf(index) < 0
+                disabledBy: root.scoring !== null && root.scoring.steps.some(function(s) {
+                  return s.effect === "debuffed" && s.source.kind === "card" && s.source.index === index
+                }) ? root.game.boss.name : ""
               }
             }
           }
@@ -853,6 +880,9 @@ Window {
               card: modelData
               selected: root.selected.indexOf(index) >= 0
               interactive: root.selecting
+              faceDown: root.faceDownIds.indexOf(modelData.id) >= 0
+              disabledBy: root.debuffedIds.indexOf(modelData.id) >= 0 ? root.bossName : ""
+              forced: modelData.id === root.forcedId
               shortcut: index < 9 ? String(index + 1) : index === 9 ? "0" : ""
               onClicked: root.toggleCard(index)
             }

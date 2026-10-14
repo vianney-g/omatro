@@ -1,6 +1,7 @@
 //! How a game unfolds: antes of three blinds, hands and discards, the shop.
 
 use crate::blind::{self, BlindKind, WINNING_ANTE};
+use crate::boss::Boss;
 use crate::card::{ACE, Card, Suit, standard_deck};
 use crate::consumable::{CONSUMABLE_SLOTS, Command, Consumable, Oligarchy, Theme};
 use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, evaluate_with};
@@ -188,11 +189,22 @@ pub enum BlindStatus {
     Skipped,
 }
 
+/// The boss of the ante.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct BossInfo {
+    pub id: Boss,
+    pub name: &'static str,
+    pub description: &'static str,
+    pub quip: &'static str,
+}
+
 /// One of the three blinds of the current ante.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct BlindInfo {
     pub kind: BlindKind,
     pub name: &'static str,
+    /// The boss's effect (none for the small and big blinds).
+    pub description: &'static str,
     pub quip: &'static str,
     pub target: f64,
     pub reward: u32,
@@ -344,6 +356,19 @@ pub struct State {
     /// The winning ante's boss was just beaten; cashing out goes on in endless mode.
     pub victory: bool,
     pub hand: Vec<Card>,
+    /// For each card in hand: dealt face down by the boss.
+    pub face_down: Vec<bool>,
+    /// For each card in hand: kept from scoring by the boss.
+    pub debuffed: Vec<bool>,
+    /// The Clippy: the hand card always selected.
+    pub forced: Option<usize>,
+    /// The boss of the ante, and whether its effect applies now.
+    pub boss: BossInfo,
+    pub boss_active: bool,
+    /// The Kernel Panic: jokers are face down.
+    pub jokers_hidden: bool,
+    /// The Windows Update: the joker that does nothing this hand.
+    pub disabled_joker: Option<usize>,
     pub hand_size: usize,
     /// Cards left to draw during a blind, the whole deck otherwise; sorted by
     /// suit, then descending rank.
@@ -404,12 +429,25 @@ pub struct Cheat {
     /// Adds a random oligarchy card to the clipboard.
     #[serde(default)]
     pub random_oligarchy: bool,
+    /// Sets this ante's boss.
+    pub boss: Option<Boss>,
+    /// Sets this ante's boss to the next one in the list.
+    #[serde(default)]
+    pub next_boss: bool,
     /// Opens a random pack (in the shop).
     #[serde(default)]
     pub random_pack: bool,
     /// Gives the cards in hand random enhancements, seals and editions.
     #[serde(default)]
     pub enhance_hand: bool,
+}
+
+/// Why cards are drawn (some bosses deal them face down).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Draw {
+    Deal,
+    AfterHand,
+    AfterDiscard,
 }
 
 /// A consumable in the clipboard; a Transparent one takes no slot (Copy-on-Write).
@@ -438,7 +476,12 @@ fn roll_oligarchy(rng: &mut Rng) -> Oligarchy {
     } else {
         let common: Vec<Oligarchy> = Oligarchy::ALL
             .into_iter()
-            .filter(|s| !matches!(s, Oligarchy::AspiringBillionaire | Oligarchy::PraiseTheOligarchy))
+            .filter(|s| {
+                !matches!(
+                    s,
+                    Oligarchy::AspiringBillionaire | Oligarchy::PraiseTheOligarchy
+                )
+            })
             .collect();
         common[rng.below(common.len() as u64) as usize]
     }
@@ -523,6 +566,27 @@ pub struct Game {
     themes_used: HashSet<Theme>,
     /// Hand size lost to Consolidation and Offshore Account.
     hand_size_penalty: usize,
+    /// This ante's boss, and the bosses already met (no repeat until all were).
+    boss: Boss,
+    bosses_seen: Vec<Boss>,
+    /// Which boss each ante gets, and its chances (face-down cards…).
+    boss_rng: Rng,
+    /// Rollback was sold during the boss blind.
+    boss_disabled: bool,
+    /// Ids of the cards played this ante (The Stale Cache).
+    played_this_ante: HashSet<u32>,
+    /// Hand types played this blind (The Code Reviewer, The Style Guide).
+    blind_hands: Vec<HandKind>,
+    /// Ids of the cards in hand dealt face down.
+    face_down: HashSet<u32>,
+    /// The Clippy: id of the card always selected.
+    forced: Option<u32>,
+    /// The Windows Update: the joker that does nothing this hand.
+    disabled_joker: Option<usize>,
+    /// The Kernel Panic: jokers are face down.
+    jokers_hidden: bool,
+    /// The Vendor Lock-in: a joker was sold, cards score again.
+    vendor_unlocked: bool,
     /// Beta Release broke: it is gone from the shop, Stable Release shows up.
     beta_broken: bool,
 }
@@ -568,14 +632,121 @@ impl Game {
             consumables: Vec::new(),
             themes_used: HashSet::new(),
             hand_size_penalty: 0,
+            boss: Boss::OomKiller,
+            bosses_seen: Vec::new(),
+            boss_rng: Rng::stream(seed, "boss"),
+            boss_disabled: false,
+            played_this_ante: HashSet::new(),
+            blind_hands: Vec::new(),
+            face_down: HashSet::new(),
+            forced: None,
+            disabled_joker: None,
+            jokers_hidden: false,
+            vendor_unlocked: false,
             beta_broken: false,
         };
+        game.roll_boss();
         game.await_blind();
         game
     }
 
     fn target(&self) -> f64 {
-        blind::target(self.ante, self.blind)
+        self.target_of(self.blind)
+    }
+
+    /// The boss blind's target follows the boss (The Kubernetes Cluster ×4…).
+    fn target_of(&self, kind: BlindKind) -> f64 {
+        match kind {
+            BlindKind::Boss => blind::ante_base(self.ante) * self.boss.multiplier(),
+            _ => blind::target(self.ante, kind),
+        }
+    }
+
+    /// The ante's boss: a final one at the winning ante and its multiples,
+    /// otherwise one allowed at this ante; no repeat until all were met.
+    fn roll_boss(&mut self) {
+        let final_ante = self.ante % WINNING_ANTE == 0;
+        let fits = |b: &Boss| {
+            if final_ante {
+                b.is_final()
+            } else {
+                !b.is_final() && b.min_ante() <= self.ante
+            }
+        };
+        let mut pool: Vec<Boss> = Boss::ALL
+            .into_iter()
+            .filter(|b| fits(b) && !self.bosses_seen.contains(b))
+            .collect();
+        if pool.is_empty() {
+            self.bosses_seen.retain(|b| !fits(b));
+            pool = Boss::ALL.into_iter().filter(fits).collect();
+        }
+        self.boss = pool[self.boss_rng.below(pool.len() as u64) as usize];
+        self.bosses_seen.push(self.boss);
+    }
+
+    /// The boss whose effect applies now: in the boss blind, unless kill -9
+    /// is owned or Rollback was sold.
+    fn boss_effect(&self) -> Option<Boss> {
+        let on =
+            self.blind == BlindKind::Boss && !self.boss_disabled && self.count(Joker::Kill9) == 0;
+        on.then_some(self.boss)
+    }
+
+    fn boss_is(&self, boss: Boss) -> bool {
+        self.boss_effect() == Some(boss)
+    }
+
+    /// Whether a boss keeps this card from scoring.
+    fn debuffed(&self, card: &Card) -> bool {
+        let Some(boss) = self.boss_effect() else {
+            return false;
+        };
+        match boss {
+            Boss::AnonymousAccount => card.is_face(),
+            Boss::StaleCache => self.played_this_ante.contains(&card.id),
+            Boss::VendorLockIn => !self.vendor_unlocked,
+            _ => boss.debuffed_suit().is_some_and(|suit| card.is_suit(suit)),
+        }
+    }
+
+    /// The Windows Update: picks the joker that does nothing this hand.
+    fn pick_disabled_joker(&mut self) {
+        self.disabled_joker = None;
+        if self.boss_is(Boss::WindowsUpdate) && !self.jokers.is_empty() {
+            self.disabled_joker = Some(self.boss_rng.below(self.jokers.len() as u64) as usize);
+        }
+    }
+
+    /// The Clippy: picks a card of the hand to keep selected, if the last one left.
+    fn pick_forced_card(&mut self) {
+        let kept = self
+            .forced
+            .is_some_and(|id| self.hand.iter().any(|c| c.id == id));
+        if !self.boss_is(Boss::Clippy) {
+            self.forced = None;
+        } else if !kept && !self.hand.is_empty() {
+            let i = self.boss_rng.below(self.hand.len() as u64) as usize;
+            self.forced = Some(self.hand[i].id);
+        }
+    }
+
+    /// Adds The Clippy's card to a selection; refuses a full one without it.
+    fn with_forced(&self, indices: &[usize]) -> Result<Vec<usize>, GameError> {
+        let mut indices = indices.to_vec();
+        if let Some(i) = self
+            .forced
+            .and_then(|id| self.hand.iter().position(|c| c.id == id))
+            && !indices.contains(&i)
+        {
+            if indices.len() >= MAX_PLAY {
+                return Err(GameError::BadSelection(
+                    "The Clippy insists on one of your cards".into(),
+                ));
+            }
+            indices.push(i);
+        }
+        Ok(indices)
     }
 
     fn count(&self, joker: Joker) -> usize {
@@ -591,15 +762,16 @@ impl Game {
     }
 
     /// Ultrawide jokers and Transparent cards in hand each add one card;
-    /// Consolidation and Offshore Account take one away.
+    /// Consolidation, Offshore Account and The 4:3 Monitor take one away.
     fn hand_size(&self) -> usize {
         let transparent = self
             .hand
             .iter()
             .filter(|c| c.edition == Some(Edition::Transparent))
             .count();
+        let monitor = usize::from(self.boss_is(Boss::Monitor43));
         (HAND_SIZE + self.count(Joker::Ultrawide) + transparent)
-            .saturating_sub(self.hand_size_penalty)
+            .saturating_sub(self.hand_size_penalty + monitor)
             .max(1)
     }
 
@@ -646,6 +818,13 @@ impl Game {
         self.hands_left = HANDS_PER_BLIND;
         self.discards_left = DISCARDS_PER_BLIND + self.count(Joker::UndoHistory) as u32;
         self.discards_used = 0;
+        self.blind_hands.clear();
+        self.face_down.clear();
+        self.forced = None;
+        self.disabled_joker = None;
+        self.jokers_hidden = false;
+        self.vendor_unlocked = false;
+        self.boss_disabled = false;
         self.phase = Phase::BlindSelect;
     }
 
@@ -657,6 +836,8 @@ impl Game {
                 self.ante += 1;
                 self.blind = BlindKind::Small;
                 self.skipped.clear();
+                self.played_this_ante.clear();
+                self.roll_boss();
             }
         }
         self.await_blind();
@@ -682,7 +863,17 @@ impl Game {
         }
         self.deck_rng.shuffle(&mut self.draw_pile);
         self.phase = Phase::Playing;
-        self.draw();
+        match self.boss_effect() {
+            Some(Boss::ReadOnlyFilesystem) => self.discards_left = 0,
+            Some(Boss::Deadline) => self.hands_left = 1,
+            Some(Boss::KernelPanic) => {
+                self.boss_rng.shuffle(&mut self.jokers);
+                self.jokers_hidden = true;
+            }
+            _ => {}
+        }
+        self.draw(Draw::Deal);
+        self.pick_disabled_joker();
         for _ in 0..self.abilities(Joker::AliasCollection) {
             let command = self.random_command();
             self.create(command);
@@ -694,6 +885,7 @@ impl Game {
             self.hand.push(card);
         }
         self.sort_hand();
+        self.pick_forced_card();
         Ok(())
     }
 
@@ -707,10 +899,27 @@ impl Game {
         Ok(())
     }
 
-    fn draw(&mut self) {
-        while self.hand.len() < self.hand_size()
+    /// Fills the hand up (The Rate Limiter: 3 cards after a hand or discard);
+    /// some bosses deal cards face down.
+    fn draw(&mut self, cause: Draw) {
+        let limit = if self.boss_is(Boss::RateLimiter) && cause != Draw::Deal {
+            self.hand.len() + 3
+        } else {
+            self.hand_size()
+        };
+        while self.hand.len() < limit
             && let Some(card) = self.draw_pile.pop()
         {
+            let hidden = match self.boss_effect() {
+                Some(Boss::BlackScreen) => cause == Draw::Deal,
+                Some(Boss::ScreenLock) => cause == Draw::AfterHand,
+                Some(Boss::FlakyWifi) => self.boss_rng.chance(7),
+                Some(Boss::DarkPattern) => card.is_face(),
+                _ => false,
+            };
+            if hidden {
+                self.face_down.insert(card.id);
+            }
             self.hand.push(card);
         }
         self.sort_hand();
@@ -757,12 +966,40 @@ impl Game {
         if self.phase != Phase::Playing {
             return Err(GameError::NotPlaying);
         }
-        let played = self.take(indices)?;
+        let indices = self.with_forced(indices)?;
+        let played = self.take(&indices)?;
+        for card in &played {
+            self.face_down.remove(&card.id);
+        }
         let money_before = self.money;
         let four_fingers = self.four_fingers();
         let evaluated = evaluate_with(&played, four_fingers);
-        self.plays.add(evaluated.kind);
         let mut notes = Vec::new();
+        let boss = self.boss_effect();
+        let most_played = HandKind::ALL
+            .iter()
+            .all(|&k| self.plays.get(evaluated.kind) >= self.plays.get(k));
+        let refused = match boss {
+            Some(Boss::MandatoryMeeting) => played.len() < 5,
+            Some(Boss::CodeReviewer) => self.blind_hands.contains(&evaluated.kind),
+            Some(Boss::StyleGuide) => self
+                .blind_hands
+                .first()
+                .is_some_and(|&k| k != evaluated.kind),
+            _ => false,
+        };
+        self.plays.add(evaluated.kind);
+        self.blind_hands.push(evaluated.kind);
+        if refused {
+            let breakdown = self.refused_hand(played, &evaluated, boss);
+            return Ok(self.end_hand(breakdown, true));
+        }
+        let mut triggered = boss == Some(Boss::Clippy) || self.disabled_joker.is_some();
+        if boss == Some(Boss::Regression) {
+            self.levels.lower(evaluated.kind);
+            notes.push(format!("{} lost a level.", evaluated.kind.name()));
+            triggered = true;
+        }
         let updates = (0..self.abilities(Joker::AutoUpdate))
             .filter(|_| self.score_rng.chance(4))
             .count() as u32;
@@ -780,6 +1017,13 @@ impl Game {
         for joker in &mut self.jokers {
             joker.before_hand(&evaluated, &scoring);
         }
+        let debuffed: Vec<u32> = played
+            .iter()
+            .chain(&self.hand)
+            .filter(|c| self.debuffed(c))
+            .map(|c| c.id)
+            .collect();
+        triggered |= played.iter().any(|c| debuffed.contains(&c.id));
         let table = Table {
             played: &played,
             held: &self.hand,
@@ -788,10 +1032,28 @@ impl Game {
             plays: &self.plays,
             four_fingers,
             deck: &self.deck,
+            debuffed: &debuffed,
+            halve_base: boss == Some(Boss::ThermalThrottle),
+            disabled_joker: self.disabled_joker,
         };
         let mut breakdown = score(&table, &mut self.score_rng);
         breakdown.notes = notes;
         self.money += breakdown.money;
+        match boss {
+            Some(Boss::ThermalThrottle) => triggered = true,
+            Some(Boss::PerSeatLicense) => {
+                self.money = self.money.saturating_sub(played.len() as u32);
+                triggered = true;
+            }
+            Some(Boss::CloudBill) if most_played => {
+                self.money = 0;
+                breakdown
+                    .notes
+                    .push("The Cloud Bill: money set to $0.".into());
+                triggered = true;
+            }
+            _ => {}
+        }
         self.after_scoring(&mut breakdown, &scoring);
         self.create_from_hand(
             &evaluated,
@@ -808,7 +1070,49 @@ impl Game {
             }
             kept
         });
+        self.played_this_ante.extend(played.iter().map(|c| c.id));
+        Ok(self.end_hand(breakdown, triggered))
+    }
 
+    /// A hand a boss does not allow: it counts, but scores nothing.
+    fn refused_hand(
+        &mut self,
+        played: Vec<Card>,
+        evaluated: &Evaluated,
+        boss: Option<Boss>,
+    ) -> Breakdown {
+        self.played_this_ante.extend(played.iter().map(|c| c.id));
+        Breakdown {
+            hand: evaluated.kind,
+            hand_name: evaluated.kind.name(),
+            scoring: evaluated.scoring.clone(),
+            cards: played,
+            base_chips: 0,
+            base_mult: 0.0,
+            steps: Vec::new(),
+            chips: 0,
+            mult: 0.0,
+            total: 0.0,
+            money: 0,
+            notes: vec![format!(
+                "Not allowed by {}.",
+                boss.map_or("the boss", Boss::name)
+            )],
+            lucky_hits: 0,
+            broken: Vec::new(),
+        }
+    }
+
+    /// After any hand: Incident Commander pays if the boss struck, The OOM
+    /// Killer discards 2 cards, then the blind is won, lost or goes on.
+    fn end_hand(&mut self, mut breakdown: Breakdown, triggered: bool) -> Breakdown {
+        let commanders = self.abilities(Joker::IncidentCommander) as u32;
+        if triggered && commanders > 0 {
+            self.money += 8 * commanders;
+            breakdown
+                .notes
+                .push(format!("Incident Commander: +${}.", 8 * commanders));
+        }
         self.score += breakdown.total;
         self.hands_left -= 1;
         if self.score >= self.target() {
@@ -816,9 +1120,20 @@ impl Game {
         } else if self.hands_left == 0 {
             self.phase = Phase::Lost;
         } else {
-            self.draw();
+            if self.boss_is(Boss::OomKiller) && !self.hand.is_empty() {
+                let mut ids: Vec<u32> = self.hand.iter().map(|c| c.id).collect();
+                self.boss_rng.shuffle(&mut ids);
+                ids.truncate(2);
+                self.hand.retain(|c| !ids.contains(&c.id));
+                breakdown
+                    .notes
+                    .push(format!("The OOM Killer discarded {} cards.", ids.len()));
+            }
+            self.draw(Draw::AfterHand);
+            self.pick_disabled_joker();
+            self.pick_forced_card();
         }
-        Ok(breakdown)
+        breakdown
     }
 
     /// Jokers that change the played cards before they score, left to right:
@@ -953,6 +1268,14 @@ impl Game {
         if indices.is_empty() || self.phase == Phase::Pack {
             return Ok(None);
         }
+        let hidden = indices.iter().any(|&i| {
+            self.hand
+                .get(i)
+                .is_some_and(|c| self.face_down.contains(&c.id))
+        });
+        if hidden {
+            return Ok(None);
+        }
         let cards: Vec<Card> = self
             .validate(indices)?
             .iter()
@@ -968,7 +1291,11 @@ impl Game {
         if self.phase == Phase::Playing && self.discards_left == 0 {
             return Err(GameError::NoDiscardsLeft);
         }
-        let discarded = self.take(indices)?;
+        let indices = self.with_forced(indices)?;
+        let discarded = self.take(&indices)?;
+        for card in &discarded {
+            self.face_down.remove(&card.id);
+        }
         let histories = discarded
             .iter()
             .filter(|c| c.seal == Some(Seal::ShellHistory))
@@ -990,7 +1317,8 @@ impl Game {
             joker.on_discard();
             joker.on_cards_discarded(discarded.len());
         }
-        self.draw();
+        self.draw(Draw::AfterDiscard);
+        self.pick_forced_card();
         Ok(())
     }
 
@@ -1002,7 +1330,10 @@ impl Game {
             .filter(|c| c.is(Enhancement::Enterprise))
             .count() as u32;
         let cards = 3 * enterprise * cron_jobs;
-        let blind = self.blind.reward();
+        let blind = match self.blind {
+            BlindKind::Boss => self.boss.reward(),
+            kind => kind.reward(),
+        };
         let hands = self.hands_left;
         let interest = (self.money / 5).min(MAX_INTEREST);
         let jokers = (0..self.jokers.len())
@@ -1189,12 +1520,30 @@ impl Game {
         Ok(())
     }
 
+    /// Sells a joker: in the shop, before a blind or during it (Rollback, sold
+    /// in the boss blind, disables the boss; any sale unlocks The Vendor Lock-in).
     pub fn sell(&mut self, index: usize) -> Result<(), GameError> {
-        self.in_shop()?;
+        if !matches!(
+            self.phase,
+            Phase::Shop | Phase::BlindSelect | Phase::Playing
+        ) {
+            return Err(GameError::NotInShop);
+        }
         if index >= self.jokers.len() {
             return Err(GameError::BadSelection(format!("no joker #{index}")));
         }
-        self.money += self.jokers.remove(index).sell_value();
+        let sold = self.jokers.remove(index);
+        self.money += sold.sell_value();
+        if self.phase == Phase::Playing {
+            self.vendor_unlocked = true;
+            if sold.joker == Joker::Rollback && self.blind == BlindKind::Boss {
+                self.boss_disabled = true;
+                self.face_down.clear();
+                self.jokers_hidden = false;
+                self.forced = None;
+            }
+            self.pick_disabled_joker();
+        }
         for joker in &mut self.jokers {
             joker.on_card_sold();
         }
@@ -1311,10 +1660,18 @@ impl Game {
                     self.add_enhanced_card(&ranks);
                 }
             }
-            Oligarchy::GoldenHandshake => self.modify_card(target.unwrap_or_default(), seal(Seal::GoldStar)),
-            Oligarchy::OligarchyHarness => self.modify_card(target.unwrap_or_default(), seal(Seal::Retry)),
-            Oligarchy::BrandGuidelines => self.modify_card(target.unwrap_or_default(), seal(Seal::ThemeSync)),
-            Oligarchy::Surveillance => self.modify_card(target.unwrap_or_default(), seal(Seal::ShellHistory)),
+            Oligarchy::GoldenHandshake => {
+                self.modify_card(target.unwrap_or_default(), seal(Seal::GoldStar))
+            }
+            Oligarchy::OligarchyHarness => {
+                self.modify_card(target.unwrap_or_default(), seal(Seal::Retry))
+            }
+            Oligarchy::BrandGuidelines => {
+                self.modify_card(target.unwrap_or_default(), seal(Seal::ThemeSync))
+            }
+            Oligarchy::Surveillance => {
+                self.modify_card(target.unwrap_or_default(), seal(Seal::ShellHistory))
+            }
             Oligarchy::OligarchyTheme => {
                 let edition = Edition::ALL[self.card_rng.below(3) as usize];
                 self.modify_card(target.unwrap_or_default(), |c| c.edition = Some(edition));
@@ -1488,7 +1845,9 @@ impl Game {
             {
                 refuse("it needs cards in hand: use it during a blind")
             }
-            Consumable::Oligarchy(Oligarchy::LeveragedBuyout | Oligarchy::AspiringBillionaire) if !self.has_room(None) => {
+            Consumable::Oligarchy(Oligarchy::LeveragedBuyout | Oligarchy::AspiringBillionaire)
+                if !self.has_room(None) =>
+            {
                 Err(GameError::JokerSlotsFull)
             }
             Consumable::Oligarchy(Oligarchy::OffshoreAccount | Oligarchy::Restructuring)
@@ -1687,9 +2046,9 @@ impl Game {
                     }
                     _ => None,
                 },
-                PackKind::Oligarchy => {
-                    Some(PackItem::Consumable(Consumable::Oligarchy(roll_oligarchy(&mut rng))))
-                }
+                PackKind::Oligarchy => Some(PackItem::Consumable(Consumable::Oligarchy(
+                    roll_oligarchy(&mut rng),
+                ))),
                 PackKind::BaseDevel => None,
             };
             self.pack_rng = rng;
@@ -1847,6 +2206,7 @@ impl Game {
             if let Some(ante) = cheat.ante {
                 self.ante = ante.max(1);
                 self.blind = BlindKind::Small;
+                self.roll_boss();
             }
             if let Some(blind) = cheat.blind {
                 self.blind = blind;
@@ -1885,6 +2245,13 @@ impl Game {
             self.in_shop()?;
             let pack = self.roll_pack();
             self.open_pack(pack);
+        }
+        if let Some(boss) = cheat.boss {
+            self.boss = boss;
+        }
+        if cheat.next_boss {
+            let i = Boss::ALL.iter().position(|&b| b == self.boss).unwrap_or(0);
+            self.boss = Boss::ALL[(i + 1) % Boss::ALL.len()];
         }
         if cheat.random_oligarchy {
             let card = Consumable::Oligarchy(roll_oligarchy(&mut self.command_rng));
@@ -1972,13 +2339,17 @@ impl Game {
             blind: self.blind,
             blinds: BlindKind::ALL
                 .iter()
-                .map(|&kind| BlindInfo {
-                    kind,
-                    name: kind.name(),
-                    quip: kind.quip(),
-                    target: blind::target(self.ante, kind),
-                    reward: kind.reward(),
-                    status: self.blind_status(kind),
+                .map(|&kind| {
+                    let boss = (kind == BlindKind::Boss).then_some(self.boss);
+                    BlindInfo {
+                        kind,
+                        name: boss.map_or(kind.name(), Boss::name),
+                        description: boss.map_or("", Boss::description),
+                        quip: boss.map_or(kind.quip(), Boss::quip),
+                        target: self.target_of(kind),
+                        reward: boss.map_or(kind.reward(), Boss::reward),
+                        status: self.blind_status(kind),
+                    }
                 })
                 .collect(),
             target: self.target(),
@@ -1988,6 +2359,24 @@ impl Game {
             phase: self.phase,
             victory: self.victory,
             hand: self.hand.clone(),
+            face_down: self
+                .hand
+                .iter()
+                .map(|c| self.face_down.contains(&c.id))
+                .collect(),
+            debuffed: self.hand.iter().map(|c| self.debuffed(c)).collect(),
+            forced: self
+                .forced
+                .and_then(|id| self.hand.iter().position(|c| c.id == id)),
+            boss: BossInfo {
+                id: self.boss,
+                name: self.boss.name(),
+                description: self.boss.description(),
+                quip: self.boss.quip(),
+            },
+            boss_active: self.boss_effect().is_some(),
+            jokers_hidden: self.jokers_hidden,
+            disabled_joker: self.disabled_joker,
             hand_size: self.hand_size(),
             remaining: {
                 let mut cards = match self.phase {
@@ -2082,6 +2471,8 @@ fn card_label(card: &Card) -> String {
 mod tests {
     use super::*;
     use crate::card::cards;
+    use crate::joker::Effect;
+    use crate::score::Source;
 
     /// A game in its first blind, hand dealt.
     fn playing(seed: u64, jokers: Vec<Joker>) -> Game {
@@ -3057,7 +3448,11 @@ mod tests {
         assert_eq!(game.jokers.len(), 2);
         assert_eq!(game.jokers[0].joker, game.jokers[1].joker);
 
-        let mut game = with_oligarchy(77, Oligarchy::Restructuring, vec![Joker::Dotfiles, Joker::Hotwire]);
+        let mut game = with_oligarchy(
+            77,
+            Oligarchy::Restructuring,
+            vec![Joker::Dotfiles, Joker::Hotwire],
+        );
         game.use_consumable(0, &[]).unwrap();
         assert_eq!(game.jokers.len(), 1);
         assert_eq!(game.jokers[0].edition, Some(Edition::Animated));
@@ -3153,11 +3548,156 @@ mod tests {
         assert_eq!((opened.choices.len(), s.hand.len()), (4, HAND_SIZE));
     }
 
+    /// A game in the boss blind of ante 1, against this boss.
+    fn boss_game(seed: u64, boss: Boss, jokers: Vec<Joker>) -> Game {
+        let mut game = Game::new(seed, jokers);
+        game.cheat(Cheat {
+            blind: Some(BlindKind::Boss),
+            boss: Some(boss),
+            ..Cheat::default()
+        })
+        .unwrap();
+        game.select_blind().unwrap();
+        game
+    }
+
+    #[test]
+    fn bosses_follow_the_ante_and_do_not_repeat() {
+        let mut game = Game::new(90, vec![]);
+        assert!(!game.boss.is_final() && game.boss.min_ante() <= 1);
+        game.ante = WINNING_ANTE;
+        game.roll_boss();
+        assert!(game.boss.is_final());
+        let mut game = Game::new(91, vec![]);
+        game.ante = 7;
+        // The ante 1 boss counts as met: 22 more before any repeat.
+        let mut seen = std::collections::HashSet::from([game.boss]);
+        for _ in 0..22 {
+            game.roll_boss();
+            assert!(seen.insert(game.boss), "{:?} repeated", game.boss);
+        }
+    }
+
+    #[test]
+    fn suit_bosses_keep_cards_from_scoring() {
+        let mut game = boss_game(92, Boss::Burnout, vec![]);
+        game.hand = cards("KH KS 9S 7C 5H 4D 3S 2C");
+        assert_eq!(game.state().debuffed[..2], [true, false]);
+        let b = game.play(&[0, 1]).unwrap();
+        // The heart king does not score: pair base 10 + 10 chips × 2.
+        assert_eq!(b.total, 40.0);
+        assert_eq!(b.steps[0].effect, Effect::Debuffed);
+    }
+
+    #[test]
+    fn face_down_cards_hide_the_preview() {
+        let game = boss_game(93, Boss::BlackScreen, vec![]);
+        assert!(game.state().face_down.iter().all(|&f| f));
+        assert_eq!(game.preview(&[0, 1]).unwrap(), None);
+    }
+
+    #[test]
+    fn refused_hands_score_nothing() {
+        let mut game = boss_game(94, Boss::MandatoryMeeting, vec![]);
+        let b = game.play(&[0, 1]).unwrap();
+        assert_eq!(
+            (b.total, b.notes[0].as_str()),
+            (0.0, "Not allowed by The Mandatory Meeting.")
+        );
+        assert_eq!(game.hands_left, HANDS_PER_BLIND - 1);
+
+        let mut game = boss_game(95, Boss::CodeReviewer, vec![]);
+        game.hand = cards("KH KS 9S 9C 5H 5D 3S 2C");
+        assert!(game.play(&[0, 1]).unwrap().total > 0.0);
+        assert_eq!(game.play(&[0, 1]).unwrap().total, 0.0);
+    }
+
+    #[test]
+    fn deadline_read_only_and_kubernetes() {
+        let game = boss_game(96, Boss::Deadline, vec![]);
+        assert_eq!((game.hands_left, game.target()), (1, 300.0));
+        let game = boss_game(97, Boss::ReadOnlyFilesystem, vec![]);
+        assert_eq!(game.discards_left, 0);
+        let game = boss_game(98, Boss::KubernetesCluster, vec![]);
+        assert_eq!(game.state().blinds[2].target, 1200.0);
+    }
+
+    #[test]
+    fn oom_killer_and_rate_limiter_shrink_the_hand() {
+        let mut game = boss_game(99, Boss::OomKiller, vec![]);
+        let left = game.draw_pile.len();
+        game.play(&[0]).unwrap();
+        // 2 cards discarded, then the hand refilled: 3 more cards drawn.
+        assert_eq!(
+            (game.hand.len(), game.draw_pile.len()),
+            (HAND_SIZE, left - 3)
+        );
+
+        let mut game = boss_game(100, Boss::RateLimiter, vec![]);
+        game.play(&[0, 1, 2, 3, 4]).unwrap();
+        assert_eq!(game.hand.len(), HAND_SIZE - 5 + 3);
+    }
+
+    #[test]
+    fn cloud_bill_and_incident_commander() {
+        let mut game = boss_game(101, Boss::CloudBill, vec![Joker::IncidentCommander]);
+        game.money = 30;
+        game.hand = cards("KH KS 9S 7C 5H 4D 3S 2C");
+        let b = game.play(&[0, 1]).unwrap();
+        assert_eq!(game.money, 8);
+        assert!(b.notes.iter().any(|n| n.contains("Cloud Bill")));
+    }
+
+    #[test]
+    fn clippy_keeps_a_card_selected() {
+        let mut game = boss_game(102, Boss::Clippy, vec![]);
+        let forced = game.state().forced.unwrap();
+        let other = (forced + 1) % HAND_SIZE;
+        let b = game.play(&[other]).unwrap();
+        assert_eq!(b.cards.len(), 2);
+        assert!(game.state().forced.is_some());
+    }
+
+    #[test]
+    fn windows_update_disables_a_joker() {
+        let mut game = boss_game(103, Boss::WindowsUpdate, vec![Joker::Omakase]);
+        assert_eq!(game.state().disabled_joker, Some(0));
+        let b = game.play(&[0]).unwrap();
+        assert!(
+            b.steps
+                .iter()
+                .all(|s| s.source != Source::Joker { index: 0 })
+        );
+    }
+
+    #[test]
+    fn vendor_lock_in_until_a_joker_is_sold() {
+        let mut game = boss_game(104, Boss::VendorLockIn, vec![Joker::Dotfiles]);
+        assert!(game.state().debuffed.iter().all(|&d| d));
+        game.sell(0).unwrap();
+        assert!(game.state().debuffed.iter().all(|&d| !d));
+    }
+
+    #[test]
+    fn kill_9_and_rollback_disable_bosses() {
+        let game = boss_game(105, Boss::ReadOnlyFilesystem, vec![Joker::Kill9]);
+        assert_eq!(game.discards_left, DISCARDS_PER_BLIND);
+        assert!(!game.state().boss_active);
+
+        let mut game = boss_game(106, Boss::Burnout, vec![Joker::Rollback]);
+        assert!(game.state().boss_active);
+        game.sell(0).unwrap();
+        assert!(!game.state().boss_active);
+        game.hand = cards("KH KS 9S 7C 5H 4D 3S 2C");
+        assert_eq!(game.play(&[0, 1]).unwrap().total, 60.0);
+    }
+
     #[test]
     fn shop_actions_need_the_shop() {
         let mut game = playing(9, vec![Joker::Dotfiles]);
         assert_eq!(game.buy(0), Err(GameError::NotInShop));
-        assert_eq!(game.sell(0), Err(GameError::NotInShop));
         assert_eq!(game.reroll(), Err(GameError::NotInShop));
+        // Jokers may be sold during a blind (Rollback, The Vendor Lock-in).
+        assert_eq!(game.sell(0), Ok(()));
     }
 }

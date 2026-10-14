@@ -41,8 +41,11 @@ takes a card, Ctrl+C (or Escape) skips.
 The game is played in antes of three blinds: the small blind, the big blind and the
 boss blind. Each blind requires reaching a score within 4 hands and 3 discards: the
 ante's base score (300, 800, 2,000, 5,000, 11,000, 20,000, 35,000, 50,000) × 1, 1.5 or
-2. Before the small and big blinds, you may skip them. Beating the boss blind of ante 8
-wins the game; you may then go on in endless mode, where targets explode.
+2. Before the small and big blinds, you may skip them. Each ante's boss
+([docs/bosses.md](docs/bosses.md)) has an effect, announced before the blind: cards that
+don't score, cards dealt face down, hands it refuses, a bigger target… Beating the
+boss blind of ante 8 wins the game; you may then go on in endless mode, where targets
+explode.
 
 Each poker hand type has a level, which raises its starting chips and mult (see
 [docs/hands.md](docs/hands.md)); three secret hands need duplicate cards. Themes
@@ -78,7 +81,7 @@ F5 (win the blind in progress), F6 (+$100), F7 (jump to the boss of ante 8), F8 
 every known hand type one level), F9 (add a random joker with a random edition), F10
 (add a random theme to the clipboard) and F11 (give the cards in hand random
 enhancements, seals and editions), F12 (add a random command to the clipboard) and F3 (open a random pack, in the
-shop), F2 (add a random oligarchy card). `OMATRO_JOKERS=uptime,fork` sets the jokers
+shop), F2 (add a random oligarchy card), F4 (switch this ante's boss to the next one). `OMATRO_JOKERS=uptime,fork` sets the jokers
 every new game starts with.
 
 ## Protocol
@@ -96,7 +99,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"preview","cards":[0,2]}` | Hand the selection would make, without playing it |
 | `{"cmd":"cash_out"}` | Cashes out a won blind's reward and opens the shop |
 | `{"cmd":"buy","offer":0}` | Buys a shop offer |
-| `{"cmd":"sell","joker":0}` | Sells a joker (in the shop) |
+| `{"cmd":"sell","joker":0}` | Sells a joker (in the shop, before or during a blind) |
 | `{"cmd":"move_joker","from":0,"to":2}` | Moves a joker within the row |
 | `{"cmd":"buy_pack","pack":0}` | Buys a pack of the shop and opens it |
 | `{"cmd":"pick","choice":0,"cards":[1]}` | Takes a card of the open pack (`cards`: the drawn hand's cards a command changes) |
@@ -105,20 +108,21 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"sell_consumable","index":0}` | Sells a consumable of the clipboard |
 | `{"cmd":"reroll"}` | Rerolls the shop offers |
 | `{"cmd":"next_blind"}` | Leaves the shop for the choice of the next blind |
-| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true,"random_command":true,"random_pack":true,"random_oligarchy":true}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
+| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true,"random_command":true,"random_pack":true,"random_oligarchy":true,"boss":"burnout","next_boss":true}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
 
 Responses:
 
 - `{"event":"state","state":{…}}`: game state: `ante`, `blind` (`small` / `big` /
-  `boss`), the ante's three `blinds` (name, target, reward, `status`), `target`, `score`,
+  `boss`), the ante's three `blinds` (name, the boss's `description`, target, reward,
+  `status`), the ante's `boss` and `boss_active`, `target`, `score`,
   hands and discards left (in the `pack` phase, the hand is the one a coreutils pack
-  drew), `remaining` (cards left to draw, or the whole deck between
+  drew; `face_down`, `debuffed` and `forced` follow the hand's cards), `remaining` (cards left to draw, or the whole deck between
   blinds), `deck_size`, `hands` (each hand type's `level`, `chips`, `mult` and `played`
   count; secret hands only once played), `phase` = `blind_select` / `playing` / `won` / `shop` /
   `pack` / `lost`, `victory` (the winning ante's boss was just beaten), hand, `hand_size`,
   jokers (`id`, `name`, `description`, `quip`, `rarity`, `edition`, `price`,
   `sell_value`, `bonus` for what a growing joker gives now, `current` for what a Fork
-  copies), `max_jokers`, `modifiers` (names and effects of every enhancement, seal and
+  copies), `max_jokers`, `jokers_hidden`, `disabled_joker`, `modifiers` (names and effects of every enhancement, seal and
   edition), `consumables` (`kind` = `theme` / `command` / `oligarchy`, `id`, `name`,
   `description`, `quip`, `price`, `sell_value`, `min_cards` / `max_cards` to select,
   `needs_hand` when it works on the cards in hand, `transparent` when it takes no slot), `consumable_slots`, `unique_themes`, `money`,
@@ -132,7 +136,8 @@ Responses:
   hand and its `hand_name`, scoring cards, base chips and mult, then `steps` (each
   trigger, with chips and mult afterwards) to animate the calculation, and the `total`.
   A step's `source` is a played `card`, a `held` card or a `joker`; its `effect` is
-  `{"chips":n}`, `{"mult":n}`, `{"x_mult":n}`, `{"money":n}` or `"again"` (a retrigger).
+  `{"chips":n}`, `{"mult":n}`, `{"x_mult":n}`, `{"money":n}`, `"again"` (a retrigger) or
+  `"debuffed"` (the boss keeps the card from scoring).
   `money` is what the hand earned, `notes` what happened to the jokers.
 - `{"event":"preview","cards":[…],"hand":"pair","hand_name":"Pair","scoring":[…],"base_chips":10,"base_mult":2.0}`
   (`hand` is `null` when nothing is chosen, `scoring` holds hand indices), with

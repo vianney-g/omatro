@@ -52,6 +52,8 @@ pub enum Effect {
     Money(u32),
     /// The card scores once more.
     Again,
+    /// A boss keeps the card from scoring.
+    Debuffed,
 }
 
 impl Effect {
@@ -60,7 +62,7 @@ impl Effect {
             Effect::Chips(c) => *chips += c,
             Effect::Mult(m) => *mult += m,
             Effect::XMult(x) => *mult *= x,
-            Effect::Money(_) | Effect::Again => {}
+            Effect::Money(_) | Effect::Again | Effect::Debuffed => {}
         }
     }
 }
@@ -151,6 +153,8 @@ pub enum Joker {
     CopyOnWrite,
     SeedRound,
     AngelInvestor,
+    IncidentCommander,
+    Rollback,
 }
 
 /// What a joker sees of the hand being scored.
@@ -186,7 +190,7 @@ fn is_even(card: Card) -> bool {
 }
 
 impl Joker {
-    pub const ALL: [Joker; 83] = [
+    pub const ALL: [Joker; 85] = [
         Joker::Dotfiles,
         Joker::Omakase,
         Joker::RubyGem,
@@ -270,6 +274,8 @@ impl Joker {
         Joker::CopyOnWrite,
         Joker::SeedRound,
         Joker::AngelInvestor,
+        Joker::IncidentCommander,
+        Joker::Rollback,
     ];
 
     pub fn name(self) -> &'static str {
@@ -357,6 +363,8 @@ impl Joker {
             Joker::CopyOnWrite => "Copy-on-Write",
             Joker::SeedRound => "Seed Round",
             Joker::AngelInvestor => "Angel Investor",
+            Joker::IncidentCommander => "Incident Commander",
+            Joker::Rollback => "Rollback",
         }
     }
 
@@ -455,6 +463,8 @@ impl Joker {
             Joker::AngelInvestor => {
                 "If the first hand of a blind is a single 6, destroys it and creates an oligarchy card"
             }
+            Joker::IncidentCommander => "+$8 each time a boss blind's effect triggers",
+            Joker::Rollback => "Sell it to disable the current boss blind's effect",
         }
     }
 
@@ -545,6 +555,8 @@ impl Joker {
             Joker::CopyOnWrite => "Free copies until someone writes.",
             Joker::SeedRound => "Straight to the top. Then raise again.",
             Joker::AngelInvestor => "Sacrifices a six. Expects a unicorn.",
+            Joker::IncidentCommander => "Paged at 3 a.m. Billed at 9.",
+            Joker::Rollback => "git revert HEAD. Everyone relax.",
         }
     }
 
@@ -555,7 +567,10 @@ impl Joker {
             | Joker::MailingList
             | Joker::Kill9
             | Joker::CopyOnWrite => Rarity::Legendary,
-            Joker::SeedRound | Joker::AngelInvestor => Rarity::Extra,
+            Joker::SeedRound
+            | Joker::AngelInvestor
+            | Joker::IncidentCommander
+            | Joker::Rollback => Rarity::Extra,
             Joker::SuperKey
             | Joker::NoBuild
             | Joker::Heartbleed
@@ -669,6 +684,8 @@ impl Joker {
             Joker::OrphanCleanup => 9,
             Joker::Fork => 10,
             Joker::SeedRound | Joker::AngelInvestor => 6,
+            Joker::IncidentCommander => 7,
+            Joker::Rollback => 5,
             Joker::Dhh
             | Joker::ThePrimeagen
             | Joker::MailingList
@@ -689,6 +706,7 @@ impl Joker {
                 | Joker::FreeAsInBeer
                 | Joker::EnterpriseSales
                 | Joker::Kill9
+                | Joker::Rollback
         )
     }
 

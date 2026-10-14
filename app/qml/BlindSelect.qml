@@ -37,10 +37,23 @@ Row {
         Text {
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
+          wrapMode: Text.WordWrap
           text: modelData.name
           color: panel.next ? Color.accent : Color.foreground
           font.family: Style.font.family
           font.pixelSize: Style.font.heading
+          font.bold: true
+        }
+        // The boss's effect.
+        Text {
+          width: parent.width
+          visible: modelData.description !== ""
+          horizontalAlignment: Text.AlignHCenter
+          wrapMode: Text.WordWrap
+          text: modelData.description
+          color: Color.urgent
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
           font.bold: true
         }
         Text {

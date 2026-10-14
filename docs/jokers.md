@@ -63,6 +63,7 @@ Fork copies the joker on its right.
 | `shell_fu` | Shell Fu | core | $6 | +1 mult per command used this game | *Pipes, loops, one-liners.* |
 | `incremental_build` | Incremental Build | extra | $5 | Every played card permanently gains +5 chips | *A little faster every time.* |
 | `cron_job` | Cron Job | extra | $5 | Retriggers the effects of cards held in hand | *Runs again at midnight. And again.* |
+| `rollback` | Rollback | extra | $5 | Sell it to disable the current boss blind's effect | *git revert HEAD. Everyone relax.* |
 | `super_key` | Super Key | extra | $6 | +2 mult for each scoring card | *Every good shortcut starts here.* |
 | `watch_mode` | Watch Mode | extra | $6 | Retriggers every scoring face card | *Every face, hot-reloaded.* |
 | `theme_collector` | Theme Collector | extra | $6 | Gains ×0.1 mult per theme applied | *37 themes installed, 1 in use.* |
@@ -81,6 +82,7 @@ Fork copies the joker on its right.
 | `enterprise_sales` | Enterprise Sales | extra | $7 | Scoring face cards become Enterprise cards | *Every face, upsold.* |
 | `garbage_collector` | Garbage Collector | extra | $7 | Gains ×0.1 mult per enhanced card played, and removes the enhancement | *Frees memory. And your upgrades.* |
 | `systemd` | systemd | extra | $7 | ×0.2 mult per Daemon card in the deck | *One daemon to rule them all.* |
+| `incident_commander` | Incident Commander | extra | $7 | +$8 each time a boss blind's effect triggers | *Paged at 3 a.m. Billed at 9.* |
 | `recursion` | Recursion | extra | $8 | +8 mult for each scoring A, 2, 3, 5 or 8 | *To understand recursion, see Recursion.* |
 | `free_as_in_beer` | Free as in Beer | extra | $8 | Themes and base16 packs in the shop cost $0 | *Also free as in freedom.* |
 | `config_reload` | Config Reload | extra | $8 | Levels up the hand type of the first discard of each blind | *Super+Shift+R: everything, but fresher.* |

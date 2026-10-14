@@ -1,6 +1,7 @@
 //! omatro's engine: a Balatro-like card game.
 
 pub mod blind;
+pub mod boss;
 pub mod card;
 pub mod consumable;
 #[cfg(test)]

@@ -36,6 +36,7 @@ function mult(m) {
 // An engine effect: {"chips": 11}, {"mult": 2}, {"x_mult": 2}, {"money": 2} or "again".
 function effect(e) {
   if (e === "again") return "Again!"
+  if (e === "debuffed") return "Debuffed"
   if (e.money !== undefined) return "+" + money(e.money)
   if (e.chips !== undefined) return "+" + e.chips
   if (e.mult !== undefined) return "+" + mult(e.mult) + " mult"

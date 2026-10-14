@@ -319,14 +319,20 @@ impl Oligarchy {
 
     pub fn description(self) -> &'static str {
         match self {
-            Oligarchy::BoardAppointment => "Destroys 1 random card in hand, adds 3 enhanced face cards",
+            Oligarchy::BoardAppointment => {
+                "Destroys 1 random card in hand, adds 3 enhanced face cards"
+            }
             Oligarchy::HostileTakeover => "Destroys 1 random card in hand, adds 2 enhanced aces",
-            Oligarchy::HiringSpree => "Destroys 1 random card in hand, adds 4 enhanced numbered cards",
+            Oligarchy::HiringSpree => {
+                "Destroys 1 random card in hand, adds 4 enhanced numbered cards"
+            }
             Oligarchy::GoldenHandshake => "Adds a Gold Star seal to 1 selected card",
             Oligarchy::OligarchyTheme => "Gives 1 selected card Blur, Shadow or Animated",
             Oligarchy::LeveragedBuyout => "Creates a random AUR joker; sets money to $0",
             Oligarchy::Monopoly => "Every card in hand takes a single random suit",
-            Oligarchy::Consolidation => "Every card in hand takes a single random rank; −1 hand size",
+            Oligarchy::Consolidation => {
+                "Every card in hand takes a single random rank; −1 hand size"
+            }
             Oligarchy::OffshoreAccount => "Gives a random joker Transparent; −1 hand size",
             Oligarchy::MassLayoffs => "Destroys 5 random cards in hand; +$20",
             Oligarchy::Merger => "Copies a random joker; destroys all the others",
@@ -484,7 +490,11 @@ mod tests {
             assert_eq!(Oligarchy::ALL.iter().filter(|&&s| s == card).count(), 1);
             assert!(card.quip().chars().count() <= 50, "{}", card.quip());
         }
-        assert!(Oligarchy::StockSplit.needs_hand() && Oligarchy::Consolidation.needs_hand() && !Oligarchy::AspiringBillionaire.needs_hand());
+        assert!(
+            Oligarchy::StockSplit.needs_hand()
+                && Oligarchy::Consolidation.needs_hand()
+                && !Oligarchy::AspiringBillionaire.needs_hand()
+        );
     }
 
     #[test]

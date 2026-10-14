@@ -88,7 +88,7 @@ Lua: `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'`,
 geometry comes from `hyprctl clients -j`; `'hl.dsp.cursor.move({ x = …, y = … })'`
 moves the pointer, to check hover tooltips. F11 gives the cards in hand random
 modifiers, F12 adds a random command, F2 a random oligarchy card, F3 opens a random pack (in
-the shop). Check that stderr has no QML warnings.
+the shop), F4 switches this ante's boss to the next one. Check that stderr has no QML warnings.
 
 ## Adding a joker
 
@@ -120,6 +120,17 @@ jokers). A `Card` carries them for the whole game: change a card with
 `Game::modify_card(id, …)`, which updates the deck, the draw pile and the hand alike.
 Use `Card::is_suit`, `has_rank`, `is_face` and `chips` rather than reading `suit` or
 `rank`: a Binary Blob has neither, a Symlink counts as every suit.
+
+## Bosses
+
+`boss.rs` lists the bosses (min ante, target multiplier, reward). `Game::roll_boss`
+draws one per ante (final ones at the winning ante's multiples, no repeat until all
+were met). `Game::boss_effect()` is the boss whose effect applies now: none outside the
+boss blind, with kill -9, or once Rollback was sold. Effects live in `Game`: `debuffed`
+(cards that don't score, sent to `score` as `Table::debuffed`), `draw(Draw::…)` (face-down
+cards, The Rate Limiter), `play` (refused hands score nothing, money effects, The OOM
+Killer), `select_blind` (discards, hands, The Kernel Panic), `with_forced` (The Clippy).
+Report a boss that struck through `triggered`, for Incident Commander.
 
 ## Packs
 

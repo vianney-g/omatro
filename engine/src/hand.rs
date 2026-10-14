@@ -131,6 +131,12 @@ impl HandLevels {
         self.0[kind.index()] += levels;
     }
 
+    /// One level less, never below the first (The Regression).
+    pub fn lower(&mut self, kind: HandKind) {
+        let level = &mut self.0[kind.index()];
+        *level = (*level - 1).max(1);
+    }
+
     /// Starting chips and mult of a hand at its current level.
     pub fn values(&self, kind: HandKind) -> (u64, f64) {
         let (chips, mult) = kind.base();

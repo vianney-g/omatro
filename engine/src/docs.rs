@@ -1,6 +1,7 @@
 //! Human-readable references in `docs/`, generated from the code. A test fails
 //! when one no longer matches; `make docs` rewrites them.
 
+use crate::boss::Boss;
 use crate::consumable::{Command, Oligarchy, Theme};
 use crate::hand::HandKind;
 use crate::joker::{Edition, Joker};
@@ -262,9 +263,37 @@ fn oligarchy() -> String {
     doc
 }
 
+fn bosses() -> String {
+    let mut doc = header(
+        "Boss blinds",
+        "Each ante's boss blind has an effect, announced before the blind. Bosses are\n\
+         drawn among those allowed at the ante, without repeat until all were met; the\n\
+         final bosses come at ante 8 and its multiples. A boss pays $5 ($8 for a final\n\
+         one). The kill -9 joker disables every boss; Rollback, sold during the boss\n\
+         blind, disables it.",
+    );
+    doc += "| Id | Boss | Effect | From ante | Target | Quip |\n|---|---|---|---|---|---|\n";
+    for boss in Boss::ALL {
+        doc += &format!(
+            "| `{}` | {} | {} | {} | ×{} | *{}* |\n",
+            id(boss),
+            boss.name(),
+            boss.description(),
+            if boss.is_final() {
+                "8, 16…".to_string()
+            } else {
+                boss.min_ante().to_string()
+            },
+            boss.multiplier(),
+            cell(boss.quip())
+        );
+    }
+    doc
+}
+
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 8] = [
+    let docs: [(&str, fn() -> String); 9] = [
         ("jokers.md", jokers),
         ("editions.md", editions),
         ("hands.md", hands),
@@ -272,6 +301,7 @@ fn docs_are_up_to_date() {
         ("commands.md", commands),
         ("packs.md", packs),
         ("oligarchy.md", oligarchy),
+        ("bosses.md", bosses),
         ("modifiers.md", modifiers),
     ];
     for (file, render) in docs {
