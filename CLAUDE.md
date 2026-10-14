@@ -52,6 +52,12 @@ A Cargo workspace with two crates:
   must be declared in `app/build.rs` (singletons with `.singleton(true)`, `.js` files
   via `qrc_resources`). `Labels.js` turns engine identifiers (hands, effects) into
   displayed text and formats numbers.
+- Sizing: every size goes through `Style.space()` / `Style.fontPx()`, i.e. theme scale ×
+  `Style.fit`. `Main.qml` sets `fit` so the whole UI shrinks together when the window is
+  smaller than `designWidth` × `designHeight` (tiled Hyprland windows ignore the minimum
+  size). The window's own size must use `Style.themeScale`, never `Style.space()`, or it
+  makes a binding loop. If the layout gets wider (e.g. more cards in the hand), raise
+  `designWidth`.
 
 ## Adding a joker
 

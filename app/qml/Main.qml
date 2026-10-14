@@ -12,10 +12,22 @@ Window {
   title: "omatro"
   visible: true
   color: Color.background
-  width: Style.space(1100)
-  height: Style.space(800)
-  minimumWidth: Style.space(980)
-  minimumHeight: Style.space(720)
+  // Sizes from the theme scale alone: `Style.space` depends on the window size.
+  width: 1100 * Style.themeScale
+  height: 800 * Style.themeScale
+  minimumWidth: designWidth / 2
+  minimumHeight: designHeight / 2
+
+  // Smallest window the layout fits in at full size; below it, everything
+  // shrinks together (a tiled window can be smaller than the minimum size).
+  // Width: margins, left column and the 8 cards of the hand (1032).
+  readonly property real designWidth: 1040 * Style.themeScale
+  readonly property real designHeight: 720 * Style.themeScale
+  Binding {
+    target: Style
+    property: "fit"
+    value: Math.min(1, root.width / root.designWidth, root.height / root.designHeight)
+  }
 
   // ---- engine and theme --------------------------------------------------
   Engine { id: engine }

@@ -3,15 +3,19 @@ import QtQuick
 import omatro
 
 // Control sizes and states, after the Omarchy shell defaults. Everything
-// follows the Omarchy font size (`omarchy display text size`).
+// follows the Omarchy font size (`omarchy display text size`), shrunk by
+// `fit` when the window is smaller than the layout needs.
 QtObject {
   id: root
 
   readonly property int cornerRadius: OmarchyTheme.cornerRadius
-  readonly property real scale: Math.max(1 / 12, OmarchyTheme.fontBaseSize / 12)
+  readonly property real themeScale: Math.max(1 / 12, OmarchyTheme.fontBaseSize / 12)
+  // Set by the window: 1 when it is large enough, less to shrink everything.
+  property real fit: 1
+  readonly property real scale: themeScale * fit
 
   function space(px) { return Math.round(px * scale) }
-  function fontPx(mult) { return Math.max(1, Math.round(OmarchyTheme.fontBaseSize * mult)) }
+  function fontPx(mult) { return Math.max(1, Math.round(OmarchyTheme.fontBaseSize * fit * mult)) }
 
   readonly property int normalBorderWidth: 1
   readonly property real normalBorderAlpha: 0.4
