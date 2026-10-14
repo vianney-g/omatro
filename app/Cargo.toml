@@ -2,7 +2,7 @@
 name = "omatro"
 version = "0.1.0"
 edition = "2024"
-description = "Jeu de cartes à la Balatro pour Omarchy, en Qt Quick"
+description = "Balatro-like card game for Omarchy, in Qt Quick"
 license = "MIT"
 
 [dependencies]

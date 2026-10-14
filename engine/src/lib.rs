@@ -1,4 +1,4 @@
-//! Moteur d'omatro : un jeu de cartes à la Balatro.
+//! omatro's engine: a Balatro-like card game.
 
 pub mod card;
 pub mod game;

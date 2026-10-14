@@ -3,9 +3,9 @@ import QtQuick.Layouts
 import omatro
 import "Labels.js" as Labels
 
-// Fenêtre de jeu. Les règles vivent dans le moteur Rust, appelé directement
-// (objet Engine) avec le protocole JSON du moteur. Ici, on ne fait qu'afficher
-// et animer.
+// Game window. The rules live in the Rust engine, called directly (Engine
+// object) with the engine's JSON protocol. This file only displays and
+// animates.
 Window {
   id: root
 
@@ -17,7 +17,7 @@ Window {
   minimumWidth: Style.space(980)
   minimumHeight: Style.space(720)
 
-  // ---- moteur et thème ----------------------------------------------------
+  // ---- engine and theme --------------------------------------------------
   Engine { id: engine }
 
   function send(command) {
@@ -26,14 +26,14 @@ Window {
 
   function receive(line) {
     var r
-    try { r = JSON.parse(line) } catch (e) { notice = "Réponse illisible du moteur."; return }
+    try { r = JSON.parse(line) } catch (e) { notice = "Unreadable response from the engine."; return }
     if (r.event === "state") applyState(r.state)
     else if (r.event === "preview") showPreview(r)
     else if (r.event === "scored") startScoring(r)
     else if (r.event === "error") notice = r.message
   }
 
-  // Changement de thème Omarchy : on relit ses fichiers s'ils ont bougé.
+  // Omarchy theme switch: reload its files if they changed.
   Timer {
     interval: 1000
     running: true
@@ -46,12 +46,12 @@ Window {
     keyCatcher.forceActiveFocus()
   }
 
-  // ---- état de la partie --------------------------------------------------
-  property var game: null        // dernier état envoyé par le moteur
-  property var hand: []          // cartes affichées dans la main
-  property var selected: []      // indices dans la main, dans l'ordre des clics
+  // ---- game state --------------------------------------------------------
+  property var game: null        // last state sent by the engine
+  property var hand: []          // cards shown in the hand
+  property var selected: []      // hand indices, in click order
   property var preview: null
-  property var scoring: null     // détail du score en cours d'animation
+  property var scoring: null     // score breakdown being animated
   property var pendingState: null
   property int stepIndex: -1
   property bool showTotal: false
@@ -108,11 +108,11 @@ Window {
 
   function discard() {
     if (!playing || selected.length === 0) return
-    if (game.discards_left === 0) { notice = "Plus de défausse."; return }
+    if (game.discards_left === 0) { notice = "No discards left."; return }
     send({ cmd: "discard", cards: selected })
   }
 
-  // Entrée : jouer, encaisser, quitter la boutique ou recommencer.
+  // Enter: play, cash out, leave the shop or start over.
   function confirm() {
     if (busy || !game) return
     notice = ""
@@ -122,7 +122,7 @@ Window {
     else play()
   }
 
-  // ---- boutique -----------------------------------------------------------
+  // ---- shop --------------------------------------------------------------
   function canBuy(offer) {
     return shopping && game.money >= offer.price && game.jokers.length < game.max_jokers
   }
@@ -134,13 +134,13 @@ Window {
   }
   function reroll() {
     if (!shopping) return
-    if (game.money < game.reroll_cost) { notice = "Pas assez d'argent pour relancer."; return }
+    if (game.money < game.reroll_cost) { notice = "Not enough money to reroll."; return }
     send({ cmd: "reroll" })
   }
 
-  // ---- animation du score -------------------------------------------------
-  // Les cartes jouées passent sur la table, puis chaque étape du détail
-  // (carte ou joker) rebondit et met à jour jetons × mult.
+  // ---- score animation ---------------------------------------------------
+  // The played cards move to the table, then each breakdown step (card or
+  // joker) bounces and updates chips × mult.
   function startScoring(r) {
     var rest = []
     for (var i = 0; i < hand.length; i++)
@@ -176,7 +176,7 @@ Window {
       stepTimer.interval = 900
     } else {
       stepTimer.stop()
-      notice = Labels.hand(scoring.hand) + " : " + Labels.number(scoring.total) + " points"
+      notice = Labels.hand(scoring.hand) + ": " + Labels.number(scoring.total) + " points"
       var s = pendingState
       scoring = null
       pendingState = null
@@ -191,7 +191,7 @@ Window {
     onTriggered: root.nextStep()
   }
 
-  // ---- fenêtre ------------------------------------------------------------
+  // ---- window ------------------------------------------------------------
   component Box: Rectangle {
     radius: Style.cornerRadius
     color: Style.normalFill
@@ -236,9 +236,9 @@ Window {
       anchors { fill: parent; margins: Style.spacing.huge }
       spacing: Style.spacing.huge
 
-      // ---- colonne de gauche : blind, score, calcul en cours
-      // Largeur fixe : un layout imbriqué s'étire par défaut et la colonne
-      // changerait de taille selon le contenu de droite (jeu ou boutique).
+      // ---- left column: blind, score, running calculation
+      // Fixed width: a nested layout stretches by default and the column
+      // would resize with the right-hand content (game or shop).
       ColumnLayout {
         Layout.fillWidth: false
         Layout.preferredWidth: Style.space(250)
@@ -262,7 +262,7 @@ Window {
             id: blindCol
             anchors { fill: parent; margins: Style.spacing.xxl }
             spacing: Style.spacing.xs
-            Caption { text: root.game ? "Blind " + root.game.blind + " · objectif" : "Blind" }
+            Caption { text: root.game ? "Blind " + root.game.blind + " · target" : "Blind" }
             Value { text: root.game ? Labels.number(root.game.target) : "–" }
           }
         }
@@ -274,7 +274,7 @@ Window {
             id: scoreCol
             anchors { fill: parent; margins: Style.spacing.xxl }
             spacing: Style.spacing.xs
-            Caption { text: "Score de la blind" }
+            Caption { text: "Blind score" }
             Value { text: Labels.number(root.shownScore) }
           }
         }
@@ -286,12 +286,12 @@ Window {
             id: moneyCol
             anchors { fill: parent; margins: Style.spacing.xxl }
             spacing: Style.spacing.xs
-            Caption { text: "Argent" }
+            Caption { text: "Money" }
             Value { text: root.game ? Labels.money(root.game.money) : "–"; color: Color.accent }
           }
         }
 
-        // Main reconnue et jetons × mult (aperçu, puis calcul animé).
+        // Recognized hand and chips × mult (preview, then animated scoring).
         Box {
           Layout.fillWidth: true
           implicitHeight: calcCol.implicitHeight + 2 * Style.spacing.xxl
@@ -300,7 +300,7 @@ Window {
             anchors { fill: parent; margins: Style.spacing.xxl }
             spacing: Style.spacing.md
             Text {
-              text: root.handName || "Choisir des cartes"
+              text: root.handName || "Choose cards"
               color: root.handName ? Color.foreground : Color.muted
               font.family: Style.font.family
               font.pixelSize: Style.font.heading
@@ -358,7 +358,7 @@ Window {
             Column {
               id: handsCol
               anchors { fill: parent; margins: Style.spacing.xl }
-              Caption { text: "Mains" }
+              Caption { text: "Hands" }
               Value { text: root.game ? root.game.hands_left : "–"; color: Color.accent }
             }
           }
@@ -368,13 +368,13 @@ Window {
             Column {
               id: discardsCol
               anchors { fill: parent; margins: Style.spacing.xl }
-              Caption { text: "Défausses" }
+              Caption { text: "Discards" }
               Value { text: root.game ? root.game.discards_left : "–"; color: Color.urgent }
             }
           }
         }
 
-        Caption { text: root.game ? "Pioche : " + root.game.deck_left + " / 52" : "" }
+        Caption { text: root.game ? "Deck: " + root.game.deck_left + " / 52" : "" }
 
         Item { Layout.fillHeight: true }
 
@@ -382,12 +382,12 @@ Window {
           Layout.fillWidth: true
           wrapMode: Text.WordWrap
           text: root.shopping
-            ? "1, 2 : acheter · R : relancer\nEntrée : blind suivante · Ctrl+Q : quitter"
-            : "1 à 8 : choisir · Entrée : jouer\nD : défausser · N : nouvelle partie\nCtrl+Q : quitter"
+            ? "1, 2: buy · R: reroll\nEnter: next blind · Ctrl+Q: quit"
+            : "1 to 8: choose · Enter: play\nD: discard · N: new game\nCtrl+Q: quit"
         }
       }
 
-      // ---- zone de jeu : jokers, table, main
+      // ---- play area: jokers, table, hand
       ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -412,7 +412,7 @@ Window {
               Button {
                 anchors.horizontalCenter: parent.horizontalCenter
                 visible: root.shopping
-                text: "Vendre " + Labels.money(modelData.sell_value)
+                text: "Sell " + Labels.money(modelData.sell_value)
                 bordered: true
                 onClicked: root.sell(index)
               }
@@ -420,7 +420,7 @@ Window {
           }
         }
 
-        // Boutique, entre deux blinds.
+        // Shop, between two blinds.
         ColumnLayout {
           Layout.fillWidth: true
           Layout.fillHeight: true
@@ -431,7 +431,7 @@ Window {
 
           Text {
             Layout.alignment: Qt.AlignHCenter
-            text: "Boutique"
+            text: "Shop"
             color: Color.accent
             font.family: Style.font.family
             font.pixelSize: Style.font.displayLarge
@@ -464,7 +464,7 @@ Window {
           Caption {
             Layout.alignment: Qt.AlignHCenter
             visible: root.game !== null && root.game.shop.length === 0
-            text: "Plus rien à vendre : relancer pour de nouvelles offres."
+            text: "Sold out: reroll for new offers."
           }
 
           Text {
@@ -481,14 +481,14 @@ Window {
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.spacing.xxl
             Button {
-              text: "Relancer (R) · " + (root.game ? Labels.money(root.game.reroll_cost) : "")
+              text: "Reroll (R) · " + (root.game ? Labels.money(root.game.reroll_cost) : "")
               bordered: true
               enabled: root.shopping && root.game.money >= root.game.reroll_cost
               opacity: enabled ? 1 : 0.5
               onClicked: root.reroll()
             }
             Button {
-              text: "Blind suivante (Entrée)"
+              text: "Next blind (Enter)"
               bordered: true
               enabled: root.shopping
               onClicked: root.confirm()
@@ -496,7 +496,7 @@ Window {
           }
         }
 
-        // Table : cartes en train de marquer, ou dernier résultat.
+        // Table: cards being scored, or the last result.
         Item {
           Layout.fillWidth: true
           Layout.fillHeight: true
@@ -563,14 +563,14 @@ Window {
           visible: !root.shopping
           spacing: Style.spacing.xxl
           Button {
-            text: "Jouer la main"
+            text: "Play hand"
             bordered: true
             enabled: root.playing && root.selected.length > 0
             opacity: enabled ? 1 : 0.5
             onClicked: root.play()
           }
           Button {
-            text: "Défausser"
+            text: "Discard"
             bordered: true
             enabled: root.playing && root.selected.length > 0 && root.game.discards_left > 0
             opacity: enabled ? 1 : 0.5
@@ -580,7 +580,7 @@ Window {
       }
     }
 
-    // ---- fin de blind : gagnée ou perdue
+    // ---- end of blind: won or lost
     Rectangle {
       anchors.fill: parent
       visible: root.game !== null && (root.game.phase === "won" || root.game.phase === "lost") && !root.busy
@@ -603,7 +603,7 @@ Window {
 
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: endCol.won ? "Blind gagnée !" : "Partie perdue"
+            text: endCol.won ? "Blind won!" : "Game over"
             color: endCol.won ? Color.accent : Color.urgent
             font.family: Style.font.family
             font.pixelSize: Style.font.displayLarge
@@ -618,7 +618,7 @@ Window {
             font.pixelSize: Style.font.title
           }
 
-          // Détail de la récompense.
+          // Reward breakdown.
           Grid {
             anchors.horizontalCenter: parent.horizontalCenter
             visible: endCol.won && root.game.reward !== null
@@ -629,7 +629,7 @@ Window {
               model: {
                 var r = root.game && root.game.reward
                 if (!r) return []
-                var lines = [["Blind", r.blind], ["Mains restantes", r.hands], ["Intérêts", r.interest]]
+                var lines = [["Blind", r.blind], ["Hands left", r.hands], ["Interest", r.interest]]
                 if (r.jokers > 0) lines.push(["Jokers", r.jokers])
                 lines.push(["Total", r.total])
                 var cells = []
@@ -650,7 +650,7 @@ Window {
 
           Button {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: endCol.won ? "Encaisser (Entrée)" : "Nouvelle partie (Entrée)"
+            text: endCol.won ? "Cash out (Enter)" : "New game (Enter)"
             bordered: true
             onClicked: root.confirm()
           }

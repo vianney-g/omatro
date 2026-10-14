@@ -1,4 +1,4 @@
-//! Les jokers : des modificateurs déclenchés pendant le calcul du score.
+//! Jokers: modifiers triggered while a hand is scored.
 
 use crate::card::{Card, Suit};
 use crate::hand::HandKind;
@@ -8,18 +8,18 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum Joker {
     Baobab,
-    Calebasse,
-    Marche,
-    Pagne,
+    Calabash,
+    Market,
+    Wrapper,
     Griot,
     Djembe,
     Zemidjan,
     Harmattan,
-    Masque,
+    Mask,
     Tontine,
 }
 
-/// Effet d'un déclencheur sur le score en cours.
+/// Effect of a trigger on the running score.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Effect {
@@ -41,55 +41,55 @@ impl Effect {
 impl Joker {
     pub const ALL: [Joker; 10] = [
         Joker::Baobab,
-        Joker::Calebasse,
-        Joker::Marche,
-        Joker::Pagne,
+        Joker::Calabash,
+        Joker::Market,
+        Joker::Wrapper,
         Joker::Griot,
         Joker::Djembe,
         Joker::Zemidjan,
         Joker::Harmattan,
-        Joker::Masque,
+        Joker::Mask,
         Joker::Tontine,
     ];
 
     pub fn name(self) -> &'static str {
         match self {
             Joker::Baobab => "Baobab",
-            Joker::Calebasse => "Calebasse",
-            Joker::Marche => "Marché",
-            Joker::Pagne => "Pagne",
+            Joker::Calabash => "Calabash",
+            Joker::Market => "Market",
+            Joker::Wrapper => "Wrapper",
             Joker::Griot => "Griot",
-            Joker::Djembe => "Djembé",
-            Joker::Zemidjan => "Zémidjan",
+            Joker::Djembe => "Djembe",
+            Joker::Zemidjan => "Zemidjan",
             Joker::Harmattan => "Harmattan",
-            Joker::Masque => "Masque",
+            Joker::Mask => "Mask",
             Joker::Tontine => "Tontine",
         }
     }
 
     pub fn description(self) -> &'static str {
         match self {
-            Joker::Baobab => "+30 jetons",
-            Joker::Calebasse => "+5 mult",
-            Joker::Marche => "+2 mult pour chaque carreau qui marque",
-            Joker::Pagne => "+15 jetons pour chaque cœur qui marque",
-            Joker::Griot => "+20 jetons pour chaque figure qui marque",
-            Joker::Djembe => "+2 mult pour chaque carte qui marque",
-            Joker::Zemidjan => "+12 mult si la main est une suite",
-            Joker::Harmattan => "×2 mult si la main jouée compte 3 cartes ou moins",
-            Joker::Masque => "×3 mult si la main est un brelan",
-            Joker::Tontine => "+1 $ par défausse restante à la fin de la blind",
+            Joker::Baobab => "+30 chips",
+            Joker::Calabash => "+5 mult",
+            Joker::Market => "+2 mult for each scoring diamond",
+            Joker::Wrapper => "+15 chips for each scoring heart",
+            Joker::Griot => "+20 chips for each scoring face card",
+            Joker::Djembe => "+2 mult for each scoring card",
+            Joker::Zemidjan => "+12 mult if the hand is a straight",
+            Joker::Harmattan => "×2 mult if the played hand has 3 cards or fewer",
+            Joker::Mask => "×3 mult if the hand is a three of a kind",
+            Joker::Tontine => "+$1 per discard left at the end of the blind",
         }
     }
 
-    /// Prix en boutique ; il se revend la moitié.
+    /// Shop price; jokers sell for half.
     pub fn price(self) -> u32 {
         match self {
-            Joker::Baobab | Joker::Calebasse => 4,
-            Joker::Marche | Joker::Pagne | Joker::Griot | Joker::Zemidjan | Joker::Tontine => 5,
+            Joker::Baobab | Joker::Calabash => 4,
+            Joker::Market | Joker::Wrapper | Joker::Griot | Joker::Zemidjan | Joker::Tontine => 5,
             Joker::Djembe => 6,
             Joker::Harmattan => 7,
-            Joker::Masque => 8,
+            Joker::Mask => 8,
         }
     }
 
@@ -97,32 +97,32 @@ impl Joker {
         (self.price() / 2).max(1)
     }
 
-    /// Déclenché pour chaque carte qui marque, juste après ses jetons.
+    /// Triggered for each scoring card, right after its chips.
     pub fn on_card_scored(self, card: Card) -> Option<Effect> {
         match self {
-            Joker::Marche if card.suit == Suit::Diamonds => Some(Effect::Mult(2.0)),
-            Joker::Pagne if card.suit == Suit::Hearts => Some(Effect::Chips(15)),
+            Joker::Market if card.suit == Suit::Diamonds => Some(Effect::Mult(2.0)),
+            Joker::Wrapper if card.suit == Suit::Hearts => Some(Effect::Chips(15)),
             Joker::Griot if card.is_face() => Some(Effect::Chips(20)),
             Joker::Djembe => Some(Effect::Mult(2.0)),
             _ => None,
         }
     }
 
-    /// Déclenché une fois par main, après les cartes, de gauche à droite.
+    /// Triggered once per hand, after the cards, left to right.
     pub fn on_hand(self, played: &[Card], kind: HandKind) -> Option<Effect> {
         match self {
             Joker::Baobab => Some(Effect::Chips(30)),
-            Joker::Calebasse => Some(Effect::Mult(5.0)),
+            Joker::Calabash => Some(Effect::Mult(5.0)),
             Joker::Zemidjan if matches!(kind, HandKind::Straight | HandKind::StraightFlush) => {
                 Some(Effect::Mult(12.0))
             }
             Joker::Harmattan if played.len() <= 3 => Some(Effect::XMult(2.0)),
-            Joker::Masque if kind == HandKind::ThreeOfAKind => Some(Effect::XMult(3.0)),
+            Joker::Mask if kind == HandKind::ThreeOfAKind => Some(Effect::XMult(3.0)),
             _ => None,
         }
     }
 
-    /// Argent rapporté en fin de blind.
+    /// Money earned at the end of a blind.
     pub fn on_blind_won(self, discards_left: u32) -> u32 {
         match self {
             Joker::Tontine => discards_left,

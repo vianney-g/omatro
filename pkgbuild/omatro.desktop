@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
 Name=omatro
-GenericName=Jeu de cartes
-Comment=Mains de poker, jokers et blinds, aux couleurs du thème
+GenericName=Card Game
+Comment=Poker hands, jokers and blinds, in your theme colors
 Exec=omatro
 Icon=omatro
 Terminal=false
 Categories=Game;CardGame;
-Keywords=cartes;poker;jokers;roguelike;jeu;
+Keywords=cards;poker;jokers;roguelike;game;
 StartupWMClass=omatro

@@ -13,7 +13,7 @@ impl Suit {
     pub const ALL: [Suit; 4] = [Suit::Hearts, Suit::Diamonds, Suit::Clubs, Suit::Spades];
 }
 
-/// Une carte. Le rang va de 2 à 14 (11 = valet, 12 = dame, 13 = roi, 14 = as).
+/// A card. Rank goes from 2 to 14 (11 = jack, 12 = queen, 13 = king, 14 = ace).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Card {
     pub rank: u8,
@@ -24,11 +24,11 @@ pub const ACE: u8 = 14;
 
 impl Card {
     pub fn new(rank: u8, suit: Suit) -> Self {
-        assert!((2..=ACE).contains(&rank), "rang invalide : {rank}");
+        assert!((2..=ACE).contains(&rank), "invalid rank: {rank}");
         Card { rank, suit }
     }
 
-    /// Jetons rapportés par la carte quand elle marque.
+    /// Chips the card is worth when it scores.
     pub fn chips(self) -> u64 {
         match self.rank {
             2..=10 => self.rank as u64,
@@ -42,7 +42,7 @@ impl Card {
     }
 }
 
-/// Le jeu de 52 cartes, dans l'ordre.
+/// The 52-card deck, in order.
 pub fn standard_deck() -> Vec<Card> {
     Suit::ALL
         .iter()
@@ -50,7 +50,7 @@ pub fn standard_deck() -> Vec<Card> {
         .collect()
 }
 
-/// Cartes de test écrites « AS KH 10D 2C » (rang puis couleur H, D, C ou S).
+/// Test cards written "AS KH 10D 2C" (rank, then suit H, D, C or S).
 #[cfg(test)]
 pub(crate) fn cards(text: &str) -> Vec<Card> {
     text.split_whitespace()
@@ -68,7 +68,7 @@ pub(crate) fn cards(text: &str) -> Vec<Card> {
                 "D" => Suit::Diamonds,
                 "C" => Suit::Clubs,
                 "S" => Suit::Spades,
-                s => panic!("couleur inconnue : {s}"),
+                s => panic!("unknown suit: {s}"),
             };
             Card::new(rank, suit)
         })

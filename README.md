@@ -1,96 +1,95 @@
 # omatro
 
-Un jeu de cartes à la Balatro pour Omarchy : on joue des mains de poker pour battre des
-blinds, et des jokers multiplient le score (jetons × mult).
+A Balatro-like card game for Omarchy: play poker hands to beat blinds, while jokers
+multiply the score (chips × mult).
 
-Une application Qt Quick autonome, comme omawrite ou omacut, mais écrite en Rust
-(liaison Qt avec [cxx-qt](https://github.com/KDAB/cxx-qt)) :
+A standalone Qt Quick application, like omawrite or omacut, but written in Rust
+(Qt binding with [cxx-qt](https://github.com/KDAB/cxx-qt)):
 
-- `engine/` : le moteur (règles, score, jokers, boutique), sans dépendance à Qt. Il
-  fournit aussi un binaire `omatro-engine` qui parle le protocole JSON sur stdin/stdout.
-- `app/` : l'application. Le QML est embarqué dans le binaire, et le moteur est appelé
-  directement, avec le même protocole JSON. Le thème Omarchy actif (couleurs de
-  `colors.toml`, taille de police de `shell.toml`, arrondi Hyprland) est relu dès qu'il
-  change.
-- `pkgbuild/` : entrée du lanceur et icône.
+- `engine/`: the engine (rules, scoring, jokers, shop), with no Qt dependency. It also
+  provides an `omatro-engine` binary that speaks the JSON protocol on stdin/stdout.
+- `app/`: the application. The QML is embedded in the binary, and the engine is called
+  directly, with the same JSON protocol. The active Omarchy theme (colors from
+  `colors.toml`, font size from `shell.toml`, Hyprland rounding) is reloaded as soon as
+  it changes.
+- `pkgbuild/`: launcher entry and icon.
 
-Projet personnel, sans lien avec Balatro : les mécaniques sont reprises, mais ni le nom,
-ni les graphismes, ni les textes, ni le code.
+A personal project, unaffiliated with Balatro: the mechanics are borrowed, but not the
+name, the artwork, the text or the code.
 
 ## Installation
 
-Il faut Rust et Qt 6 (`qt6-base`, `qt6-declarative`).
+Requires Rust and Qt 6 (`qt6-base`, `qt6-declarative`).
 
 ```sh
-make install   # compile et installe dans ~/.local (binaire, lanceur, icône)
+make install   # build and install into ~/.local (binary, launcher entry, icon)
 omatro
-make run       # compile et lance sans installer
+make run       # build and run without installing
 make test
 ```
 
-Touches : 1 à 8 pour choisir les cartes, Entrée pour jouer, D pour défausser,
-N pour une nouvelle partie, Ctrl+Q pour quitter. En boutique : 1 et 2 pour acheter,
-R pour relancer, Entrée pour la blind suivante.
+Keys: 1 to 8 to choose cards, Enter to play, D to discard, N for a new game,
+Ctrl+Q to quit. In the shop: 1 and 2 to buy, R to reroll, Enter for the next blind.
 
-## Déroulement
+## How a game goes
 
-Chaque blind demande d'atteindre un score (300, puis × 1,5) en 4 mains et 3 défausses.
-Une blind gagnée rapporte 4 $, plus 1 $ par main non jouée, plus 1 $ d'intérêt par
-tranche de 5 $ possédés (5 $ au plus). On encaisse, puis la boutique propose 2 jokers
-qu'on n'a pas encore (5 emplacements, revente à moitié prix ; relance à 5 $, puis 1 $ de
-plus à chaque fois). On commence avec 4 $ et sans joker.
+Each blind requires reaching a score (300, then × 1.5) within 4 hands and 3 discards.
+A won blind pays $4, plus $1 per unplayed hand, plus $1 of interest per $5 held
+($5 at most). Cash out, then the shop offers 2 jokers you don't own yet (5 slots,
+resold at half price; reroll for $5, then $1 more each time). You start with $4 and
+no jokers.
 
-## Moteur seul
+## Engine alone
 
 ```sh
-cargo run -p omatro-engine   # lit les commandes sur stdin
+cargo run -p omatro-engine   # reads commands on stdin
 ```
 
-## Protocole
+## Protocol
 
-Une commande JSON par ligne sur l'entrée standard, une réponse JSON par ligne sur la sortie.
+One JSON command per line on standard input, one JSON response per line on output.
 
-| Commande | Effet |
+| Command | Effect |
 |---|---|
-| `{"cmd":"new_game","seed":42,"jokers":["baobab"]}` | Nouvelle partie (`seed` et `jokers` facultatifs) |
-| `{"cmd":"state"}` | Renvoie l'état |
-| `{"cmd":"play","cards":[0,2,3]}` | Joue 1 à 5 cartes (indices dans la main) |
-| `{"cmd":"discard","cards":[1]}` | Défausse 1 à 5 cartes |
-| `{"cmd":"preview","cards":[0,2]}` | Main que formerait la sélection, sans la jouer |
-| `{"cmd":"cash_out"}` | Encaisse la récompense d'une blind gagnée et ouvre la boutique |
-| `{"cmd":"buy","offer":0}` | Achète une offre de la boutique |
-| `{"cmd":"sell","joker":0}` | Revend un joker (en boutique) |
-| `{"cmd":"reroll"}` | Relance les offres de la boutique |
-| `{"cmd":"next_blind"}` | Quitte la boutique pour la blind suivante |
+| `{"cmd":"new_game","seed":42,"jokers":["baobab"]}` | New game (`seed` and `jokers` optional) |
+| `{"cmd":"state"}` | Returns the state |
+| `{"cmd":"play","cards":[0,2,3]}` | Plays 1 to 5 cards (indices into the hand) |
+| `{"cmd":"discard","cards":[1]}` | Discards 1 to 5 cards |
+| `{"cmd":"preview","cards":[0,2]}` | Hand the selection would make, without playing it |
+| `{"cmd":"cash_out"}` | Cashes out a won blind's reward and opens the shop |
+| `{"cmd":"buy","offer":0}` | Buys a shop offer |
+| `{"cmd":"sell","joker":0}` | Sells a joker (in the shop) |
+| `{"cmd":"reroll"}` | Rerolls the shop offers |
+| `{"cmd":"next_blind"}` | Leaves the shop for the next blind |
 
-Réponses :
+Responses:
 
-- `{"event":"state","state":{…}}` : état de la partie (blind, objectif, score, mains et
-  défausses restantes, `phase` = `playing` / `won` / `shop` / `lost`, main, jokers,
-  `money`, `reward` en phase `won`, offres `shop` et `reroll_cost` en boutique).
-- `{"event":"scored","score":{…},"state":{…}}` après `play` : cartes jouées, main reconnue,
-  cartes qui marquent, jetons et mult de départ, puis `steps` (chaque déclencheur, avec
-  jetons et mult après coup) pour animer le calcul, et le `total`.
+- `{"event":"state","state":{…}}`: game state (blind, target, score, hands and discards
+  left, `phase` = `playing` / `won` / `shop` / `lost`, hand, jokers, `money`, `reward`
+  in the `won` phase, `shop` offers and `reroll_cost` in the shop).
+- `{"event":"scored","score":{…},"state":{…}}` after `play`: played cards, recognized
+  hand, scoring cards, base chips and mult, then `steps` (each trigger, with chips and
+  mult afterwards) to animate the calculation, and the `total`.
 - `{"event":"preview","cards":[…],"hand":"pair","scoring":[…],"base_chips":10,"base_mult":2.0}`
-  (`hand` à `null` si rien n'est choisi, `scoring` en indices dans la main).
+  (`hand` is `null` when nothing is chosen, `scoring` holds hand indices).
 - `{"event":"error","message":"…"}`.
 
-La main est toujours rangée par rang décroissant.
+The hand is always sorted by descending rank.
 
-Les cartes s'écrivent `{"rank":14,"suit":"spades"}` (rang 2 à 14 : 11 valet, 12 dame,
-13 roi, 14 as).
+Cards are written `{"rank":14,"suit":"spades"}` (rank 2 to 14: 11 jack, 12 queen,
+13 king, 14 ace).
 
 ## Jokers
 
-| Id | Nom | Prix | Effet |
+| Id | Name | Price | Effect |
 |---|---|---|---|
-| `baobab` | Baobab | 4 $ | +30 jetons |
-| `calebasse` | Calebasse | 4 $ | +5 mult |
-| `marche` | Marché | 5 $ | +2 mult pour chaque carreau qui marque |
-| `pagne` | Pagne | 5 $ | +15 jetons pour chaque cœur qui marque |
-| `griot` | Griot | 5 $ | +20 jetons pour chaque figure qui marque |
-| `zemidjan` | Zémidjan | 5 $ | +12 mult si la main est une suite |
-| `tontine` | Tontine | 5 $ | +1 $ par défausse restante à la fin de la blind |
-| `djembe` | Djembé | 6 $ | +2 mult pour chaque carte qui marque |
-| `harmattan` | Harmattan | 7 $ | ×2 mult si la main jouée compte 3 cartes ou moins |
-| `masque` | Masque | 8 $ | ×3 mult si la main est un brelan |
+| `baobab` | Baobab | $4 | +30 chips |
+| `calabash` | Calabash | $4 | +5 mult |
+| `market` | Market | $5 | +2 mult for each scoring diamond |
+| `wrapper` | Wrapper | $5 | +15 chips for each scoring heart |
+| `griot` | Griot | $5 | +20 chips for each scoring face card |
+| `zemidjan` | Zemidjan | $5 | +12 mult if the hand is a straight |
+| `tontine` | Tontine | $5 | +$1 per discard left at the end of the blind |
+| `djembe` | Djembe | $6 | +2 mult for each scoring card |
+| `harmattan` | Harmattan | $7 | ×2 mult if the played hand has 3 cards or fewer |
+| `mask` | Mask | $8 | ×3 mult if the hand is a three of a kind |

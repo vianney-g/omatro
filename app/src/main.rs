@@ -1,4 +1,4 @@
-//! omatro : un jeu de cartes à la Balatro, aux couleurs du thème Omarchy.
+//! omatro: a Balatro-like card game, in the colors of the Omarchy theme.
 
 mod bridge;
 mod theme;
@@ -7,7 +7,7 @@ use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 
 fn main() {
     let mut app = QGuiApplication::new();
-    // Relie la fenêtre à omatro.desktop (app_id Wayland, icône).
+    // Ties the window to omatro.desktop (Wayland app_id, icon).
     QGuiApplication::set_desktop_file_name(&QString::from("omatro"));
     let mut engine = QQmlApplicationEngine::new();
     if let Some(engine) = engine.as_mut() {

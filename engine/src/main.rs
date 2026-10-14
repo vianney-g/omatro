@@ -1,5 +1,5 @@
-//! Le moteur en processus : lit des commandes JSON sur stdin (une par ligne)
-//! et écrit les réponses sur stdout.
+//! The engine as a process: reads JSON commands on stdin (one per line)
+//! and writes the responses on stdout.
 
 use omatro_engine::protocol::Session;
 use std::io::{self, BufRead, Write};

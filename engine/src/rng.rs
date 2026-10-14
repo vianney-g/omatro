@@ -1,7 +1,7 @@
-//! Générateur pseudo-aléatoire à graine (SplitMix64).
+//! Seeded pseudo-random generator (SplitMix64).
 //!
-//! Écrit à la main plutôt que tiré de `rand` : une même graine doit donner la
-//! même partie quelle que soit la version des dépendances.
+//! Hand-written rather than taken from `rand`: the same seed must give the
+//! same game whatever the dependency versions.
 
 pub struct Rng(u64);
 
@@ -18,12 +18,12 @@ impl Rng {
         z ^ (z >> 31)
     }
 
-    /// Entier dans `0..n`.
+    /// Integer in `0..n`.
     pub fn below(&mut self, n: u64) -> u64 {
         ((self.next_u64() as u128 * n as u128) >> 64) as u64
     }
 
-    /// Mélange de Fisher-Yates.
+    /// Fisher-Yates shuffle.
     pub fn shuffle<T>(&mut self, items: &mut [T]) {
         for i in (1..items.len()).rev() {
             let j = self.below(i as u64 + 1) as usize;

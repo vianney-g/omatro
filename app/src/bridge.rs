@@ -1,4 +1,4 @@
-//! Le pont entre Rust et QML : le moteur de jeu et le thème Omarchy.
+//! The bridge between Rust and QML: the game engine and the Omarchy theme.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -10,8 +10,8 @@ pub mod qobject {
     }
 
     extern "RustQt" {
-        /// Le moteur, derrière le même protocole JSON que le binaire
-        /// `omatro-engine` : une commande en entrée, une réponse en sortie.
+        /// The engine, behind the same JSON protocol as the `omatro-engine`
+        /// binary: one command in, one response out.
         #[qobject]
         #[qml_element]
         type Engine = super::EngineRust;
@@ -21,7 +21,7 @@ pub mod qobject {
     }
 
     extern "RustQt" {
-        /// Le thème Omarchy actif, relu quand il change.
+        /// The active Omarchy theme, reloaded when it changes.
         #[qobject]
         #[qml_element]
         #[qml_singleton]
@@ -34,7 +34,7 @@ pub mod qobject {
         #[qproperty(i32, corner_radius, cxx_name = "cornerRadius")]
         type OmarchyTheme = super::ThemeRust;
 
-        /// Relit le thème si ses fichiers ont changé.
+        /// Reloads the theme if its files have changed.
         #[qinvokable]
         fn refresh(self: Pin<&mut OmarchyTheme>);
     }

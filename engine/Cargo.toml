@@ -2,7 +2,7 @@
 name = "omatro-engine"
 version = "0.1.0"
 edition = "2024"
-description = "Moteur de jeu d'omatro : deck, mains de poker, score jetons × mult, jokers"
+description = "omatro game engine: deck, poker hands, chips × mult scoring, jokers"
 license = "MIT"
 
 [dependencies]

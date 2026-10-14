@@ -1,5 +1,5 @@
-//! Lecture du thème Omarchy actif : palette de `colors.toml` et taille de police
-//! de `shell.toml`, comme le fait le shell.
+//! Reading the active Omarchy theme: palette from `colors.toml` and font size
+//! from `shell.toml`, as the shell does.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -10,13 +10,13 @@ pub struct Palette {
     pub background: String,
     pub foreground: String,
     pub accent: String,
-    /// Le rouge du thème (`red`, sinon `color1`).
+    /// The theme's red (`red`, else `color1`).
     pub urgent: String,
     pub muted: String,
 }
 
 impl Default for Palette {
-    /// Couleurs de repli du shell Omarchy.
+    /// Fallback colors of the Omarchy shell.
     fn default() -> Self {
         Palette {
             background: "#101315".into(),
@@ -28,7 +28,7 @@ impl Default for Palette {
     }
 }
 
-/// Paires `clé = "#rrggbb"` d'un fichier TOML de couleurs.
+/// `key = "#rrggbb"` pairs of a TOML color file.
 fn colors(text: &str) -> impl Iterator<Item = (&str, &str)> {
     text.lines().filter_map(|line| {
         let (key, value) = line.split_once('=')?;
@@ -42,7 +42,7 @@ fn colors(text: &str) -> impl Iterator<Item = (&str, &str)> {
 }
 
 impl Palette {
-    /// Même logique que le shell : `accent` sinon `color4`, `muted` sinon `color8`, etc.
+    /// Same logic as the shell: `accent` else `color4`, `muted` else `color8`, etc.
     pub fn parse(text: &str) -> Palette {
         let mut p = Palette::default();
         let (mut accent, mut muted, mut fg, mut bg) = (None, None, None, None);
@@ -76,7 +76,7 @@ impl Palette {
     }
 }
 
-/// `base-size` de la section `[font]` d'un `shell.toml`.
+/// `base-size` of the `[font]` section of a `shell.toml`.
 pub fn font_base_size(text: &str) -> Option<i32> {
     let mut in_font = false;
     for line in text.lines().map(str::trim) {
@@ -109,7 +109,7 @@ fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_default()
 }
 
-/// Ce que l'interface prend du thème.
+/// What the interface takes from the theme.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
     pub palette: Palette,
@@ -120,7 +120,7 @@ pub struct Theme {
 impl Theme {
     pub fn load() -> Theme {
         let dir = theme_dir();
-        // Le réglage de la machine l'emporte sur celui du thème, comme dans le shell.
+        // The machine setting wins over the theme's, as in the shell.
         let user_shell = read(&home().join(".config/omarchy/shell.toml"));
         let theme_shell = read(&dir.join("shell.toml"));
         Theme {
@@ -133,7 +133,7 @@ impl Theme {
     }
 }
 
-/// Arrondi des fenêtres Hyprland (`decoration:rounding`), que le shell reprend aussi.
+/// Hyprland window rounding (`decoration:rounding`), which the shell uses too.
 fn hyprland_rounding() -> Option<i32> {
     let out = Command::new("hyprctl")
         .args(["getoption", "decoration:rounding", "-j"])
@@ -149,8 +149,8 @@ fn hyprland_rounding() -> Option<i32> {
     digits.parse().ok()
 }
 
-/// Empreinte des fichiers du thème : change quand on change de thème (le
-/// dossier courant est remplacé) ou qu'un fichier est modifié.
+/// Fingerprint of the theme files: changes when the theme is switched (the
+/// current directory is replaced) or a file is modified.
 pub fn fingerprint() -> Vec<(PathBuf, Option<SystemTime>)> {
     let dir = theme_dir();
     let files = [
@@ -202,19 +202,19 @@ mod tests {
 
     #[test]
     fn empty_file_gives_defaults() {
-        // Sans `muted` ni `color8`, le shell prend la couleur du texte.
+        // Without `muted` or `color8`, the shell uses the text color.
         let expected = Palette {
             muted: Palette::default().foreground,
             ..Palette::default()
         };
         assert_eq!(Palette::parse(""), expected);
-        assert_eq!(Palette::parse("accent = \"pas une couleur\""), expected);
+        assert_eq!(Palette::parse("accent = \"not a color\""), expected);
     }
 
     #[test]
     fn reads_font_base_size() {
         assert_eq!(
-            font_base_size("[bar]\nbase-size = 9\n[font]\nbase-size = 14 # grand\n"),
+            font_base_size("[bar]\nbase-size = 9\n[font]\nbase-size = 14 # large\n"),
             Some(14)
         );
         assert_eq!(font_base_size("[font]\nfamily = \"x\"\n"), None);

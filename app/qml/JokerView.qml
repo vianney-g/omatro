@@ -1,7 +1,7 @@
 import QtQuick
 import omatro
 
-// Un joker de la rangée : nom et effet.
+// A joker of the row: name and effect.
 Item {
   id: root
 

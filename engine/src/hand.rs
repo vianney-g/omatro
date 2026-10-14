@@ -1,4 +1,4 @@
-//! Reconnaissance des mains de poker (1 à 5 cartes jouées).
+//! Poker hand recognition (1 to 5 played cards).
 
 use crate::card::{ACE, Card};
 use serde::Serialize;
@@ -18,7 +18,7 @@ pub enum HandKind {
 }
 
 impl HandKind {
-    /// Jetons et multiplicateur de départ de la main.
+    /// Base chips and multiplier of the hand.
     pub fn base(self) -> (u64, f64) {
         match self {
             HandKind::HighCard => (5, 1.0),
@@ -37,18 +37,15 @@ impl HandKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Evaluated {
     pub kind: HandKind,
-    /// Indices (dans les cartes jouées, par ordre croissant) des cartes qui marquent.
+    /// Indices (into the played cards, ascending) of the scoring cards.
     pub scoring: Vec<usize>,
 }
 
 pub fn evaluate(cards: &[Card]) -> Evaluated {
-    assert!(
-        (1..=5).contains(&cards.len()),
-        "il faut jouer de 1 à 5 cartes"
-    );
+    assert!((1..=5).contains(&cards.len()), "play 1 to 5 cards");
     let all: Vec<usize> = (0..cards.len()).collect();
 
-    // Groupes de cartes de même rang, les plus nombreux puis les plus forts d'abord.
+    // Groups of cards of the same rank, largest then highest first.
     let mut groups: Vec<Vec<usize>> = Vec::new();
     for (i, card) in cards.iter().enumerate() {
         match groups.iter_mut().find(|g| cards[g[0]].rank == card.rank) {

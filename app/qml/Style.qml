@@ -2,8 +2,8 @@ pragma Singleton
 import QtQuick
 import omatro
 
-// Mesures et états des contrôles, d'après les valeurs par défaut du shell
-// Omarchy. Tout suit la taille de police d'Omarchy (`omarchy display text size`).
+// Control sizes and states, after the Omarchy shell defaults. Everything
+// follows the Omarchy font size (`omarchy display text size`).
 QtObject {
   id: root
 
@@ -30,7 +30,7 @@ QtObject {
     readonly property int huge: root.space(18)
   }
 
-  // « monospace » est l'alias fontconfig que règle `omarchy font set`.
+  // "monospace" is the fontconfig alias set by `omarchy font set`.
   readonly property QtObject font: QtObject {
     readonly property string family: "monospace"
     readonly property int caption: root.fontPx(0.833)

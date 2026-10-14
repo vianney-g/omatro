@@ -1,4 +1,4 @@
-//! Calcul du score d'une main, étape par étape pour que l'affichage puisse l'animer.
+//! Scoring a hand, step by step so the display can animate it.
 
 use crate::card::Card;
 use crate::hand::{HandKind, evaluate};
@@ -8,9 +8,9 @@ use serde::Serialize;
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Source {
-    /// Une carte jouée (indice dans `Breakdown::cards`).
+    /// A played card (index into `Breakdown::cards`).
     Card { index: usize },
-    /// Un joker (indice dans la rangée de jokers).
+    /// A joker (index into the joker row).
     Joker { index: usize },
 }
 
@@ -18,7 +18,7 @@ pub enum Source {
 pub struct Step {
     pub source: Source,
     pub effect: Effect,
-    /// Jetons et mult après cette étape.
+    /// Chips and mult after this step.
     pub chips: u64,
     pub mult: f64,
 }
@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn pair_without_jokers() {
-        // Paire : 10 jetons × 2, plus 10 + 10 pour les rois.
+        // Pair: 10 chips × 2, plus 10 + 10 for the kings.
         let b = score(&cards("KH 4D KS"), &[]);
         assert_eq!(b.hand, HandKind::Pair);
         assert_eq!((b.chips, b.mult, b.total), (30, 2.0, 60));
@@ -110,17 +110,17 @@ mod tests {
 
     #[test]
     fn card_jokers_trigger_per_scoring_card() {
-        // Brelan de dames dont deux carreaux : 30 + 3×10 + 3×20 jetons, 3 + 2×2 mult.
-        let b = score(&cards("QD QH 2D QD"), &[Joker::Marche, Joker::Griot]);
+        // Three queens, two of them diamonds: 30 + 3×10 + 3×20 chips, 3 + 2×2 mult.
+        let b = score(&cards("QD QH 2D QD"), &[Joker::Market, Joker::Griot]);
         assert_eq!((b.chips, b.mult), (120, 7.0));
         assert_eq!(b.total, 840);
     }
 
     #[test]
     fn hand_kind_jokers() {
-        // Brelan : (30 + 3×5) × 3, puis ×3 pour le masque.
-        assert_eq!(score(&cards("5H 5D 5S"), &[Joker::Masque]).total, 405);
-        // Suite : (30 + 2+3+4+5+6) × (4 + 12).
+        // Three of a kind: (30 + 3×5) × 3, then ×3 for the mask.
+        assert_eq!(score(&cards("5H 5D 5S"), &[Joker::Mask]).total, 405);
+        // Straight: (30 + 2+3+4+5+6) × (4 + 12).
         assert_eq!(
             score(&cards("2H 3D 4S 5C 6H"), &[Joker::Zemidjan]).total,
             800

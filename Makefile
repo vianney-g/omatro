@@ -12,7 +12,7 @@ build:
 run: build
 	./target/release/omatro
 
-# Installation dans ~/.local : binaire, entrée du lanceur et icône.
+# Installs into ~/.local: binary, launcher entry and icon.
 install: build
 	install -Dm755 target/release/omatro $(PREFIX)/bin/omatro
 	install -Dm644 pkgbuild/omatro.desktop $(PREFIX)/share/applications/omatro.desktop

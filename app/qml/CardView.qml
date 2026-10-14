@@ -2,8 +2,8 @@ import QtQuick
 import omatro
 import "Labels.js" as Labels
 
-// Une carte à jouer : cœurs et carreaux dans la couleur d'alerte du thème,
-// piques et trèfles dans sa couleur de texte.
+// A playing card: hearts and diamonds in the theme's urgent color,
+// spades and clubs in its text color.
 Item {
   id: root
 
@@ -21,7 +21,7 @@ Item {
   readonly property string suitText: card ? Labels.suit(card.suit) : ""
   readonly property string rankText: card ? Labels.rank(card.rank) : ""
 
-  // Rebond de la carte et effet qui s'affiche au-dessus.
+  // Card bounce and the effect shown above it.
   function flash(text, color) {
     popup.text = text
     popup.color = color

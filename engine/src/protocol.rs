@@ -1,5 +1,5 @@
-//! Protocole entre le moteur et l'affichage : une commande JSON par ligne en
-//! entrée, une réponse JSON par ligne en sortie.
+//! Protocol between the engine and the display: one JSON command per line
+//! in, one JSON response per line out.
 
 use crate::game::{Game, State};
 use crate::hand::HandKind;
@@ -47,7 +47,7 @@ pub enum Response {
         score: Breakdown,
         state: State,
     },
-    /// Main formée par la sélection (`hand` absent si rien n'est choisi).
+    /// Hand made by the selection (`hand` is null when nothing is chosen).
     Preview {
         cards: Vec<usize>,
         hand: Option<HandKind>,
@@ -72,7 +72,7 @@ impl Session {
                 .run(command)
                 .unwrap_or_else(|message| Response::Error { message }),
             Err(e) => Response::Error {
-                message: format!("commande illisible : {e}"),
+                message: format!("unreadable command: {e}"),
             },
         }
     }
@@ -85,7 +85,7 @@ impl Session {
                 state: game.state(),
             });
         }
-        let game = self.game.as_mut().ok_or("aucune partie en cours")?;
+        let game = self.game.as_mut().ok_or("no game in progress")?;
         match command {
             Command::NewGame { .. } => unreachable!(),
             Command::State => {}
@@ -123,8 +123,7 @@ impl Session {
     }
 }
 
-/// Indice dans la main de la `n`-ième carte choisie, les cartes étant prises
-/// dans l'ordre de la main.
+/// Hand index of the `n`-th chosen card, cards being taken in hand order.
 fn sorted_nth(cards: &[usize], n: usize) -> usize {
     let mut sorted = cards.to_vec();
     sorted.sort();
@@ -182,7 +181,7 @@ mod tests {
     fn errors_before_any_game() {
         let mut session = Session::default();
         assert_eq!(send(&mut session, r#"{"cmd":"state"}"#)["event"], "error");
-        assert_eq!(send(&mut session, "pas du json")["event"], "error");
+        assert_eq!(send(&mut session, "not json")["event"], "error");
     }
 
     #[test]
@@ -218,6 +217,6 @@ mod tests {
             assert_eq!(r["event"], "error", "{cmd}");
         }
         let r = send(&mut session, r#"{"cmd":"buy","offer":0}"#);
-        assert_eq!(r["message"], "la boutique est fermée");
+        assert_eq!(r["message"], "the shop is closed");
     }
 }

@@ -1,7 +1,7 @@
 import QtQuick
 import omatro
 
-// Bouton aux couleurs du thème.
+// Button in the theme colors.
 Rectangle {
   id: root
 

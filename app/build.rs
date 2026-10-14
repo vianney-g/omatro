@@ -10,7 +10,7 @@ fn main() {
         QmlFile::from("qml/Style.qml").singleton(true),
         QmlFile::from("qml/Util.qml").singleton(true),
     ]))
-    // Les .js ne sont pas des fichiers du module : on les met à côté, dans les ressources.
+    // .js files are not module files: they go next to them, in the resources.
     .qrc_resources(["qml/Labels.js"])
     .files(["src/bridge.rs"])
     .build();

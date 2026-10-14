@@ -1,4 +1,4 @@
-//! Déroulement d'une partie : blinds successives, mains et défausses.
+//! How a game unfolds: successive blinds, hands and discards.
 
 use crate::card::{Card, standard_deck};
 use crate::hand::{Evaluated, evaluate};
@@ -23,7 +23,7 @@ pub const REROLL_COST: u32 = 5;
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
     Playing,
-    /// Blind gagnée, récompense pas encore encaissée.
+    /// Blind won, reward not cashed out yet.
     Won,
     Shop,
     Lost,
@@ -43,15 +43,15 @@ pub enum GameError {
 impl fmt::Display for GameError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            GameError::NotPlaying => write!(f, "la blind n'est plus en cours"),
-            GameError::NotWon => write!(f, "la blind n'est pas encore gagnée"),
-            GameError::NotInShop => write!(f, "la boutique est fermée"),
-            GameError::NoDiscardsLeft => write!(f, "plus de défausse"),
-            GameError::NotEnoughMoney => write!(f, "pas assez d'argent"),
+            GameError::NotPlaying => write!(f, "the blind is over"),
+            GameError::NotWon => write!(f, "the blind is not won yet"),
+            GameError::NotInShop => write!(f, "the shop is closed"),
+            GameError::NoDiscardsLeft => write!(f, "no discards left"),
+            GameError::NotEnoughMoney => write!(f, "not enough money"),
             GameError::JokerSlotsFull => {
-                write!(f, "plus de place pour un joker ({MAX_JOKERS} au plus)")
+                write!(f, "no room for another joker ({MAX_JOKERS} at most)")
             }
-            GameError::BadSelection(why) => write!(f, "sélection invalide : {why}"),
+            GameError::BadSelection(why) => write!(f, "invalid selection: {why}"),
         }
     }
 }
@@ -79,19 +79,19 @@ impl From<Joker> for JokerInfo {
     }
 }
 
-/// Argent gagné en fin de blind.
+/// Money earned at the end of a blind.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Reward {
     pub blind: u32,
-    /// 1 $ par main non jouée.
+    /// $1 per unplayed hand.
     pub hands: u32,
-    /// 1 $ par tranche de 5 $ possédés, au plus `MAX_INTEREST`.
+    /// $1 per $5 held, at most `MAX_INTEREST`.
     pub interest: u32,
     pub jokers: u32,
     pub total: u32,
 }
 
-/// Instantané de la partie envoyé à l'affichage.
+/// Snapshot of the game sent to the display.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct State {
     pub seed: u64,
@@ -106,14 +106,14 @@ pub struct State {
     pub jokers: Vec<JokerInfo>,
     pub max_jokers: usize,
     pub money: u32,
-    /// Présente en phase `won`.
+    /// Present in the `won` phase.
     pub reward: Option<Reward>,
-    /// Offres de la boutique (vide hors boutique).
+    /// Shop offers (empty outside the shop).
     pub shop: Vec<JokerInfo>,
     pub reroll_cost: u32,
 }
 
-/// Score à atteindre pour la blind `n` (à partir de 1).
+/// Score needed to beat blind `n` (starting at 1).
 pub fn blind_target(n: u32) -> u64 {
     (300.0 * 1.5_f64.powi(n as i32 - 1)).round() as u64
 }
@@ -174,12 +174,12 @@ impl Game {
         {
             self.hand.push(card);
         }
-        // Main rangée comme à la table : rang décroissant, puis couleur.
+        // Hand sorted as at the table: descending rank, then suit.
         self.hand
             .sort_by_key(|c| (std::cmp::Reverse(c.rank), c.suit as u8));
     }
 
-    /// Vérifie une sélection et renvoie ses indices triés.
+    /// Checks a selection and returns its sorted indices.
     fn validate(&self, indices: &[usize]) -> Result<Vec<usize>, GameError> {
         if self.phase != Phase::Playing {
             return Err(GameError::NotPlaying);
@@ -188,20 +188,20 @@ impl Game {
         sorted.sort();
         sorted.dedup();
         if sorted.len() != indices.len() {
-            return Err(GameError::BadSelection("carte choisie deux fois".into()));
+            return Err(GameError::BadSelection("card chosen twice".into()));
         }
         if !(1..=MAX_PLAY).contains(&sorted.len()) {
             return Err(GameError::BadSelection(format!(
-                "choisir de 1 à {MAX_PLAY} cartes"
+                "choose 1 to {MAX_PLAY} cards"
             )));
         }
         if let Some(&i) = sorted.iter().find(|&&i| i >= self.hand.len()) {
-            return Err(GameError::BadSelection(format!("pas de carte n° {i}")));
+            return Err(GameError::BadSelection(format!("no card #{i}")));
         }
         Ok(sorted)
     }
 
-    /// Retire de la main les cartes choisies et les rend dans l'ordre de la main.
+    /// Removes the chosen cards from the hand and returns them in hand order.
     fn take(&mut self, indices: &[usize]) -> Result<Vec<Card>, GameError> {
         let sorted = self.validate(indices)?;
         let mut taken: Vec<Card> = sorted.iter().rev().map(|&i| self.hand.remove(i)).collect();
@@ -225,7 +225,7 @@ impl Game {
         Ok(breakdown)
     }
 
-    /// La main que formeraient les cartes choisies, sans les jouer.
+    /// The hand the chosen cards would make, without playing them.
     pub fn preview(&self, indices: &[usize]) -> Result<Option<Evaluated>, GameError> {
         if indices.is_empty() {
             return Ok(None);
@@ -265,7 +265,7 @@ impl Game {
         }
     }
 
-    /// Encaisse la récompense et ouvre la boutique.
+    /// Cashes out the reward and opens the shop.
     pub fn cash_out(&mut self) -> Result<(), GameError> {
         if self.phase != Phase::Won {
             return Err(GameError::NotWon);
@@ -277,7 +277,7 @@ impl Game {
         Ok(())
     }
 
-    /// Tire de nouvelles offres parmi les jokers qu'on n'a pas.
+    /// Draws new offers among the jokers not owned yet.
     fn roll_offers(&mut self) {
         let mut pool: Vec<Joker> = Joker::ALL
             .into_iter()
@@ -309,7 +309,7 @@ impl Game {
         let joker = *self
             .offers
             .get(offer)
-            .ok_or_else(|| GameError::BadSelection(format!("pas d'offre n° {offer}")))?;
+            .ok_or_else(|| GameError::BadSelection(format!("no offer #{offer}")))?;
         if self.jokers.len() >= MAX_JOKERS {
             return Err(GameError::JokerSlotsFull);
         }
@@ -322,13 +322,13 @@ impl Game {
     pub fn sell(&mut self, index: usize) -> Result<(), GameError> {
         self.in_shop()?;
         if index >= self.jokers.len() {
-            return Err(GameError::BadSelection(format!("pas de joker n° {index}")));
+            return Err(GameError::BadSelection(format!("no joker #{index}")));
         }
         self.money += self.jokers.remove(index).sell_value();
         Ok(())
     }
 
-    /// Nouvelles offres ; chaque relance coûte 1 $ de plus que la précédente.
+    /// New offers; each reroll costs $1 more than the previous one.
     pub fn reroll(&mut self) -> Result<(), GameError> {
         self.in_shop()?;
         self.spend(self.reroll_cost)?;
@@ -474,7 +474,7 @@ mod tests {
         assert_eq!(game.next_blind(), Err(GameError::NotInShop));
     }
 
-    /// Partie dont la première blind vient d'être gagnée par une quinte flush royale.
+    /// A game whose first blind was just won with a royal flush.
     fn won_game(seed: u64, jokers: Vec<Joker>) -> Game {
         let mut game = Game::new(seed, jokers);
         game.hand = cards("AS KS QS JS 10S 2H 3D 4C");
@@ -487,7 +487,7 @@ mod tests {
         let game = won_game(9, vec![Joker::Tontine]);
         let s = game.state();
         assert_eq!(s.phase, Phase::Won);
-        // 4 $ + 3 mains restantes + 0 d'intérêts (4 $) + 3 défausses (tontine).
+        // $4 + 3 hands left + 0 interest ($4) + 3 discards (tontine).
         assert_eq!(
             s.reward,
             Some(Reward {
