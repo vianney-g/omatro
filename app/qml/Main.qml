@@ -22,7 +22,8 @@ Window {
   // shrinks together (a tiled window can be smaller than the minimum size).
   // Width: margins, left column and the 8 cards of the hand (1032).
   readonly property real designWidth: 1040 * Style.themeScale
-  readonly property real designHeight: 720 * Style.themeScale
+  // Height: the shop, with the joker row and the offers (both 230 high).
+  readonly property real designHeight: 830 * Style.themeScale
   Binding {
     target: Style
     property: "fit"
@@ -159,13 +160,17 @@ Window {
 
   // ---- shop --------------------------------------------------------------
   function canBuy(offer) {
-    return shopping && game.money >= offer.price && game.jokers.length < game.max_jokers
+    var transparent = offer.edition !== null && offer.edition.id === "transparent"
+    return shopping && game.money >= offer.price && (transparent || game.jokers.length < game.max_jokers)
   }
   function buy(i) {
     if (shopping && i >= 0 && i < game.shop.length) send({ cmd: "buy", offer: i })
   }
   function sell(i) {
     if (shopping) send({ cmd: "sell", joker: i })
+  }
+  function moveJoker(from, to) {
+    if (!busy) send({ cmd: "move_joker", from: from, to: to })
   }
   function reroll() {
     if (!shopping) return
@@ -201,9 +206,10 @@ Window {
       var step = steps[stepIndex]
       liveChips = step.chips
       liveMult = step.mult
-      var color = Labels.isChips(step.effect) ? Color.accent : Color.urgent
-      var view = step.source.kind === "card"
-        ? tableRepeater.itemAt(step.source.index)
+      var color = step.effect === "again" ? Color.foreground
+        : Labels.isChips(step.effect) || Labels.isMoney(step.effect) ? Color.accent : Color.urgent
+      var view = step.source.kind === "card" ? tableRepeater.itemAt(step.source.index)
+        : step.source.kind === "held" ? handRepeater.itemAt(step.source.index)
         : jokerRepeater.itemAt(step.source.index)
       if (view) view.flash(Labels.effect(step.effect), color)
     } else if (stepIndex === steps.length) {
@@ -212,6 +218,7 @@ Window {
     } else {
       stepTimer.stop()
       notice = scoring.hand_name + ": " + Labels.number(scoring.total) + " points"
+        + (scoring.notes.length ? " · " + scoring.notes.join(" ") : "")
       var s = pendingState
       scoring = null
       pendingState = null
@@ -260,15 +267,17 @@ Window {
         if (k === Qt.Key_Escape) root.infoOpen = false
         else return
       }
-      else if (k >= Qt.Key_1 && k <= Qt.Key_8) {
-        if (root.shopping) root.buy(k - Qt.Key_1)
-        else root.toggleCard(k - Qt.Key_1)
+      else if (k >= Qt.Key_0 && k <= Qt.Key_9) {
+        var i = k === Qt.Key_0 ? 9 : k - Qt.Key_1
+        if (root.shopping) root.buy(i)
+        else root.toggleCard(i)
       }
       else if (k === Qt.Key_R) root.reroll()
       else if (k === Qt.Key_S) root.skipBlind()
       else if (k === Qt.Key_F5) root.cheat({ win: true })
       else if (k === Qt.Key_F6) root.cheat({ money: root.game.money + 100 })
       else if (k === Qt.Key_F7) root.cheat({ ante: root.game.winning_ante, blind: "boss" })
+      else if (k === Qt.Key_F9) root.cheat({ random_joker: true })
       else if (k === Qt.Key_F8) root.cheat({ level_up: root.game.hands.map(function(h) { return h.kind }) })
       else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) root.confirm()
       else if (k === Qt.Key_D || k === Qt.Key_Delete) root.discard()
@@ -435,12 +444,13 @@ Window {
             ? "1, 2: buy · R: reroll\nEnter: next blind · I: fastfetch\nCtrl+Q: quit"
             : root.choosing
             ? "Enter: play the blind · S: skip it\nN: new game · I: fastfetch\nCtrl+Q: quit"
-            : "1 to 8: choose · Enter: play\nD: discard · N: new game\nI: fastfetch · Ctrl+Q: quit"
+            : "1-9, 0: choose · Enter: play\nD: discard · N: new game\nI: fastfetch · Ctrl+Q: quit"
         }
       }
 
       // ---- play area: jokers, table, hand
       ColumnLayout {
+        id: playArea
         Layout.fillWidth: true
         Layout.fillHeight: true
         spacing: Style.spacing.huge
@@ -451,22 +461,44 @@ Window {
         }
 
         Row {
+          id: jokerRow
           Layout.alignment: Qt.AlignHCenter
-          Layout.preferredHeight: Style.space(150) + (root.shopping ? Style.space(48) : 0)
+          Layout.preferredHeight: Style.space(230) + (root.shopping ? Style.space(40) : 0)
           spacing: Style.spacing.xxl
+          // Narrower jokers when the row is full (Transparent jokers add slots).
+          readonly property int count: Math.max(1, root.game ? root.game.jokers.length : 1)
+          readonly property real jokerWidth: Math.min(Style.space(120),
+            (playArea.width - (count - 1) * spacing) / count)
           Repeater {
             id: jokerRepeater
             model: root.game ? root.game.jokers : []
             Column {
+              width: jokerRow.jokerWidth
               spacing: Style.spacing.md
               function flash(text, color) { view.flash(text, color) }
-              JokerView { id: view; joker: modelData }
-              Button {
+              JokerView { id: view; joker: modelData; width: jokerRow.jokerWidth }
+              // In the shop: sell, and move left or right (Fork copies its right neighbour).
+              Row {
                 anchors.horizontalCenter: parent.horizontalCenter
                 visible: root.shopping
-                text: "Sell " + Labels.money(modelData.sell_value)
-                bordered: true
-                onClicked: root.sell(index)
+                spacing: Style.spacing.xs
+                Button {
+                  compact: true
+                  visible: index > 0
+                  text: "<"
+                  onClicked: root.moveJoker(index, index - 1)
+                }
+                Button {
+                  compact: true
+                  text: "Sell " + Labels.money(modelData.sell_value)
+                  onClicked: root.sell(index)
+                }
+                Button {
+                  compact: true
+                  visible: index < root.game.jokers.length - 1
+                  text: ">"
+                  onClicked: root.moveJoker(index, index + 1)
+                }
               }
             }
           }
@@ -620,17 +652,24 @@ Window {
         }
 
         Row {
+          id: handRow
           Layout.alignment: Qt.AlignHCenter
           Layout.topMargin: Style.space(24)
           visible: !root.shopping && !root.choosing
           spacing: Style.spacing.lg
+          // Narrower cards for a bigger hand (Ultrawide).
+          readonly property int count: Math.max(8, root.game ? root.game.hand_size : 8)
+          readonly property real cardWidth: Math.min(Style.space(84),
+            (playArea.width - (count - 1) * spacing) / count)
           Repeater {
+            id: handRepeater
             model: root.hand
             CardView {
+              width: handRow.cardWidth
               card: modelData
               selected: root.selected.indexOf(index) >= 0
               interactive: root.playing
-              shortcut: String(index + 1)
+              shortcut: index < 9 ? String(index + 1) : index === 9 ? "0" : ""
               onClicked: root.toggleCard(index)
             }
           }
@@ -709,6 +748,17 @@ Window {
             color: Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.title
+          }
+
+          Text {
+            width: parent.width
+            visible: endCol.won && root.game.reward !== null && root.game.reward.notes.length > 0
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            text: visible ? root.game.reward.notes.join(" ") : ""
+            color: Color.urgent
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
           }
 
           // Reward breakdown.

@@ -2,7 +2,7 @@
 //! when one no longer matches; `make docs` rewrites them.
 
 use crate::hand::HandKind;
-use crate::joker::Joker;
+use crate::joker::{Edition, Joker};
 
 /// Snake-case id of a value, as in the protocol.
 fn id(value: impl serde::Serialize) -> String {
@@ -11,6 +11,11 @@ fn id(value: impl serde::Serialize) -> String {
         .as_str()
         .unwrap()
         .to_string()
+}
+
+/// Escapes a table cell.
+fn cell(text: &str) -> String {
+    text.replace('|', "\\|")
 }
 
 fn header(title: &str, intro: &str) -> String {
@@ -23,23 +28,50 @@ fn header(title: &str, intro: &str) -> String {
 
 fn jokers() -> String {
     let mut jokers = Joker::ALL.to_vec();
-    jokers.sort_by_key(|j| j.price());
+    jokers.sort_by_key(|j| (j.rarity(), j.price()));
     let mut doc = header(
         "Jokers",
         "Jokers are bought in the shop between blinds (5 slots at most) and sell for\n\
-         half their price. While a hand is scored, card jokers trigger for each scoring\n\
-         card right after its chips; hand jokers then trigger once, left to right.",
+         half their price. Each shop slot draws a rarity, named after Arch's\n\
+         repositories: core (70%), extra (25%) or AUR (5%); legendary jokers never\n\
+         show up in the shop. A joker may come with an edition (see\n\
+         [editions.md](editions.md)).\n\n\
+         While a hand is scored, each scoring card scores its chips, then card jokers\n\
+         trigger, and retriggers score it again; then jokers trigger for the cards\n\
+         held in hand; then each joker, left to right, adds its effect. Order matters:\n\
+         Fork copies the joker on its right.",
     );
-    doc += "| Id | Name | Price | Sells for | Effect | Quip |\n|---|---|---|---|---|---|\n";
+    doc += "| Id | Name | Rarity | Price | Effect | Quip |\n|---|---|---|---|---|---|\n";
     for joker in jokers {
         doc += &format!(
-            "| `{}` | {} | ${} | ${} | {} | *{}* |\n",
+            "| `{}` | {} | {} | ${} | {} | *{}* |\n",
             id(joker),
             joker.name(),
+            joker.rarity().name(),
             joker.price(),
-            joker.sell_value(),
             joker.description(),
-            joker.quip()
+            cell(joker.quip())
+        );
+    }
+    doc
+}
+
+fn editions() -> String {
+    let mut doc = header(
+        "Editions",
+        "Hyprland decorations a joker may come with in the shop, for a higher price.\n\
+         Blur and Shadow apply before the joker's own effect, Animated after it.",
+    );
+    doc += "| Id | Name | Effect | Extra price | Shop odds | Quip |\n|---|---|---|---|---|---|\n";
+    for edition in Edition::ALL {
+        doc += &format!(
+            "| `{}` | {} | {} | +${} | {}% | *{}* |\n",
+            id(edition),
+            edition.name(),
+            edition.description(),
+            edition.price(),
+            edition.odds() * 100.0,
+            cell(edition.quip())
         );
     }
     doc
@@ -58,7 +90,7 @@ fn hands() -> String {
         let (chips, mult) = kind.base();
         let (step_chips, step_mult) = kind.per_level();
         let secret = if kind.secret() {
-            format!("yes: *{}*", kind.quip().replace('|', "\\|"))
+            format!("yes: *{}*", cell(kind.quip()))
         } else {
             String::new()
         };
@@ -73,7 +105,11 @@ fn hands() -> String {
 
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 2] = [("jokers.md", jokers), ("hands.md", hands)];
+    let docs: [(&str, fn() -> String); 3] = [
+        ("jokers.md", jokers),
+        ("editions.md", editions),
+        ("hands.md", hands),
+    ];
     for (file, render) in docs {
         let path = format!("{}/../docs/{file}", env!("CARGO_MANIFEST_DIR"));
         if std::env::var_os("UPDATE_DOCS").is_some() {

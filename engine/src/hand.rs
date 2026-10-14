@@ -1,6 +1,6 @@
 //! Poker hand recognition (1 to 5 played cards) and hand levels.
 
-use crate::card::{ACE, Card};
+use crate::card::{ACE, Card, Suit};
 use serde::{Deserialize, Serialize};
 
 /// Hand types, weakest first. The last three need duplicate cards: they stay
@@ -162,11 +162,48 @@ pub struct Evaluated {
     pub kind: HandKind,
     /// Indices (into the played cards, ascending) of the scoring cards.
     pub scoring: Vec<usize>,
+    /// Every hand type the cards contain: a full house contains a pair, a three
+    /// of a kind and a two pair.
+    pub contains: Vec<HandKind>,
+}
+
+impl Evaluated {
+    pub fn contains(&self, kind: HandKind) -> bool {
+        self.contains.contains(&kind)
+    }
 }
 
 pub fn evaluate(cards: &[Card]) -> Evaluated {
+    evaluate_with(cards, false)
+}
+
+/// Cards of a straight: a run of `need` consecutive ranks, the ace also
+/// counting low; the highest run wins.
+fn straight_run(cards: &[Card], need: u8) -> Vec<usize> {
+    // Rank 1 stands for the ace played low.
+    let has = |rank: u8| {
+        cards
+            .iter()
+            .any(|c| c.rank == rank || (rank == 1 && c.rank == ACE))
+    };
+    for top in (need..=ACE).rev() {
+        let low = top + 1 - need;
+        if (low..=top).all(has) {
+            return (0..cards.len())
+                .filter(|&i| {
+                    (low..=top).contains(&cards[i].rank) || (low == 1 && cards[i].rank == ACE)
+                })
+                .collect();
+        }
+    }
+    Vec::new()
+}
+
+/// `four_fingers`: flushes and straights need only 4 cards (the MVP joker).
+pub fn evaluate_with(cards: &[Card], four_fingers: bool) -> Evaluated {
     assert!((1..=5).contains(&cards.len()), "play 1 to 5 cards");
     let all: Vec<usize> = (0..cards.len()).collect();
+    let need = if four_fingers { 4 } else { 5 };
 
     // Groups of cards of the same rank, largest then highest first.
     let mut groups: Vec<Vec<usize>> = Vec::new();
@@ -181,28 +218,62 @@ pub fn evaluate(cards: &[Card]) -> Evaluated {
             .cmp(&a.len())
             .then(cards[b[0]].rank.cmp(&cards[a[0]].rank))
     });
+    let sizes: Vec<usize> = groups.iter().map(Vec::len).collect();
 
-    let flush = cards.len() == 5 && cards.iter().all(|c| c.suit == cards[0].suit);
-    let straight = cards.len() == 5 && groups.len() == 5 && {
-        let mut ranks: Vec<u8> = cards.iter().map(|c| c.rank).collect();
-        ranks.sort();
-        ranks[4] - ranks[0] == 4 || ranks == [2, 3, 4, 5, ACE]
+    let flush_cards: Vec<usize> = Suit::ALL
+        .iter()
+        .map(|&suit| {
+            all.iter()
+                .copied()
+                .filter(|&i| cards[i].suit == suit)
+                .collect::<Vec<_>>()
+        })
+        .find(|suited| suited.len() >= need as usize)
+        .unwrap_or_default();
+    let straight_cards = straight_run(cards, need);
+    let (flush, straight) = (!flush_cards.is_empty(), !straight_cards.is_empty());
+
+    let pairs = sizes.iter().filter(|&&s| s >= 2).count();
+    let mut contains = vec![HandKind::HighCard];
+    let mut include = |kind, yes: bool| {
+        if yes {
+            contains.push(kind);
+        }
     };
+    include(HandKind::Pair, sizes[0] >= 2);
+    include(HandKind::TwoPair, pairs >= 2);
+    include(HandKind::ThreeOfAKind, sizes[0] >= 3);
+    include(HandKind::FourOfAKind, sizes[0] >= 4);
+    include(HandKind::FullHouse, sizes[0] >= 3 && pairs >= 2);
+    include(HandKind::Straight, straight);
+    include(HandKind::Flush, flush);
+    include(HandKind::StraightFlush, straight && flush);
 
     let hand = |kind, mut scoring: Vec<usize>| {
         scoring.sort();
-        Evaluated { kind, scoring }
+        scoring.dedup();
+        let mut contains = contains.clone();
+        if !contains.contains(&kind) {
+            contains.push(kind);
+        }
+        Evaluated {
+            kind,
+            scoring,
+            contains,
+        }
     };
-    let sizes: Vec<usize> = groups.iter().map(Vec::len).collect();
     match sizes.as_slice() {
         [5] if flush => hand(HandKind::ForkBomb, all),
         [3, 2] if flush => hand(HandKind::MajesticMonolith, all),
         [5] => hand(HandKind::FiveOfAKind, all),
-        _ if straight && flush => hand(HandKind::StraightFlush, all),
+        _ if straight && flush => hand(
+            HandKind::StraightFlush,
+            [straight_cards, flush_cards].concat(),
+        ),
         [4, ..] => hand(HandKind::FourOfAKind, groups[0].clone()),
         [3, 2] => hand(HandKind::FullHouse, all),
-        _ if flush => hand(HandKind::Flush, all),
-        _ if straight => hand(HandKind::Straight, all),
+        _ if flush => hand(HandKind::Flush, flush_cards),
+        _ if straight => hand(HandKind::Straight, straight_cards),
         [3, ..] => hand(HandKind::ThreeOfAKind, groups[0].clone()),
         [2, 2, ..] => hand(
             HandKind::TwoPair,
@@ -250,6 +321,36 @@ mod tests {
     fn no_wraparound_straight_and_no_short_flush() {
         check("QH KD AS 2C 3H", HandKind::HighCard, &[2]);
         check("2H 9H KH 4H", HandKind::HighCard, &[2]);
+    }
+
+    #[test]
+    fn hands_contain_smaller_ones() {
+        let full = evaluate(&cards("QH 4D QS 4C QC"));
+        use HandKind::*;
+        for kind in [HighCard, Pair, TwoPair, ThreeOfAKind, FullHouse] {
+            assert!(full.contains(kind), "{kind:?}");
+        }
+        assert!(!full.contains(FourOfAKind) && !full.contains(Flush));
+        let four = evaluate(&cards("7H 7D 7S 7C 2H"));
+        assert!(four.contains(ThreeOfAKind) && !four.contains(TwoPair));
+    }
+
+    #[test]
+    fn four_fingers_make_short_flushes_and_straights() {
+        let four = |text| evaluate_with(&cards(text), true);
+        let flush = four("2H 9H KH 4H 6S");
+        assert_eq!(
+            (flush.kind, flush.scoring.clone()),
+            (HandKind::Flush, vec![0, 1, 2, 3])
+        );
+        let straight = four("5C 6D 7S 8H KC");
+        assert_eq!(
+            (straight.kind, straight.scoring.clone()),
+            (HandKind::Straight, vec![0, 1, 2, 3])
+        );
+        assert_eq!(four("AH 2H 3H 4H 9C").kind, HandKind::StraightFlush);
+        assert_eq!(four("AH 2H 3H 4H 9C").scoring, [0, 1, 2, 3]);
+        assert_eq!(evaluate(&cards("2H 9H KH 4H 6S")).kind, HandKind::HighCard);
     }
 
     #[test]

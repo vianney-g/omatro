@@ -28,8 +28,10 @@ function mult(m) {
   return Number.isInteger(m) ? String(m) : m.toFixed(1)
 }
 
-// An engine effect: {"chips": 11}, {"mult": 2} or {"x_mult": 2}.
+// An engine effect: {"chips": 11}, {"mult": 2}, {"x_mult": 2}, {"money": 2} or "again".
 function effect(e) {
+  if (e === "again") return "Again!"
+  if (e.money !== undefined) return "+" + money(e.money)
   if (e.chips !== undefined) return "+" + e.chips
   if (e.mult !== undefined) return "+" + mult(e.mult) + " mult"
   if (e.x_mult !== undefined) return "×" + mult(e.x_mult) + " mult"
@@ -37,6 +39,8 @@ function effect(e) {
 }
 
 function isChips(e) { return e.chips !== undefined }
+
+function isMoney(e) { return e.money !== undefined }
 
 var BLIND_STATUSES = { upcoming: "Upcoming", select: "Next", current: "In progress", defeated: "Defeated", skipped: "Skipped" }
 

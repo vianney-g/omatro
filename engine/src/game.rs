@@ -2,10 +2,10 @@
 
 use crate::blind::{self, BlindKind, WINNING_ANTE};
 use crate::card::{Card, standard_deck};
-use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, evaluate};
-use crate::joker::Joker;
+use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, evaluate_with};
+use crate::joker::{Edition, Joker, OwnedJoker, Rarity};
 use crate::rng::Rng;
-use crate::score::{Breakdown, score};
+use crate::score::{Breakdown, Table, copy_target, score};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -54,9 +54,7 @@ impl fmt::Display for GameError {
             GameError::CannotSkipBoss => write!(f, "the boss blind cannot be skipped"),
             GameError::NoDiscardsLeft => write!(f, "no discards left"),
             GameError::NotEnoughMoney => write!(f, "not enough money"),
-            GameError::JokerSlotsFull => {
-                write!(f, "no room for another joker ({MAX_JOKERS} at most)")
-            }
+            GameError::JokerSlotsFull => write!(f, "no room for another joker"),
             GameError::BadSelection(why) => write!(f, "invalid selection: {why}"),
         }
     }
@@ -65,24 +63,55 @@ impl fmt::Display for GameError {
 impl std::error::Error for GameError {}
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct EditionInfo {
+    pub id: Edition,
+    pub name: &'static str,
+    pub description: &'static str,
+    pub quip: &'static str,
+}
+
+impl From<Edition> for EditionInfo {
+    fn from(edition: Edition) -> Self {
+        EditionInfo {
+            id: edition,
+            name: edition.name(),
+            description: edition.description(),
+            quip: edition.quip(),
+        }
+    }
+}
+
+/// A joker as the display shows it, owned or on offer.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct JokerInfo {
     pub id: Joker,
     pub name: &'static str,
     pub description: &'static str,
     pub quip: &'static str,
+    pub rarity: Rarity,
+    pub rarity_name: &'static str,
+    pub edition: Option<EditionInfo>,
+    /// Price with the edition.
     pub price: u32,
     pub sell_value: u32,
+    /// What a growing joker adds now, or what a Fork copies.
+    pub current: Option<String>,
 }
 
-impl From<Joker> for JokerInfo {
-    fn from(joker: Joker) -> Self {
+impl JokerInfo {
+    fn new(owned: &OwnedJoker, current: Option<String>) -> Self {
+        let joker = owned.joker;
         JokerInfo {
             id: joker,
             name: joker.name(),
             description: joker.description(),
             quip: joker.quip(),
-            price: joker.price(),
-            sell_value: joker.sell_value(),
+            rarity: joker.rarity(),
+            rarity_name: joker.rarity().name(),
+            edition: owned.edition.map(EditionInfo::from),
+            price: owned.price(),
+            sell_value: owned.sell_value(),
+            current,
         }
     }
 }
@@ -131,6 +160,8 @@ pub struct Reward {
     pub interest: u32,
     pub jokers: u32,
     pub total: u32,
+    /// What happened to the jokers ("Beta Release broke.").
+    pub notes: Vec<String>,
 }
 
 /// Snapshot of the game sent to the display.
@@ -151,6 +182,7 @@ pub struct State {
     /// The winning ante's boss was just beaten; cashing out goes on in endless mode.
     pub victory: bool,
     pub hand: Vec<Card>,
+    pub hand_size: usize,
     /// Cards left to draw during a blind, the whole deck otherwise; sorted by
     /// suit, then descending rank.
     pub remaining: Vec<Card>,
@@ -176,6 +208,8 @@ pub struct Cheat {
     /// Adds jokers, within the joker slots.
     #[serde(default)]
     pub jokers: Vec<Joker>,
+    /// Edition of the added jokers.
+    pub edition: Option<Edition>,
     /// Jumps to the choice of a blind (ante and blind default to the current ones).
     pub ante: Option<u32>,
     pub blind: Option<BlindKind>,
@@ -185,12 +219,26 @@ pub struct Cheat {
     /// Raises each listed hand type by one level.
     #[serde(default)]
     pub level_up: Vec<HandKind>,
+    /// Adds a random joker not owned yet, with a random edition (or none).
+    #[serde(default)]
+    pub random_joker: bool,
+}
+
+/// A joker for sale.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Offer {
+    joker: Joker,
+    edition: Option<Edition>,
 }
 
 pub struct Game {
     seed: u64,
     deck_rng: Rng,
     shop_rng: Rng,
+    /// Chances while scoring (Heartbleed, Segfault…).
+    score_rng: Rng,
+    /// Chances at the end of a blind (Beta Release…).
+    round_rng: Rng,
     /// The player's deck, which lasts the whole game.
     deck: Vec<Card>,
     /// Cards left to draw in the blind in progress.
@@ -198,7 +246,7 @@ pub struct Game {
     hand: Vec<Card>,
     levels: HandLevels,
     plays: HandCounts,
-    jokers: Vec<Joker>,
+    jokers: Vec<OwnedJoker>,
     ante: u32,
     blind: BlindKind,
     /// Blinds skipped in the current ante.
@@ -206,12 +254,15 @@ pub struct Game {
     score: f64,
     hands_left: u32,
     discards_left: u32,
+    discards_used: u32,
     phase: Phase,
     victory: bool,
     money: u32,
     reward: Option<Reward>,
-    offers: Vec<Joker>,
+    offers: Vec<Offer>,
     reroll_cost: u32,
+    /// Beta Release broke: it is gone from the shop, Stable Release shows up.
+    beta_broken: bool,
 }
 
 impl Game {
@@ -220,24 +271,31 @@ impl Game {
             seed,
             deck_rng: Rng::stream(seed, "deck"),
             shop_rng: Rng::stream(seed, "shop"),
+            score_rng: Rng::stream(seed, "score"),
+            round_rng: Rng::stream(seed, "round"),
             deck: standard_deck(),
             draw_pile: Vec::new(),
             hand: Vec::new(),
             levels: HandLevels::default(),
             plays: HandCounts::default(),
-            jokers,
+            jokers: jokers
+                .into_iter()
+                .map(|j| OwnedJoker::new(j, None))
+                .collect(),
             ante: 1,
             blind: BlindKind::Small,
             skipped: Vec::new(),
             score: 0.0,
             hands_left: 0,
             discards_left: 0,
+            discards_used: 0,
             phase: Phase::BlindSelect,
             victory: false,
             money: START_MONEY,
             reward: None,
             offers: Vec::new(),
             reroll_cost: REROLL_COST,
+            beta_broken: false,
         };
         game.await_blind();
         game
@@ -247,6 +305,27 @@ impl Game {
         blind::target(self.ante, self.blind)
     }
 
+    fn count(&self, joker: Joker) -> usize {
+        self.jokers.iter().filter(|j| j.joker == joker).count()
+    }
+
+    fn hand_size(&self) -> usize {
+        HAND_SIZE + self.count(Joker::Ultrawide)
+    }
+
+    fn joker_slots(&self) -> usize {
+        let transparent = self
+            .jokers
+            .iter()
+            .filter(|j| j.edition == Some(Edition::Transparent))
+            .count();
+        MAX_JOKERS + transparent
+    }
+
+    fn four_fingers(&self) -> bool {
+        self.count(Joker::Mvp) > 0
+    }
+
     /// Waits for the player to choose the current blind; every card is back in
     /// the deck.
     fn await_blind(&mut self) {
@@ -254,7 +333,8 @@ impl Game {
         self.hand.clear();
         self.score = 0.0;
         self.hands_left = HANDS_PER_BLIND;
-        self.discards_left = DISCARDS_PER_BLIND;
+        self.discards_left = DISCARDS_PER_BLIND + self.count(Joker::UndoHistory) as u32;
+        self.discards_used = 0;
         self.phase = Phase::BlindSelect;
     }
 
@@ -282,6 +362,8 @@ impl Game {
     /// Plays the blind on offer: shuffles the deck and deals a hand.
     pub fn select_blind(&mut self) -> Result<(), GameError> {
         self.selecting()?;
+        // Jokers bought since the blind was announced count too.
+        self.discards_left = DISCARDS_PER_BLIND + self.count(Joker::UndoHistory) as u32;
         self.deck_rng.shuffle(&mut self.draw_pile);
         self.phase = Phase::Playing;
         self.draw();
@@ -299,7 +381,7 @@ impl Game {
     }
 
     fn draw(&mut self) {
-        while self.hand.len() < HAND_SIZE
+        while self.hand.len() < self.hand_size()
             && let Some(card) = self.draw_pile.pop()
         {
             self.hand.push(card);
@@ -341,8 +423,32 @@ impl Game {
 
     pub fn play(&mut self, indices: &[usize]) -> Result<Breakdown, GameError> {
         let played = self.take(indices)?;
-        let breakdown = score(&played, &self.jokers, &self.levels);
-        self.plays.add(breakdown.hand);
+        let four_fingers = self.four_fingers();
+        let evaluated = evaluate_with(&played, four_fingers);
+        self.plays.add(evaluated.kind);
+        let scoring: Vec<Card> = evaluated.scoring.iter().map(|&i| played[i]).collect();
+        for joker in &mut self.jokers {
+            joker.before_hand(&evaluated, &scoring);
+        }
+        let table = Table {
+            played: &played,
+            held: &self.hand,
+            jokers: &self.jokers,
+            levels: &self.levels,
+            plays: &self.plays,
+            four_fingers,
+        };
+        let mut breakdown = score(&table, &mut self.score_rng);
+        self.money += breakdown.money;
+        let notes = &mut breakdown.notes;
+        self.jokers.retain_mut(|joker| {
+            let kept = joker.after_hand();
+            if !kept {
+                notes.push(format!("{} ran out.", joker.joker.name()));
+            }
+            kept
+        });
+
         self.score += breakdown.total;
         self.hands_left -= 1;
         if self.score >= self.target() {
@@ -357,8 +463,21 @@ impl Game {
 
     fn win_blind(&mut self) {
         self.phase = Phase::Won;
-        self.reward = Some(self.reward());
-        self.victory = self.ante == WINNING_ANTE && self.blind == BlindKind::Boss;
+        let mut reward = self.reward();
+        let boss = self.blind == BlindKind::Boss;
+        let rng = &mut self.round_rng;
+        let mut broke_beta = false;
+        self.jokers.retain_mut(|joker| {
+            let kept = joker.end_of_blind(boss, rng);
+            if !kept {
+                reward.notes.push(format!("{} broke.", joker.joker.name()));
+                broke_beta |= joker.joker == Joker::BetaRelease;
+            }
+            kept
+        });
+        self.beta_broken |= broke_beta;
+        self.reward = Some(reward);
+        self.victory = self.ante == WINNING_ANTE && boss;
     }
 
     /// The hand the chosen cards would make, without playing them.
@@ -371,7 +490,7 @@ impl Game {
             .iter()
             .map(|&i| self.hand[i])
             .collect();
-        Ok(Some(evaluate(&cards)))
+        Ok(Some(evaluate_with(&cards, self.four_fingers())))
     }
 
     pub fn discard(&mut self, indices: &[usize]) -> Result<(), GameError> {
@@ -380,6 +499,10 @@ impl Game {
         }
         self.take(indices)?;
         self.discards_left -= 1;
+        self.discards_used += 1;
+        for joker in &mut self.jokers {
+            joker.on_discard();
+        }
         self.draw();
         Ok(())
     }
@@ -388,10 +511,13 @@ impl Game {
         let blind = self.blind.reward();
         let hands = self.hands_left;
         let interest = (self.money / 5).min(MAX_INTEREST);
-        let jokers = self
-            .jokers
-            .iter()
-            .map(|j| j.on_blind_won(self.discards_left))
+        let jokers = (0..self.jokers.len())
+            .filter_map(|i| copy_target(&self.jokers, i))
+            .map(|t| {
+                self.jokers[t]
+                    .joker
+                    .blind_money(self.discards_left, self.discards_used)
+            })
             .sum();
         Reward {
             blind,
@@ -399,6 +525,7 @@ impl Game {
             interest,
             jokers,
             total: blind + hands + interest + jokers,
+            notes: Vec::new(),
         }
     }
 
@@ -416,15 +543,56 @@ impl Game {
         Ok(())
     }
 
-    /// Draws new offers among the jokers not owned yet.
+    /// Whether a joker may show up in the shop.
+    fn on_sale(&self, joker: Joker) -> bool {
+        let owned = self.jokers.iter().any(|j| j.joker == joker);
+        let offered = self.offers.iter().any(|o| o.joker == joker);
+        let lifecycle = match joker {
+            Joker::BetaRelease => !self.beta_broken,
+            Joker::StableRelease => self.beta_broken,
+            _ => true,
+        };
+        !owned && !offered && lifecycle && joker.rarity() != Rarity::Legendary
+    }
+
+    /// Draws new offers: a rarity for each slot (70% core, 25% extra, 5% AUR),
+    /// a joker of that rarity not owned yet, and sometimes an edition.
     fn roll_offers(&mut self) {
-        let mut pool: Vec<Joker> = Joker::ALL
-            .into_iter()
-            .filter(|j| !self.jokers.contains(j))
-            .collect();
-        self.shop_rng.shuffle(&mut pool);
-        pool.truncate(SHOP_OFFERS);
-        self.offers = pool;
+        self.offers.clear();
+        for _ in 0..SHOP_OFFERS {
+            let roll = self.shop_rng.unit();
+            let mut odds = 0.0;
+            let rarity = Rarity::ALL
+                .into_iter()
+                .find(|r| {
+                    odds += r.odds();
+                    roll < odds
+                })
+                .unwrap_or(Rarity::Core);
+            let of_rarity: Vec<Joker> = Joker::ALL
+                .into_iter()
+                .filter(|&j| j.rarity() == rarity && self.on_sale(j))
+                .collect();
+            let pool = if of_rarity.is_empty() {
+                Joker::ALL
+                    .into_iter()
+                    .filter(|&j| self.on_sale(j))
+                    .collect()
+            } else {
+                of_rarity
+            };
+            if pool.is_empty() {
+                break;
+            }
+            let joker = pool[self.shop_rng.below(pool.len() as u64) as usize];
+            let roll = self.shop_rng.unit();
+            let mut odds = 0.0;
+            let edition = Edition::ALL.into_iter().rev().find(|e| {
+                odds += e.odds();
+                roll < odds
+            });
+            self.offers.push(Offer { joker, edition });
+        }
     }
 
     fn in_shop(&self) -> Result<(), GameError> {
@@ -443,18 +611,24 @@ impl Game {
         Ok(())
     }
 
+    /// Whether a joker of this edition fits: a Transparent one brings its own slot.
+    fn has_room(&self, edition: Option<Edition>) -> bool {
+        edition == Some(Edition::Transparent) || self.jokers.len() < self.joker_slots()
+    }
+
     pub fn buy(&mut self, offer: usize) -> Result<(), GameError> {
         self.in_shop()?;
-        let joker = *self
+        let Offer { joker, edition } = *self
             .offers
             .get(offer)
             .ok_or_else(|| GameError::BadSelection(format!("no offer #{offer}")))?;
-        if self.jokers.len() >= MAX_JOKERS {
+        if !self.has_room(edition) {
             return Err(GameError::JokerSlotsFull);
         }
-        self.spend(joker.price())?;
+        let owned = OwnedJoker::new(joker, edition);
+        self.spend(owned.price())?;
         self.offers.remove(offer);
-        self.jokers.push(joker);
+        self.jokers.push(owned);
         Ok(())
     }
 
@@ -464,6 +638,23 @@ impl Game {
             return Err(GameError::BadSelection(format!("no joker #{index}")));
         }
         self.money += self.jokers.remove(index).sell_value();
+        for joker in &mut self.jokers {
+            joker.on_card_sold();
+        }
+        Ok(())
+    }
+
+    /// Moves a joker within the row (order matters: left to right, and Fork
+    /// copies its right neighbour).
+    pub fn move_joker(&mut self, from: usize, to: usize) -> Result<(), GameError> {
+        if from >= self.jokers.len() || to >= self.jokers.len() {
+            return Err(GameError::BadSelection(format!(
+                "no joker #{}",
+                from.max(to)
+            )));
+        }
+        let joker = self.jokers.remove(from);
+        self.jokers.insert(to, joker);
         Ok(())
     }
 
@@ -489,10 +680,10 @@ impl Game {
             self.money = money;
         }
         for joker in cheat.jokers {
-            if self.jokers.len() >= MAX_JOKERS {
+            if !self.has_room(cheat.edition) {
                 return Err(GameError::JokerSlotsFull);
             }
-            self.jokers.push(joker);
+            self.jokers.push(OwnedJoker::new(joker, cheat.edition));
         }
         if cheat.ante.is_some() || cheat.blind.is_some() {
             if let Some(ante) = cheat.ante {
@@ -507,6 +698,19 @@ impl Game {
             self.victory = false;
             self.offers.clear();
             self.await_blind();
+        }
+        if cheat.random_joker {
+            let mut rng = Rng::stream(self.seed ^ self.jokers.len() as u64, "cheat");
+            let pool: Vec<Joker> = Joker::ALL
+                .into_iter()
+                .filter(|&j| self.on_sale(j))
+                .collect();
+            let joker = pool[rng.below(pool.len() as u64) as usize];
+            let edition = Edition::ALL.get(rng.below(5) as usize).copied();
+            if !self.has_room(edition) {
+                return Err(GameError::JokerSlotsFull);
+            }
+            self.jokers.push(OwnedJoker::new(joker, edition));
         }
         for kind in cheat.level_up {
             self.levels.raise(kind, 1);
@@ -549,6 +753,19 @@ impl Game {
         }
     }
 
+    fn joker_info(&self, index: usize) -> JokerInfo {
+        let owned = &self.jokers[index];
+        let current = if owned.joker == Joker::Fork {
+            Some(match copy_target(&self.jokers, index) {
+                Some(t) => format!("Copying {}", self.jokers[t].joker.name()),
+                None => "Nothing to copy".to_string(),
+            })
+        } else {
+            owned.current()
+        };
+        JokerInfo::new(owned, current)
+    }
+
     pub fn state(&self) -> State {
         State {
             seed: self.seed,
@@ -573,6 +790,7 @@ impl Game {
             phase: self.phase,
             victory: self.victory,
             hand: self.hand.clone(),
+            hand_size: self.hand_size(),
             remaining: {
                 let mut cards = match self.phase {
                     Phase::Playing | Phase::Won | Phase::Lost => self.draw_pile.clone(),
@@ -598,11 +816,15 @@ impl Game {
                     }
                 })
                 .collect(),
-            jokers: self.jokers.iter().map(|&j| j.into()).collect(),
-            max_jokers: MAX_JOKERS,
+            jokers: (0..self.jokers.len()).map(|i| self.joker_info(i)).collect(),
+            max_jokers: self.joker_slots(),
             money: self.money,
             reward: self.reward.clone(),
-            shop: self.offers.iter().map(|&j| j.into()).collect(),
+            shop: self
+                .offers
+                .iter()
+                .map(|o| JokerInfo::new(&OwnedJoker::new(o.joker, o.edition), None))
+                .collect(),
             reroll_cost: self.reroll_cost,
         }
     }
@@ -846,7 +1068,8 @@ mod tests {
                 hands: 3,
                 interest: 0,
                 jokers: 3,
-                total: 9
+                total: 9,
+                notes: vec![],
             })
         );
     }
@@ -947,14 +1170,15 @@ mod tests {
         game.cash_out().unwrap();
         game.money = 20;
         let offer = game.offers[0];
+        let owned = OwnedJoker::new(offer.joker, offer.edition);
         game.buy(0).unwrap();
-        assert_eq!(game.jokers, [offer]);
-        assert_eq!(game.money, 20 - offer.price());
+        assert_eq!(game.jokers, [owned.clone()]);
+        assert_eq!(game.money, 20 - owned.price());
         assert_eq!(game.offers.len(), SHOP_OFFERS - 1);
         assert!(game.buy(5).is_err());
         game.sell(0).unwrap();
         assert!(game.jokers.is_empty());
-        assert_eq!(game.money, 20 - offer.price() + offer.sell_value());
+        assert_eq!(game.money, 20 - owned.price() + owned.sell_value());
     }
 
     #[test]
@@ -965,10 +1189,25 @@ mod tests {
         assert_eq!(game.buy(0), Err(GameError::NotEnoughMoney));
         assert_eq!(game.reroll(), Err(GameError::NotEnoughMoney));
         game.money = 100;
-        game.jokers = Joker::ALL[..MAX_JOKERS].to_vec();
-        game.roll_offers();
+        game.jokers = Joker::ALL[..MAX_JOKERS]
+            .iter()
+            .map(|&j| OwnedJoker::new(j, None))
+            .collect();
+        game.offers = vec![Offer {
+            joker: Joker::Fork,
+            edition: None,
+        }];
         assert_eq!(game.buy(0), Err(GameError::JokerSlotsFull));
-        assert!(game.offers.iter().all(|o| !game.jokers.contains(o)));
+        // A transparent joker brings its own slot.
+        game.offers[0].edition = Some(Edition::Transparent);
+        game.buy(0).unwrap();
+        assert_eq!(game.state().max_jokers, MAX_JOKERS + 1);
+        game.roll_offers();
+        assert!(
+            game.offers
+                .iter()
+                .all(|o| game.jokers.iter().all(|j| j.joker != o.joker))
+        );
     }
 
     #[test]
@@ -996,6 +1235,95 @@ mod tests {
             game.state().hand
         };
         assert_eq!(next_hand(0), next_hand(3));
+    }
+
+    #[test]
+    fn jokers_change_hand_size_and_discards() {
+        let game = playing(15, vec![Joker::Ultrawide, Joker::UndoHistory]);
+        let s = game.state();
+        assert_eq!((s.hand.len(), s.hand_size, s.discards_left), (9, 9, 4));
+    }
+
+    #[test]
+    fn jokers_pay_at_the_end_of_the_blind() {
+        let game = won_game(
+            16,
+            vec![
+                Joker::Sponsorware,
+                Joker::DataHoarder,
+                Joker::Fork,
+                Joker::Sponsorware,
+            ],
+        );
+        // 4 + 2×3 (no discard used) + 4 (Fork copying Sponsorware) + 4.
+        assert_eq!(game.state().reward.unwrap().jokers, 18);
+    }
+
+    #[test]
+    fn beta_release_breaks_then_stable_release_shows_up() {
+        let mut game = Game::new(17, vec![]);
+        for _ in 0..200 {
+            game.jokers = vec![OwnedJoker::new(Joker::BetaRelease, None)];
+            game.cheat(Cheat {
+                blind: Some(BlindKind::Small),
+                ..Cheat::default()
+            })
+            .unwrap();
+            game.select_blind().unwrap();
+            win(&mut game);
+            if game.jokers.is_empty() {
+                break;
+            }
+        }
+        assert!(game.beta_broken);
+        assert_eq!(game.state().reward.unwrap().notes, ["Beta Release broke."]);
+        assert!(!game.on_sale(Joker::BetaRelease) && game.on_sale(Joker::StableRelease));
+    }
+
+    #[test]
+    fn selling_grows_orphan_cleanup() {
+        let mut game = won_game(18, vec![Joker::OrphanCleanup, Joker::Dotfiles]);
+        game.cash_out().unwrap();
+        game.sell(1).unwrap();
+        assert_eq!(game.jokers[0].counter, 1.25);
+        assert_eq!(
+            game.state().jokers[0].current.as_deref(),
+            Some("Currently ×1.25 mult")
+        );
+    }
+
+    #[test]
+    fn jokers_can_be_reordered() {
+        let mut game = playing(19, vec![Joker::Fork, Joker::Dotfiles, Joker::Omakase]);
+        assert_eq!(
+            game.state().jokers[0].current.as_deref(),
+            Some("Copying Dotfiles")
+        );
+        game.move_joker(0, 2).unwrap();
+        let ids: Vec<Joker> = game.state().jokers.iter().map(|j| j.id).collect();
+        assert_eq!(ids, [Joker::Dotfiles, Joker::Omakase, Joker::Fork]);
+        assert_eq!(
+            game.state().jokers[2].current.as_deref(),
+            Some("Nothing to copy")
+        );
+        assert!(game.move_joker(0, 3).is_err());
+    }
+
+    #[test]
+    fn shop_rarities_follow_the_odds() {
+        let mut game = won_game(20, vec![]);
+        game.cash_out().unwrap();
+        let mut counts = std::collections::HashMap::new();
+        for _ in 0..2000 {
+            game.roll_offers();
+            for offer in &game.offers {
+                *counts.entry(offer.joker.rarity()).or_insert(0) += 1;
+            }
+        }
+        let share = |r| counts.get(&r).copied().unwrap_or(0) as f64 / 4000.0;
+        assert!((share(Rarity::Core) - 0.70).abs() < 0.03, "{counts:?}");
+        assert!((share(Rarity::Aur) - 0.05).abs() < 0.02, "{counts:?}");
+        assert_eq!(share(Rarity::Legendary), 0.0);
     }
 
     #[test]

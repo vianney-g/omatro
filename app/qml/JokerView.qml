@@ -1,14 +1,19 @@
 import QtQuick
 import omatro
 
-// A joker of the row: name and effect.
+// A joker: rarity, name, effect, what it adds now, its quip and its edition.
 Item {
   id: root
 
   property var joker: null
 
   width: Style.space(120)
-  height: Style.space(150)
+  height: Style.space(230)
+
+  readonly property var edition: joker ? joker.edition : null
+  readonly property color rarityColor: !joker ? Color.muted
+    : joker.rarity === "extra" ? Color.accent
+    : joker.rarity === "core" ? Color.muted : Color.urgent
 
   function flash(text, color) {
     popup.text = text
@@ -20,16 +25,26 @@ Item {
     id: face
     anchors.fill: parent
     radius: Style.cornerRadius
-    color: Qt.tint(Color.background, Util.alpha(Color.accent, 0.10))
-    border.width: Style.normalBorderWidth
-    border.color: Util.alpha(Color.accent, Style.normalBorderAlpha)
+    color: Qt.tint(Color.background, Util.alpha(Color.accent, root.edition ? 0.20 : 0.10))
+    border.width: root.edition ? Style.space(2) : Style.normalBorderWidth
+    border.color: root.edition ? Color.accent : Util.alpha(Color.accent, Style.normalBorderAlpha)
 
     Column {
-      anchors { fill: parent; margins: Style.space(10) }
-      spacing: Style.space(8)
+      anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(8) }
+      spacing: Style.space(4)
+
       Text {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
+        text: root.joker ? root.joker.rarity_name : ""
+        color: root.rarityColor
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+      }
+      Text {
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
         text: root.joker ? root.joker.name : ""
         color: Color.accent
         font.family: Style.font.family
@@ -47,6 +62,17 @@ Item {
       }
       Text {
         width: parent.width
+        visible: text !== ""
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        text: root.joker && root.joker.current ? root.joker.current : ""
+        color: Color.accent
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+        font.bold: true
+      }
+      Text {
+        width: parent.width
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         text: root.joker ? root.joker.quip : ""
@@ -55,6 +81,19 @@ Item {
         font.pixelSize: Style.font.caption
         font.italic: true
       }
+    }
+
+    // Edition, at the bottom.
+    Text {
+      anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: Style.space(6) }
+      visible: root.edition !== null
+      horizontalAlignment: Text.AlignHCenter
+      wrapMode: Text.WordWrap
+      text: root.edition ? root.edition.name + " · " + root.edition.description : ""
+      color: Color.accent
+      font.family: Style.font.family
+      font.pixelSize: Style.font.caption
+      font.bold: true
     }
   }
 

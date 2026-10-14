@@ -7,10 +7,12 @@ Rectangle {
 
   property string text: ""
   property bool bordered: true
+  // Less padding, for buttons under a joker.
+  property bool compact: false
   signal clicked()
 
-  implicitWidth: label.implicitWidth + 2 * Style.space(14)
-  implicitHeight: label.implicitHeight + 2 * Style.space(8)
+  implicitWidth: label.implicitWidth + 2 * Style.space(compact ? 6 : 14)
+  implicitHeight: label.implicitHeight + 2 * Style.space(compact ? 5 : 8)
   radius: Style.cornerRadius
   color: !enabled ? Style.normalFill
     : mouse.pressed ? Style.pressedFill

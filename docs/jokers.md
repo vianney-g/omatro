@@ -3,18 +3,67 @@
 <!-- Generated from the engine code by `make docs`: do not edit by hand. -->
 
 Jokers are bought in the shop between blinds (5 slots at most) and sell for
-half their price. While a hand is scored, card jokers trigger for each scoring
-card right after its chips; hand jokers then trigger once, left to right.
+half their price. Each shop slot draws a rarity, named after Arch's
+repositories: core (70%), extra (25%) or AUR (5%); legendary jokers never
+show up in the shop. A joker may come with an edition (see
+[editions.md](editions.md)).
 
-| Id | Name | Price | Sells for | Effect | Quip |
+While a hand is scored, each scoring card scores its chips, then card jokers
+trigger, and retriggers score it again; then jokers trigger for the cards
+held in hand; then each joker, left to right, adds its effect. Order matters:
+Fork copies the joker on its right.
+
+| Id | Name | Rarity | Price | Effect | Quip |
 |---|---|---|---|---|---|
-| `dotfiles` | Dotfiles | $4 | $2 | +30 chips | *It works on my machine. Now it works on yours.* |
-| `omakase` | Omakase | $4 | $2 | +5 mult | *You don't pick the menu. The menu picks you.* |
-| `ruby_gem` | Ruby Gem | $5 | $2 | +2 mult for each scoring diamond | *Optimized for programmer happiness.* |
-| `fan_mail` | Fan Mail | $5 | $2 | +15 chips for each scoring heart | *HEY, someone loves your pull request.* |
-| `rails_world` | Rails World | $5 | $2 | +20 chips for each scoring face card | *Everyone came for the keynote. And the opinions.* |
-| `tiling_manager` | Tiling Manager | $5 | $2 | +12 mult if the hand is a straight | *Floating windows are a lifestyle choice.* |
-| `cloud_exit` | Cloud Exit | $5 | $2 | +$1 per discard left at the end of the blind | *Why rent what you can own?* |
-| `super_key` | Super Key | $6 | $3 | +2 mult for each scoring card | *Every good shortcut starts here.* |
-| `no_build` | No Build | $7 | $3 | ×2 mult if the played hand has 3 cards or fewer | *Webpack? Never heard of her.* |
-| `hotwire` | Hotwire | $8 | $4 | ×3 mult if the hand is a three of a kind | *Three frameworks walk into a monolith.* |
+| `pair_programming` | Pair Programming | core | $3 | +8 mult if the hand contains a Pair | *Two keyboards, one bug.* |
+| `rubber_duck` | Rubber Duck | core | $3 | +50 chips if the hand contains a Pair | *Explains your bug back to you.* |
+| `dotfiles` | Dotfiles | core | $4 | +30 chips | *It works on my machine. Now it works on yours.* |
+| `omakase` | Omakase | core | $4 | +5 mult | *You don't pick the menu. The menu picks you.* |
+| `dual_monitors` | Dual Monitors | core | $4 | +10 mult if the hand contains a Two Pair | *Twice the screens, twice the tabs.* |
+| `three_way_merge` | Three-Way Merge | core | $4 | +12 mult if the hand contains a Three of a Kind | *Ours, theirs, and somehow a third.* |
+| `color_scheme` | Color Scheme | core | $4 | +10 mult if the hand contains a Flush | *Every window, the same theme.* |
+| `split_keyboard` | Split Keyboard | core | $4 | +80 chips if the hand contains a Two Pair | *Two halves, both ergonomic.* |
+| `triple_boot` | Triple Boot | core | $4 | +100 chips if the hand contains a Three of a Kind | *Arch, Arch, and also Arch.* |
+| `pipeline` | Pipeline | core | $4 | +100 chips if the hand contains a Straight | *cat \| grep \| sort \| uniq -c* |
+| `dark_mode` | Dark Mode | core | $4 | +80 chips if the hand contains a Flush | *Light mode is a bug report.* |
+| `two_spaces` | Two Spaces | core | $4 | +4 mult for each scoring even card (10, 8, 6, 4, 2) | *Not tabs. Never tabs.* |
+| `off_by_one` | Off By One | core | $4 | +31 chips for each scoring odd card (A, 9, 7, 5, 3) | *Arrays start at one. Fight me.* |
+| `arch_wiki` | Arch Wiki | core | $4 | +20 chips and +4 mult for each scoring ace | *The answer was on the Arch Wiki all along.* |
+| `green_build` | Green Build | core | $4 | +1 mult per hand played, −1 mult per discard | *All tests pass. Don't touch anything.* |
+| `vintage_thinkpad` | Vintage ThinkPad | core | $4 | Sell value rises by $3 at the end of each blind | *Appreciating asset. Allegedly.* |
+| `data_hoarder` | Data Hoarder | core | $4 | +$2 per discard left, if no discard was used this blind | *Never delete anything. Ever.* |
+| `consulting_gig` | Consulting Gig | core | $4 | 1 in 2 chance of +$2 for each scoring face card | *Faces pay. Sometimes.* |
+| `segfault` | Segfault | core | $4 | +0 to +23 mult, at random | *Undefined behavior, defined fun.* |
+| `stable_release` | Stable Release | core | $4 | ×3 mult; 1 in 1000 chance to break at the end of each blind | *Boring. Reliable. Beautiful.* |
+| `bang_bang` | Bang Bang | core | $4 | Retriggers the first scoring card 2 more times | *!! — run it again, louder.* |
+| `ultrawide` | Ultrawide | core | $4 | +1 hand size | *More screen, more cards.* |
+| `undo_history` | Undo History | core | $4 | +1 discard each blind | *Ctrl+Z, but for cards.* |
+| `ruby_gem` | Ruby Gem | core | $5 | +2 mult for each scoring diamond | *Optimized for programmer happiness.* |
+| `fan_mail` | Fan Mail | core | $5 | +15 chips for each scoring heart | *HEY, someone loves your pull request.* |
+| `rails_world` | Rails World | core | $5 | +20 chips for each scoring face card | *Everyone came for the keynote. And the opinions.* |
+| `tiling_manager` | Tiling Manager | core | $5 | +12 mult if the hand is a straight | *Floating windows are a lifestyle choice.* |
+| `cloud_exit` | Cloud Exit | core | $5 | +$1 per discard left at the end of the blind | *Why rent what you can own?* |
+| `open_source_love` | Open Source Love | core | $5 | +3 mult for each scoring heart | *Made with ♥ and too much coffee.* |
+| `rabbit_hole` | Rabbit Hole | core | $5 | +3 mult for each scoring spade | *Just one more config tweak.* |
+| `linux_user_group` | Linux User Group | core | $5 | +3 mult for each scoring club | *Pizza, slides, and a broken projector.* |
+| `low_battery` | Low Battery | core | $5 | Adds twice the rank of the lowest card held in hand to mult | *Still at 2%. Still going.* |
+| `free_trial` | Free Trial | core | $5 | +100 chips, −5 chips per hand played | *Enjoy it while it lasts.* |
+| `muscle_memory` | Muscle Memory | core | $5 | Adds the number of times the hand type was played to mult | *Your fingers type it before you think.* |
+| `ci_runner` | CI Runner | core | $5 | Gains +15 chips when the hand contains a Straight | *Green checks, one after another.* |
+| `beta_release` | Beta Release | core | $5 | +15 mult; 1 in 6 chance to break at the end of each blind | *Works great until it doesn't.* |
+| `uptime` | Uptime | core | $6 | +1 mult per hand in a row without a scoring face card | *847 days without a reboot.* |
+| `sponsorware` | Sponsorware | core | $6 | +$4 at the end of each blind | *Thank you for your sponsorship.* |
+| `super_key` | Super Key | extra | $6 | +2 mult for each scoring card | *Every good shortcut starts here.* |
+| `watch_mode` | Watch Mode | extra | $6 | Retriggers every scoring face card | *Every face, hot-reloaded.* |
+| `no_build` | No Build | extra | $7 | ×2 mult if the played hand has 3 cards or fewer | *Webpack? Never heard of her.* |
+| `heartbleed` | Heartbleed | extra | $7 | 1 in 2 chance of ×1.5 mult for each scoring heart | *Your heart leaks, 64 KB at a time.* |
+| `mvp` | MVP | extra | $7 | Flushes and Straights can be made with 4 cards | *Minimum viable flush.* |
+| `recursion` | Recursion | extra | $8 | +8 mult for each scoring A, 2, 3, 5 or 8 | *To understand recursion, see Recursion.* |
+| `hotwire` | Hotwire | AUR | $8 | ×3 mult if the hand is a three of a kind | *Three frameworks walk into a monolith.* |
+| `code_review` | Code Review | AUR | $8 | ×2 mult if the hand contains a Pair | *Looks good to me. Ship it.* |
+| `quad_core` | Quad Core | AUR | $8 | ×4 mult if the hand contains a Four of a Kind | *All cores busy compiling Rust.* |
+| `git_bisect` | Git Bisect | AUR | $8 | ×3 mult if the hand contains a Straight | *Good, bad, good, bad… found it.* |
+| `monorepo` | Monorepo | AUR | $8 | ×2 mult if the hand contains a Flush | *Everything in one place. Even you.* |
+| `benevolent_dictator` | Benevolent Dictator | AUR | $8 | ×1.5 mult for each king held in hand | *For life. Or until the fork.* |
+| `orphan_cleanup` | Orphan Cleanup | AUR | $9 | Gains ×0.25 mult per card sold; resets after a boss | *pacman -Rns $(pacman -Qdtq)* |
+| `fork` | Fork | AUR | $10 | Copies the ability of the joker on its right | *Same features. MIT licensed.* |

@@ -70,8 +70,10 @@ A Cargo workspace with two crates:
   `Style.fit`. `Main.qml` sets `fit` so the whole UI shrinks together when the window is
   smaller than `designWidth` × `designHeight` (tiled Hyprland windows ignore the minimum
   size). The window's own size must use `Style.themeScale`, never `Style.space()`, or it
-  makes a binding loop. If the layout gets wider (e.g. more cards in the hand), raise
-  `designWidth`.
+  makes a binding loop. If the layout gets wider or taller (the shop sets the height:
+  joker row and offers), raise `designWidth` or `designHeight`. Rows whose length
+  varies (hand size, joker slots) narrow their items instead (`handRow.cardWidth`,
+  `jokerRow.jokerWidth`).
 
 ## Debugging and screenshots
 
@@ -86,8 +88,19 @@ geometry comes from `hyprctl clients -j`. Check that stderr has no QML warnings.
 ## Adding a joker
 
 Add a variant to the `Joker` enum and to `Joker::ALL` (fixed-size array), then `name`,
-`description`, `quip`, `price` and the relevant trigger (`on_card_scored`, `on_hand` or
-`on_blind_won`) in `engine/src/joker.rs`. Then run `make docs`.
+`description`, `quip`, `rarity` and `price` in `engine/src/joker.rs`, and its behaviour:
+- scoring triggers on `Joker`, which `score.rs` calls in this order: `retriggers` and
+  `on_card_scored` per scoring card, `on_held` per card held in hand, `on_hand` once
+  (with the joker's `counter`); and `blind_money` at the end of a won blind. Chances
+  take the `Rng` passed in (the game's `score` or `round` stream), never a new one.
+- jokers that grow or change: `OwnedJoker` keeps a `counter` (and `sell_bonus`),
+  updated by `before_hand`, `after_hand` (false = used up), `on_discard`,
+  `on_card_sold`, `end_of_blind` (false = broken); `initial_counter` and `current()`
+  (the "Currently +n" line) go with them.
+- rule changers (hand size, discards, four-card hands) are read by `Game` with
+  `count(Joker::…)`; mark them, and anything else Fork must not copy, in `copyable`.
+
+Fork copies through `score::copy_target`. Then run `make docs`.
 
 ## Generated references
 

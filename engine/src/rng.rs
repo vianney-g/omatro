@@ -33,6 +33,16 @@ impl Rng {
         ((self.next_u64() as u128 * n as u128) >> 64) as u64
     }
 
+    /// True with a 1 in `n` chance.
+    pub fn chance(&mut self, n: u64) -> bool {
+        self.below(n) == 0
+    }
+
+    /// Float in `0..1`.
+    pub fn unit(&mut self) -> f64 {
+        (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64
+    }
+
     /// Fisher-Yates shuffle.
     pub fn shuffle<T>(&mut self, items: &mut [T]) {
         for i in (1..items.len()).rev() {

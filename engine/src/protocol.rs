@@ -35,6 +35,10 @@ pub enum Command {
     Sell {
         joker: usize,
     },
+    MoveJoker {
+        from: usize,
+        to: usize,
+    },
     Reroll,
     NextBlind,
     /// Only accepted when the session allows debugging.
@@ -135,6 +139,9 @@ impl Session {
             Command::CashOut => game.cash_out().map_err(|e| e.to_string())?,
             Command::Buy { offer } => game.buy(offer).map_err(|e| e.to_string())?,
             Command::Sell { joker } => game.sell(joker).map_err(|e| e.to_string())?,
+            Command::MoveJoker { from, to } => {
+                game.move_joker(from, to).map_err(|e| e.to_string())?
+            }
             Command::Reroll => game.reroll().map_err(|e| e.to_string())?,
             Command::NextBlind => game.next_blind().map_err(|e| e.to_string())?,
             Command::Debug(cheat) => game.cheat(cheat).map_err(|e| e.to_string())?,
