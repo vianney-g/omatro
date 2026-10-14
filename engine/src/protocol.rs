@@ -149,11 +149,11 @@ mod tests {
     #[test]
     fn parses_commands() {
         assert_eq!(
-            serde_json::from_str::<Command>(r#"{"cmd":"new_game","seed":3,"jokers":["baobab"]}"#)
+            serde_json::from_str::<Command>(r#"{"cmd":"new_game","seed":3,"jokers":["dotfiles"]}"#)
                 .unwrap(),
             Command::NewGame {
                 seed: Some(3),
-                jokers: vec![Joker::Baobab]
+                jokers: vec![Joker::Dotfiles]
             }
         );
         assert_eq!(
@@ -189,12 +189,12 @@ mod tests {
         let mut session = Session::default();
         let r = send(
             &mut session,
-            r#"{"cmd":"new_game","seed":42,"jokers":["griot"]}"#,
+            r#"{"cmd":"new_game","seed":42,"jokers":["rails_world"]}"#,
         );
         assert_eq!(r["event"], "state");
         assert_eq!(r["state"]["seed"], 42);
         assert_eq!(r["state"]["hand"].as_array().unwrap().len(), 8);
-        assert_eq!(r["state"]["jokers"][0]["name"], "Griot");
+        assert_eq!(r["state"]["jokers"][0]["name"], "Rails World");
         assert_eq!(r["state"]["money"], 4);
         assert_eq!(r["state"]["shop"], serde_json::json!([]));
 

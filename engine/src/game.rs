@@ -63,6 +63,7 @@ pub struct JokerInfo {
     pub id: Joker,
     pub name: &'static str,
     pub description: &'static str,
+    pub quip: &'static str,
     pub price: u32,
     pub sell_value: u32,
 }
@@ -73,6 +74,7 @@ impl From<Joker> for JokerInfo {
             id: joker,
             name: joker.name(),
             description: joker.description(),
+            quip: joker.quip(),
             price: joker.price(),
             sell_value: joker.sell_value(),
         }
@@ -484,10 +486,10 @@ mod tests {
 
     #[test]
     fn winning_pays_a_reward() {
-        let game = won_game(9, vec![Joker::Tontine]);
+        let game = won_game(9, vec![Joker::CloudExit]);
         let s = game.state();
         assert_eq!(s.phase, Phase::Won);
-        // $4 + 3 hands left + 0 interest ($4) + 3 discards (tontine).
+        // $4 + 3 hands left + 0 interest ($4) + 3 discards (Cloud Exit).
         assert_eq!(
             s.reward,
             Some(Reward {
@@ -571,7 +573,7 @@ mod tests {
 
     #[test]
     fn shop_actions_need_the_shop() {
-        let mut game = Game::new(9, vec![Joker::Baobab]);
+        let mut game = Game::new(9, vec![Joker::Dotfiles]);
         assert_eq!(game.buy(0), Err(GameError::NotInShop));
         assert_eq!(game.sell(0), Err(GameError::NotInShop));
         assert_eq!(game.reroll(), Err(GameError::NotInShop));

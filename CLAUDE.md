@@ -6,6 +6,12 @@ omatro is a Balatro-like card game for Omarchy: a standalone Qt Quick applicatio
 in Rust with cxx-qt. The README covers the rules and the JSON protocol; the jokers are listed in
 `docs/jokers.md`.
 
+Game content (jokers and, later, consumables, bosses, decks…) is themed around Omarchy,
+Arch, Hyprland and DHH, with humor: affectionate jabs, never mean. Names and texts are
+original, never Balatro's (only the mechanics are borrowed). Each item has a `quip()`,
+a one-line joke shown under its effect (50 characters at most, or it overflows the card).
+New content names and quips are proposed to the maintainer for approval before coding.
+
 The whole codebase and the interface are in English: code, comments, error messages,
 UI text, README and commit messages. Numbers are displayed in English format
 (`12,345`, `2.5`, `$4`). Conversation with the maintainer may be in French.
@@ -62,7 +68,7 @@ A Cargo workspace with two crates:
 ## Adding a joker
 
 Add a variant to the `Joker` enum and to `Joker::ALL` (fixed-size array), then `name`,
-`description`, `price` and the relevant trigger (`on_card_scored`, `on_hand` or
+`description`, `quip`, `price` and the relevant trigger (`on_card_scored`, `on_hand` or
 `on_blind_won`) in `engine/src/joker.rs`. Then run `make jokers-doc`: `docs/jokers.md`,
 the human-readable joker reference, is generated from the code, and the
 `joker_reference_is_up_to_date` test fails whenever it no longer matches. Never edit

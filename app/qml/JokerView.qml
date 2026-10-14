@@ -45,6 +45,16 @@ Item {
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
       }
+      Text {
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        text: root.joker ? root.joker.quip : ""
+        color: Color.muted
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+        font.italic: true
+      }
     }
   }
 

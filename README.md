@@ -15,7 +15,8 @@ A standalone Qt Quick application, like omawrite or omacut, but written in Rust
 - `pkgbuild/`: launcher entry and icon.
 
 A personal project, unaffiliated with Balatro: the mechanics are borrowed, but not the
-name, the artwork, the text or the code.
+name, the artwork, the text or the code. The content is themed around Omarchy, Arch and
+Hyprland, with affectionate jokes about DHH; it is unaffiliated with them too.
 
 ## Installation
 
@@ -51,7 +52,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 
 | Command | Effect |
 |---|---|
-| `{"cmd":"new_game","seed":42,"jokers":["baobab"]}` | New game (`seed` and `jokers` optional) |
+| `{"cmd":"new_game","seed":42,"jokers":["dotfiles"]}` | New game (`seed` and `jokers` optional) |
 | `{"cmd":"state"}` | Returns the state |
 | `{"cmd":"play","cards":[0,2,3]}` | Plays 1 to 5 cards (indices into the hand) |
 | `{"cmd":"discard","cards":[1]}` | Discards 1 to 5 cards |
