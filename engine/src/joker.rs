@@ -3,6 +3,8 @@
 
 use crate::card::{ACE, Card, Suit};
 use crate::hand::{Evaluated, HandKind};
+pub use crate::modifier::Edition;
+use crate::modifier::Enhancement;
 use crate::rng::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -35,81 +37,6 @@ impl Rarity {
             Rarity::Extra => 0.25,
             Rarity::Aur => 0.05,
             Rarity::Legendary => 0.0,
-        }
-    }
-}
-
-/// Hyprland decorations on a joker (and, later, on cards).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Edition {
-    Blur,
-    Shadow,
-    Animated,
-    Transparent,
-}
-
-impl Edition {
-    pub const ALL: [Edition; 4] = [
-        Edition::Blur,
-        Edition::Shadow,
-        Edition::Animated,
-        Edition::Transparent,
-    ];
-
-    pub fn name(self) -> &'static str {
-        match self {
-            Edition::Blur => "Blur",
-            Edition::Shadow => "Shadow",
-            Edition::Animated => "Animated",
-            Edition::Transparent => "Transparent",
-        }
-    }
-
-    pub fn description(self) -> &'static str {
-        match self {
-            Edition::Blur => "+50 chips",
-            Edition::Shadow => "+10 mult",
-            Edition::Animated => "×1.5 mult",
-            Edition::Transparent => "+1 joker slot",
-        }
-    }
-
-    pub fn quip(self) -> &'static str {
-        match self {
-            Edition::Blur => "Looks expensive. Costs GPU.",
-            Edition::Shadow => "Depth, for your flat design.",
-            Edition::Animated => "Wobbly windows are back.",
-            Edition::Transparent => "See-through. Takes no room.",
-        }
-    }
-
-    /// Added to the price of a joker.
-    pub fn price(self) -> u32 {
-        match self {
-            Edition::Blur => 2,
-            Edition::Shadow => 3,
-            Edition::Animated | Edition::Transparent => 5,
-        }
-    }
-
-    /// Chance for a shop joker to come with this edition.
-    pub fn odds(self) -> f64 {
-        match self {
-            Edition::Blur => 0.02,
-            Edition::Shadow => 0.014,
-            Edition::Animated | Edition::Transparent => 0.003,
-        }
-    }
-
-    /// Effect when the joker scores: Blur and Shadow before its own effect,
-    /// Animated after it.
-    pub fn effect(self) -> Option<Effect> {
-        match self {
-            Edition::Blur => Some(Effect::Chips(50)),
-            Edition::Shadow => Some(Effect::Mult(10.0)),
-            Edition::Animated => Some(Effect::XMult(1.5)),
-            Edition::Transparent => None,
         }
     }
 }
@@ -198,6 +125,18 @@ pub enum Joker {
     FreeAsInBeer,
     AutoUpdate,
     ConfigReload,
+    ClosedSource,
+    EnterpriseSales,
+    GarbageCollector,
+    Systemd,
+    BlobStorage,
+    SupportContract,
+    FlakyCi,
+    RmaDepartment,
+    SeniorEngineer,
+    IncrementalBuild,
+    CodeSigning,
+    CronJob,
 }
 
 /// What a joker sees of the hand being scored.
@@ -206,18 +145,34 @@ pub struct HandContext<'a> {
     pub evaluated: &'a Evaluated,
     /// Times this hand type was played this game, this one included.
     pub times_played: u32,
+    /// The whole deck.
+    pub deck: &'a [Card],
+    /// Flaky Test cards that triggered in this hand.
+    pub lucky_hits: u32,
 }
 
+fn count(deck: &[Card], enhancement: Enhancement) -> usize {
+    deck.iter().filter(|c| c.is(enhancement)).count()
+}
+
+/// Cards of the deck with an enhancement (Senior Engineer).
+pub fn enhanced_cards(deck: &[Card]) -> usize {
+    deck.iter().filter(|c| c.enhancement.is_some()).count()
+}
+
+/// Enhanced cards Senior Engineer needs.
+pub const SENIOR_THRESHOLD: usize = 16;
+
 fn is_odd(card: Card) -> bool {
-    card.rank == ACE || (card.rank <= 9 && card.rank % 2 == 1)
+    card.has_rank() && (card.rank == ACE || (card.rank <= 9 && card.rank % 2 == 1))
 }
 
 fn is_even(card: Card) -> bool {
-    card.rank <= 10 && card.rank % 2 == 0
+    card.has_rank() && card.rank <= 10 && card.rank % 2 == 0
 }
 
 impl Joker {
-    pub const ALL: [Joker; 57] = [
+    pub const ALL: [Joker; 69] = [
         Joker::Dotfiles,
         Joker::Omakase,
         Joker::RubyGem,
@@ -275,6 +230,18 @@ impl Joker {
         Joker::FreeAsInBeer,
         Joker::AutoUpdate,
         Joker::ConfigReload,
+        Joker::ClosedSource,
+        Joker::EnterpriseSales,
+        Joker::GarbageCollector,
+        Joker::Systemd,
+        Joker::BlobStorage,
+        Joker::SupportContract,
+        Joker::FlakyCi,
+        Joker::RmaDepartment,
+        Joker::SeniorEngineer,
+        Joker::IncrementalBuild,
+        Joker::CodeSigning,
+        Joker::CronJob,
     ];
 
     pub fn name(self) -> &'static str {
@@ -336,6 +303,18 @@ impl Joker {
             Joker::FreeAsInBeer => "Free as in Beer",
             Joker::AutoUpdate => "Auto Update",
             Joker::ConfigReload => "Config Reload",
+            Joker::ClosedSource => "Closed Source",
+            Joker::EnterpriseSales => "Enterprise Sales",
+            Joker::GarbageCollector => "Garbage Collector",
+            Joker::Systemd => "systemd",
+            Joker::BlobStorage => "Blob Storage",
+            Joker::SupportContract => "Support Contract",
+            Joker::FlakyCi => "Flaky CI",
+            Joker::RmaDepartment => "RMA Department",
+            Joker::SeniorEngineer => "Senior Engineer",
+            Joker::IncrementalBuild => "Incremental Build",
+            Joker::CodeSigning => "Code Signing",
+            Joker::CronJob => "Cron Job",
         }
     }
 
@@ -398,6 +377,22 @@ impl Joker {
             Joker::FreeAsInBeer => "Themes in the shop cost $0",
             Joker::AutoUpdate => "1 in 4 chance to level up the played hand type",
             Joker::ConfigReload => "Levels up the hand type of the first discard of each blind",
+            Joker::ClosedSource => "Adds a Binary Blob card to the deck when a blind starts",
+            Joker::EnterpriseSales => "Scoring face cards become Enterprise cards",
+            Joker::GarbageCollector => {
+                "Gains ×0.1 mult per enhanced card played, and removes the enhancement"
+            }
+            Joker::Systemd => "×0.2 mult per Daemon card in the deck",
+            Joker::BlobStorage => "+25 chips per Binary Blob card in the deck",
+            Joker::SupportContract => "Enterprise cards give +$4 when scored",
+            Joker::FlakyCi => "Gains ×0.25 mult each time a Flaky Test card triggers",
+            Joker::RmaDepartment => "Gains ×0.75 mult per Overclocked card that breaks",
+            Joker::SeniorEngineer => "×3 mult if the deck holds at least 16 enhanced cards",
+            Joker::IncrementalBuild => "Every played card permanently gains +5 chips",
+            Joker::CodeSigning => {
+                "When a blind starts, adds a random card with a random seal to the hand"
+            }
+            Joker::CronJob => "Retriggers the effects of cards held in hand",
         }
     }
 
@@ -462,6 +457,18 @@ impl Joker {
             Joker::FreeAsInBeer => "Also free as in freedom.",
             Joker::AutoUpdate => "pacman -Syu, every hand.",
             Joker::ConfigReload => "Super+Shift+R: everything, but fresher.",
+            Joker::ClosedSource => "Can't read it. Can't remove it.",
+            Joker::EnterpriseSales => "Every face, upsold.",
+            Joker::GarbageCollector => "Frees memory. And your upgrades.",
+            Joker::Systemd => "One daemon to rule them all.",
+            Joker::BlobStorage => "S3 buckets all the way down.",
+            Joker::SupportContract => "Billed per incident.",
+            Joker::FlakyCi => "Green on the third try.",
+            Joker::RmaDepartment => "We've seen worse. Probably.",
+            Joker::SeniorEngineer => "Has seen every config.",
+            Joker::IncrementalBuild => "A little faster every time.",
+            Joker::CodeSigning => "Signed, sealed, delivered.",
+            Joker::CronJob => "Runs again at midnight. And again.",
         }
     }
 
@@ -476,7 +483,17 @@ impl Joker {
             | Joker::ThemeCollector
             | Joker::Unixporn
             | Joker::FreeAsInBeer
-            | Joker::ConfigReload => Rarity::Extra,
+            | Joker::ConfigReload
+            | Joker::ClosedSource
+            | Joker::EnterpriseSales
+            | Joker::GarbageCollector
+            | Joker::Systemd
+            | Joker::BlobStorage
+            | Joker::FlakyCi
+            | Joker::RmaDepartment
+            | Joker::IncrementalBuild
+            | Joker::CodeSigning
+            | Joker::CronJob => Rarity::Extra,
             Joker::Hotwire
             | Joker::CodeReview
             | Joker::QuadCore
@@ -484,7 +501,8 @@ impl Joker {
             | Joker::Monorepo
             | Joker::BenevolentDictator
             | Joker::OrphanCleanup
-            | Joker::Fork => Rarity::Aur,
+            | Joker::Fork
+            | Joker::SeniorEngineer => Rarity::Aur,
             _ => Rarity::Core,
         }
     }
@@ -527,14 +545,28 @@ impl Joker {
             | Joker::MuscleMemory
             | Joker::CiRunner
             | Joker::BetaRelease
-            | Joker::AutoUpdate => 5,
+            | Joker::AutoUpdate
+            | Joker::SupportContract
+            | Joker::IncrementalBuild
+            | Joker::CronJob => 5,
             Joker::SuperKey
             | Joker::Uptime
             | Joker::Sponsorware
             | Joker::WatchMode
             | Joker::ThemeCollector
-            | Joker::Unixporn => 6,
-            Joker::NoBuild | Joker::Heartbleed | Joker::Mvp => 7,
+            | Joker::Unixporn
+            | Joker::BlobStorage
+            | Joker::FlakyCi
+            | Joker::RmaDepartment
+            | Joker::CodeSigning => 6,
+            Joker::NoBuild
+            | Joker::Heartbleed
+            | Joker::Mvp
+            | Joker::ClosedSource
+            | Joker::EnterpriseSales
+            | Joker::GarbageCollector
+            | Joker::Systemd
+            | Joker::SeniorEngineer => 7,
             Joker::Hotwire
             | Joker::CodeReview
             | Joker::QuadCore
@@ -559,6 +591,7 @@ impl Joker {
                 | Joker::Ultrawide
                 | Joker::UndoHistory
                 | Joker::FreeAsInBeer
+                | Joker::EnterpriseSales
         )
     }
 
@@ -566,7 +599,11 @@ impl Joker {
     fn initial_counter(self) -> f64 {
         match self {
             Joker::FreeTrial => 100.0,
-            Joker::OrphanCleanup | Joker::ThemeCollector => 1.0,
+            Joker::OrphanCleanup
+            | Joker::ThemeCollector
+            | Joker::GarbageCollector
+            | Joker::FlakyCi
+            | Joker::RmaDepartment => 1.0,
             _ => 0.0,
         }
     }
@@ -575,21 +612,26 @@ impl Joker {
     pub fn on_card_scored(self, card: Card, rng: &mut Rng) -> Vec<Effect> {
         let face = card.is_face();
         match self {
-            Joker::RubyGem if card.suit == Suit::Diamonds => vec![Effect::Mult(2.0)],
-            Joker::FanMail if card.suit == Suit::Hearts => vec![Effect::Chips(15)],
+            Joker::RubyGem if card.is_suit(Suit::Diamonds) => vec![Effect::Mult(2.0)],
+            Joker::FanMail if card.is_suit(Suit::Hearts) => vec![Effect::Chips(15)],
             Joker::RailsWorld if face => vec![Effect::Chips(20)],
             Joker::SuperKey => vec![Effect::Mult(2.0)],
-            Joker::OpenSourceLove if card.suit == Suit::Hearts => vec![Effect::Mult(3.0)],
-            Joker::RabbitHole if card.suit == Suit::Spades => vec![Effect::Mult(3.0)],
-            Joker::LinuxUserGroup if card.suit == Suit::Clubs => vec![Effect::Mult(3.0)],
-            Joker::Heartbleed if card.suit == Suit::Hearts && rng.chance(2) => {
+            Joker::OpenSourceLove if card.is_suit(Suit::Hearts) => vec![Effect::Mult(3.0)],
+            Joker::RabbitHole if card.is_suit(Suit::Spades) => vec![Effect::Mult(3.0)],
+            Joker::LinuxUserGroup if card.is_suit(Suit::Clubs) => vec![Effect::Mult(3.0)],
+            Joker::Heartbleed if card.is_suit(Suit::Hearts) && rng.chance(2) => {
                 vec![Effect::XMult(1.5)]
             }
             Joker::TwoSpaces if is_even(card) => vec![Effect::Mult(4.0)],
             Joker::OffByOne if is_odd(card) => vec![Effect::Chips(31)],
-            Joker::Recursion if matches!(card.rank, ACE | 2 | 3 | 5 | 8) => vec![Effect::Mult(8.0)],
-            Joker::ArchWiki if card.rank == ACE => vec![Effect::Chips(20), Effect::Mult(4.0)],
+            Joker::Recursion if card.has_rank() && matches!(card.rank, ACE | 2 | 3 | 5 | 8) => {
+                vec![Effect::Mult(8.0)]
+            }
+            Joker::ArchWiki if card.has_rank() && card.rank == ACE => {
+                vec![Effect::Chips(20), Effect::Mult(4.0)]
+            }
             Joker::ConsultingGig if face && rng.chance(2) => vec![Effect::Money(2)],
+            Joker::SupportContract if card.is(Enhancement::Enterprise) => vec![Effect::Money(4)],
             _ => Vec::new(),
         }
     }
@@ -606,8 +648,10 @@ impl Joker {
     /// Triggered for each card held in hand (`lowest`: the lowest of them).
     pub fn on_held(self, card: Card, lowest: bool) -> Vec<Effect> {
         match self {
-            Joker::LowBattery if lowest => vec![Effect::Mult(2.0 * card.chips() as f64)],
-            Joker::BenevolentDictator if card.rank == 13 => vec![Effect::XMult(1.5)],
+            Joker::LowBattery if lowest => vec![Effect::Mult(2.0 * card.rank_chips() as f64)],
+            Joker::BenevolentDictator if card.has_rank() && card.rank == 13 => {
+                vec![Effect::XMult(1.5)]
+            }
             _ => Vec::new(),
         }
     }
@@ -644,6 +688,21 @@ impl Joker {
             Joker::FreeTrial | Joker::CiRunner if counter > 0.0 => Effect::Chips(counter as u64),
             Joker::MuscleMemory if hand.times_played > 0 => Effect::Mult(hand.times_played as f64),
             Joker::OrphanCleanup | Joker::ThemeCollector if counter > 1.0 => Effect::XMult(counter),
+            Joker::GarbageCollector | Joker::RmaDepartment if counter > 1.0 => {
+                Effect::XMult(counter)
+            }
+            Joker::FlakyCi if counter + 0.25 * hand.lucky_hits as f64 > 1.0 => {
+                Effect::XMult(counter + 0.25 * hand.lucky_hits as f64)
+            }
+            Joker::Systemd if count(hand.deck, Enhancement::Daemon) > 0 => {
+                Effect::XMult(1.0 + 0.2 * count(hand.deck, Enhancement::Daemon) as f64)
+            }
+            Joker::BlobStorage if count(hand.deck, Enhancement::BinaryBlob) > 0 => {
+                Effect::Chips(25 * count(hand.deck, Enhancement::BinaryBlob) as u64)
+            }
+            Joker::SeniorEngineer if enhanced_cards(hand.deck) >= SENIOR_THRESHOLD => {
+                Effect::XMult(3.0)
+            }
             Joker::Segfault => Effect::Mult(rng.below(24) as f64),
             Joker::BetaRelease => Effect::Mult(15.0),
             Joker::StableRelease => Effect::XMult(3.0),
@@ -667,7 +726,8 @@ impl Joker {
 /// The current value of a growing joker, shown on a badge.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Bonus {
-    /// `chips`, `mult`, `x_mult` or `money`: the badge's colour.
+    /// `chips`, `mult`, `x_mult`, `money`, or `progress` towards an effect: the
+    /// badge's colour.
     pub kind: &'static str,
     pub text: String,
 }
@@ -710,9 +770,34 @@ impl OwnedJoker {
     /// What a joker that grows, shrinks or depends on the game gives right now,
     /// for its badge. `hand_plays`: times the selected hand type would have been
     /// played, this hand included (none when no hand is selected).
-    pub fn bonus(&self, hand_plays: Option<u32>, unique_themes: u32) -> Option<Bonus> {
+    pub fn bonus(
+        &self,
+        hand_plays: Option<u32>,
+        unique_themes: u32,
+        deck: &[Card],
+    ) -> Option<Bonus> {
         let c = round(self.counter);
+        let daemons = count(deck, Enhancement::Daemon);
+        let enhanced = enhanced_cards(deck);
         let (kind, text) = match self.joker {
+            Joker::GarbageCollector | Joker::FlakyCi | Joker::RmaDepartment => {
+                ("x_mult", format!("×{c} mult"))
+            }
+            Joker::Systemd => (
+                "x_mult",
+                format!("×{} mult", round(1.0 + 0.2 * daemons as f64)),
+            ),
+            Joker::BlobStorage => (
+                "chips",
+                format!("+{} chips", 25 * count(deck, Enhancement::BinaryBlob)),
+            ),
+            Joker::SeniorEngineer if enhanced >= SENIOR_THRESHOLD => {
+                ("x_mult", "×3 mult".to_string())
+            }
+            Joker::SeniorEngineer => (
+                "progress",
+                format!("{enhanced} / {SENIOR_THRESHOLD} enhanced"),
+            ),
             Joker::Uptime | Joker::GreenBuild => ("mult", format!("+{c} mult")),
             Joker::FreeTrial | Joker::CiRunner => ("chips", format!("+{c} chips")),
             Joker::OrphanCleanup | Joker::ThemeCollector => ("x_mult", format!("×{c} mult")),
@@ -812,17 +897,17 @@ mod tests {
 
         let mut cleanup = OwnedJoker::new(Joker::OrphanCleanup, None);
         cleanup.on_card_sold();
-        assert_eq!(cleanup.bonus(None, 0).unwrap().text, "×1.25 mult");
+        assert_eq!(cleanup.bonus(None, 0, &[]).unwrap().text, "×1.25 mult");
 
         let mut collector = OwnedJoker::new(Joker::ThemeCollector, None);
-        assert_eq!(collector.bonus(None, 0).unwrap().text, "×1 mult");
+        assert_eq!(collector.bonus(None, 0, &[]).unwrap().text, "×1 mult");
         for _ in 0..3 {
             collector.on_theme_used();
         }
-        assert_eq!(collector.bonus(None, 0).unwrap().text, "×1.3 mult");
+        assert_eq!(collector.bonus(None, 0, &[]).unwrap().text, "×1.3 mult");
         let memory = OwnedJoker::new(Joker::MuscleMemory, None);
-        assert_eq!(memory.bonus(None, 0), None);
-        assert_eq!(memory.bonus(Some(4), 0).unwrap().text, "+4 mult");
+        assert_eq!(memory.bonus(None, 0, &[]), None);
+        assert_eq!(memory.bonus(Some(4), 0, &[]).unwrap().text, "+4 mult");
         cleanup.end_of_blind(true, &mut Rng::new(1));
         assert_eq!(cleanup.counter, 1.0);
     }

@@ -47,7 +47,9 @@ Each poker hand type has a level, which raises its starting chips and mult (see
 [docs/hands.md](docs/hands.md)); three secret hands need duplicate cards. Themes
 ([docs/themes.md](docs/themes.md)) level up a hand type: bought in the shop, they wait
 in the clipboard (2 slots) until applied, at any time. Your deck lasts
-the whole game: every played or discarded card comes back to it after each blind.
+the whole game: every played or discarded card comes back to it after each blind. Cards
+may carry an enhancement, a seal and an edition ([docs/modifiers.md](docs/modifiers.md));
+hover a card to read them.
 
 A won blind pays $3, $4 or $5, plus $1 per unplayed hand, plus $1 of interest per $5
 held ($5 at most). Cash out, then the shop offers 2 cards: each slot holds a theme
@@ -64,8 +66,9 @@ cargo run -p omatro-engine   # reads commands on stdin
 
 With `OMATRO_DEBUG=1`, the engine accepts `debug` commands, and the app maps them to
 F5 (win the blind in progress), F6 (+$100), F7 (jump to the boss of ante 8), F8 (raise
-every known hand type one level), F9 (add a random joker with a random edition) and F10
-(add a random theme to the clipboard). `OMATRO_JOKERS=uptime,fork` sets the jokers
+every known hand type one level), F9 (add a random joker with a random edition), F10
+(add a random theme to the clipboard) and F11 (give the cards in hand random
+enhancements, seals and editions). `OMATRO_JOKERS=uptime,fork` sets the jokers
 every new game starts with.
 
 ## Protocol
@@ -89,7 +92,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"sell_consumable","index":0}` | Sells a consumable of the clipboard |
 | `{"cmd":"reroll"}` | Rerolls the shop offers |
 | `{"cmd":"next_blind"}` | Leaves the shop for the choice of the next blind |
-| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
+| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
 
 Responses:
 
@@ -101,9 +104,11 @@ Responses:
   `lost`, `victory` (the winning ante's boss was just beaten), hand, `hand_size`,
   jokers (`id`, `name`, `description`, `quip`, `rarity`, `edition`, `price`,
   `sell_value`, `bonus` for what a growing joker gives now, `current` for what a Fork
-  copies), `max_jokers`, `consumables` (`kind`, `id`, `name`, `description`, `quip`,
+  copies), `max_jokers`, `modifiers` (names and effects of every enhancement, seal and
+  edition), `consumables` (`kind`, `id`, `name`, `description`, `quip`,
   `price`, `sell_value`), `consumable_slots`, `unique_themes`, `money`,
-  `reward` in the `won` phase (with `notes` such as "Beta Release broke."), `shop` offers
+  `reward` in the `won` phase (with `cards` for Enterprise cards held, and `notes` such
+  as "Beta Release broke."), `shop` offers
   (jokers or consumables, told apart by `kind`) and `reroll_cost` in the shop. Scores and
   targets are floats; an infinite target (from ante 39) is `null`.
 - `{"event":"scored","score":{…},"state":{…}}` after `play`: played cards, recognized
@@ -119,8 +124,10 @@ Responses:
 
 The hand is always sorted by descending rank.
 
-Cards are written `{"rank":14,"suit":"spades","id":51}` (rank 2 to 14: 11 jack, 12 queen,
-13 king, 14 ace; `id` tells apart the cards of the deck).
+Cards are written `{"rank":14,"suit":"spades","id":51,"enhancement":"daemon","seal":"retry","edition":null,"bonus_chips":5}`
+(rank 2 to 14: 11 jack, 12 queen, 13 king, 14 ace; `id` tells apart the cards of the
+deck; `enhancement`, `seal` and `edition` are ids or `null`, `bonus_chips` what the card
+gained).
 
 ## Jokers
 

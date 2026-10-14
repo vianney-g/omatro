@@ -1,10 +1,11 @@
 //! How a game unfolds: antes of three blinds, hands and discards, the shop.
 
 use crate::blind::{self, BlindKind, WINNING_ANTE};
-use crate::card::{Card, standard_deck};
+use crate::card::{Card, Suit, standard_deck};
 use crate::consumable::{CONSUMABLE_SLOTS, Consumable, Theme};
 use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, evaluate_with};
-use crate::joker::{Bonus, Edition, Joker, OwnedJoker, Rarity};
+use crate::joker::{Bonus, Joker, OwnedJoker, Rarity};
+use crate::modifier::{Edition, Enhancement, Seal};
 use crate::rng::Rng;
 use crate::score::{Breakdown, Table, copy_target, score};
 use serde::{Deserialize, Serialize};
@@ -203,9 +204,69 @@ pub struct Reward {
     /// $1 per $5 held, at most `MAX_INTEREST`.
     pub interest: u32,
     pub jokers: u32,
+    /// Enterprise cards held in hand.
+    pub cards: u32,
     pub total: u32,
     /// What happened to the jokers ("Beta Release broke.").
     pub notes: Vec<String>,
+}
+
+/// Name, effect and quip of an enhancement, a seal or an edition.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ModifierInfo {
+    pub id: String,
+    pub name: &'static str,
+    pub description: &'static str,
+    pub quip: &'static str,
+}
+
+/// Every enhancement, seal and edition, for the display to name what cards carry.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Modifiers {
+    pub enhancements: Vec<ModifierInfo>,
+    pub seals: Vec<ModifierInfo>,
+    pub editions: Vec<ModifierInfo>,
+}
+
+fn id_of(value: impl Serialize) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default()
+}
+
+impl Modifiers {
+    fn catalog() -> Self {
+        Modifiers {
+            enhancements: Enhancement::ALL
+                .iter()
+                .map(|&e| ModifierInfo {
+                    id: id_of(e),
+                    name: e.name(),
+                    description: e.description(),
+                    quip: e.quip(),
+                })
+                .collect(),
+            seals: Seal::ALL
+                .iter()
+                .map(|&s| ModifierInfo {
+                    id: id_of(s),
+                    name: s.name(),
+                    description: s.description(),
+                    quip: s.quip(),
+                })
+                .collect(),
+            editions: Edition::ALL
+                .iter()
+                .map(|&e| ModifierInfo {
+                    id: id_of(e),
+                    name: e.name(),
+                    description: e.description(),
+                    quip: e.quip(),
+                })
+                .collect(),
+        }
+    }
 }
 
 /// Snapshot of the game sent to the display.
@@ -240,6 +301,8 @@ pub struct State {
     pub consumable_slots: usize,
     /// Distinct themes applied this game.
     pub unique_themes: u32,
+    /// Names of what cards may carry.
+    pub modifiers: Modifiers,
     pub money: u32,
     /// Present in the `won` phase.
     pub reward: Option<Reward>,
@@ -274,6 +337,9 @@ pub struct Cheat {
     /// Adds a random theme to the clipboard.
     #[serde(default)]
     pub random_theme: bool,
+    /// Gives the cards in hand random enhancements, seals and editions.
+    #[serde(default)]
+    pub enhance_hand: bool,
 }
 
 /// Something for sale.
@@ -294,6 +360,12 @@ pub struct Game {
     score_rng: Rng,
     /// Chances at the end of a blind (Beta Release…).
     round_rng: Rng,
+    /// Cards added to the deck (Closed Source, Code Signing).
+    card_rng: Rng,
+    /// Id of the next card added to the deck.
+    next_card_id: u32,
+    /// The last hand type played (Theme Sync).
+    last_hand: Option<HandKind>,
     /// The player's deck, which lasts the whole game.
     deck: Vec<Card>,
     /// Cards left to draw in the blind in progress.
@@ -331,6 +403,9 @@ impl Game {
             shop_rng: Rng::stream(seed, "shop"),
             score_rng: Rng::stream(seed, "score"),
             round_rng: Rng::stream(seed, "round"),
+            card_rng: Rng::stream(seed, "cards"),
+            next_card_id: 52,
+            last_hand: None,
             deck: standard_deck(),
             draw_pile: Vec::new(),
             hand: Vec::new(),
@@ -377,8 +452,35 @@ impl Game {
             .count()
     }
 
+    /// Ultrawide jokers and Transparent cards in hand each add one card.
     fn hand_size(&self) -> usize {
-        HAND_SIZE + self.count(Joker::Ultrawide)
+        let transparent = self
+            .hand
+            .iter()
+            .filter(|c| c.edition == Some(Edition::Transparent))
+            .count();
+        HAND_SIZE + self.count(Joker::Ultrawide) + transparent
+    }
+
+    /// Changes a card for good: in the deck, and in the draw pile or the hand.
+    fn modify_card(&mut self, id: u32, change: impl Fn(&mut Card)) {
+        for card in self
+            .deck
+            .iter_mut()
+            .chain(&mut self.draw_pile)
+            .chain(&mut self.hand)
+            .filter(|c| c.id == id)
+        {
+            change(card);
+        }
+    }
+
+    /// A new card for the deck, with an id of its own.
+    fn new_card(&mut self) -> Card {
+        let rank = 2 + self.card_rng.below(13) as u8;
+        let suit = Suit::ALL[self.card_rng.below(4) as usize];
+        self.next_card_id += 1;
+        Card::new(rank, suit).with_id(self.next_card_id - 1)
     }
 
     fn joker_slots(&self) -> usize {
@@ -432,9 +534,21 @@ impl Game {
         self.selecting()?;
         // Jokers bought since the blind was announced count too.
         self.discards_left = DISCARDS_PER_BLIND + self.count(Joker::UndoHistory) as u32;
+        for _ in 0..self.abilities(Joker::ClosedSource) {
+            let blob = self.new_card().with_enhancement(Enhancement::BinaryBlob);
+            self.deck.push(blob);
+            self.draw_pile.push(blob);
+        }
         self.deck_rng.shuffle(&mut self.draw_pile);
         self.phase = Phase::Playing;
         self.draw();
+        for _ in 0..self.abilities(Joker::CodeSigning) {
+            let seal = Seal::ALL[self.card_rng.below(Seal::ALL.len() as u64) as usize];
+            let card = self.new_card().with_seal(seal);
+            self.deck.push(card);
+            self.hand.push(card);
+        }
+        self.sort_hand();
         Ok(())
     }
 
@@ -454,9 +568,13 @@ impl Game {
         {
             self.hand.push(card);
         }
-        // Hand sorted as at the table: descending rank, then suit.
+        self.sort_hand();
+    }
+
+    /// Hand sorted as at the table: descending rank, then suit; Binary Blobs last.
+    fn sort_hand(&mut self) {
         self.hand
-            .sort_by_key(|c| (std::cmp::Reverse(c.rank), c.suit as u8));
+            .sort_by_key(|c| (!c.has_rank(), std::cmp::Reverse(c.rank), c.suit as u8));
     }
 
     /// Checks a selection and returns its sorted indices.
@@ -505,6 +623,9 @@ impl Game {
                 evaluated.kind.name()
             ));
         }
+        self.last_hand = Some(evaluated.kind);
+        let mut played = played;
+        self.before_scoring(&evaluated, &mut played);
         let scoring: Vec<Card> = evaluated.scoring.iter().map(|&i| played[i]).collect();
         for joker in &mut self.jokers {
             joker.before_hand(&evaluated, &scoring);
@@ -516,10 +637,12 @@ impl Game {
             levels: &self.levels,
             plays: &self.plays,
             four_fingers,
+            deck: &self.deck,
         };
         let mut breakdown = score(&table, &mut self.score_rng);
         breakdown.notes = notes;
         self.money += breakdown.money;
+        self.after_scoring(&mut breakdown, &scoring);
         let notes = &mut breakdown.notes;
         self.jokers.retain_mut(|joker| {
             let kept = joker.after_hand();
@@ -541,6 +664,59 @@ impl Game {
         Ok(breakdown)
     }
 
+    /// Jokers that change the played cards before they score, left to right:
+    /// Enterprise Sales turns faces into Enterprise cards, Garbage Collector
+    /// eats enhancements.
+    fn before_scoring(&mut self, evaluated: &Evaluated, played: &mut [Card]) {
+        for j in 0..self.jokers.len() {
+            let joker = self.jokers[j].joker;
+            for &i in &evaluated.scoring {
+                let card = played[i];
+                let change: Option<fn(&mut Card)> = match joker {
+                    Joker::EnterpriseSales if card.is_face() => {
+                        Some(|c| c.enhancement = Some(Enhancement::Enterprise))
+                    }
+                    Joker::GarbageCollector if card.enhancement.is_some() => {
+                        self.jokers[j].counter += 0.1;
+                        Some(|c| c.enhancement = None)
+                    }
+                    _ => None,
+                };
+                if let Some(change) = change {
+                    change(&mut played[i]);
+                    self.modify_card(card.id, change);
+                }
+            }
+        }
+    }
+
+    /// After a hand scored: Flaky CI grows, Overclocked cards may have broken
+    /// (RMA Department grows), Incremental Build adds chips to the cards.
+    fn after_scoring(&mut self, breakdown: &mut Breakdown, scoring: &[Card]) {
+        let broken = breakdown.broken.len() as f64;
+        for joker in &mut self.jokers {
+            match joker.joker {
+                Joker::FlakyCi => joker.counter += 0.25 * breakdown.lucky_hits as f64,
+                Joker::RmaDepartment => joker.counter += 0.75 * broken,
+                _ => {}
+            }
+        }
+        for &id in &breakdown.broken {
+            if let Some(card) = self.deck.iter().find(|c| c.id == id) {
+                breakdown
+                    .notes
+                    .push(format!("Overclocked {} broke.", card_label(card)));
+            }
+            self.deck.retain(|c| c.id != id);
+        }
+        let chips = 5 * self.abilities(Joker::IncrementalBuild) as u64;
+        if chips > 0 {
+            for card in scoring {
+                self.modify_card(card.id, |c| c.bonus_chips += chips);
+            }
+        }
+    }
+
     fn win_blind(&mut self) {
         self.phase = Phase::Won;
         let mut reward = self.reward();
@@ -556,6 +732,23 @@ impl Game {
             kept
         });
         self.beta_broken |= broke_beta;
+        let syncs = self
+            .hand
+            .iter()
+            .filter(|c| c.seal == Some(Seal::ThemeSync))
+            .count();
+        if let Some(kind) = self.last_hand {
+            let theme = Theme::ALL[kind as usize];
+            for _ in 0..syncs {
+                if self.consumables.len() < CONSUMABLE_SLOTS {
+                    self.consumables.push(Consumable::Theme(theme));
+                    reward.notes.push(format!(
+                        "Theme Sync: {} added to the clipboard.",
+                        theme.name()
+                    ));
+                }
+            }
+        }
         self.reward = Some(reward);
         self.victory = self.ante == WINNING_ANTE && boss;
     }
@@ -595,6 +788,13 @@ impl Game {
     }
 
     fn reward(&self) -> Reward {
+        let cron_jobs = 1 + self.abilities(Joker::CronJob) as u32;
+        let enterprise = self
+            .hand
+            .iter()
+            .filter(|c| c.is(Enhancement::Enterprise))
+            .count() as u32;
+        let cards = 3 * enterprise * cron_jobs;
         let blind = self.blind.reward();
         let hands = self.hands_left;
         let interest = (self.money / 5).min(MAX_INTEREST);
@@ -613,7 +813,8 @@ impl Game {
             hands,
             interest,
             jokers,
-            total: blind + hands + interest + jokers,
+            cards,
+            total: blind + hands + interest + jokers + cards,
             notes: Vec::new(),
         }
     }
@@ -843,7 +1044,7 @@ impl Game {
         let plays = self.plays.get(kind) + 1;
         self.jokers
             .iter()
-            .map(|j| j.bonus(Some(plays), self.themes_used.len() as u32))
+            .map(|j| j.bonus(Some(plays), self.themes_used.len() as u32, &self.deck))
             .collect()
     }
 
@@ -900,6 +1101,17 @@ impl Game {
                 return Err(GameError::JokerSlotsFull);
             }
             self.jokers.push(OwnedJoker::new(joker, edition));
+        }
+        if cheat.enhance_hand {
+            let ids: Vec<u32> = self.hand.iter().map(|c| c.id).collect();
+            for id in ids {
+                let roll = self.card_rng.below(8 * 4 * 5);
+                self.modify_card(id, |card| {
+                    card.enhancement = Some(Enhancement::ALL[roll as usize % 8]);
+                    card.seal = Seal::ALL.get(roll as usize / 8 % 4).copied();
+                    card.edition = Edition::ALL[..3].get(roll as usize / 32).copied();
+                });
+            }
         }
         if cheat.random_theme {
             if self.consumables.len() >= CONSUMABLE_SLOTS {
@@ -963,7 +1175,7 @@ impl Game {
         JokerInfo::new(
             owned,
             current,
-            owned.bonus(None, self.themes_used.len() as u32),
+            owned.bonus(None, self.themes_used.len() as u32, &self.deck),
         )
     }
 
@@ -1028,6 +1240,7 @@ impl Game {
                 .collect(),
             consumable_slots: CONSUMABLE_SLOTS,
             unique_themes: self.themes_used.len() as u32,
+            modifiers: Modifiers::catalog(),
             shop: self
                 .offers
                 .iter()
@@ -1045,6 +1258,24 @@ impl Game {
             reroll_cost: self.reroll_cost,
         }
     }
+}
+
+/// "K♠", for messages.
+fn card_label(card: &Card) -> String {
+    let rank = match card.rank {
+        11 => "J".to_string(),
+        12 => "Q".to_string(),
+        13 => "K".to_string(),
+        14 => "A".to_string(),
+        r => r.to_string(),
+    };
+    let suit = match card.suit {
+        Suit::Hearts => "♥",
+        Suit::Diamonds => "♦",
+        Suit::Clubs => "♣",
+        Suit::Spades => "♠",
+    };
+    format!("{rank}{suit}")
 }
 
 #[cfg(test)]
@@ -1285,6 +1516,7 @@ mod tests {
                 hands: 3,
                 interest: 0,
                 jokers: 3,
+                cards: 0,
                 total: 9,
                 notes: vec![],
             })
@@ -1649,6 +1881,87 @@ mod tests {
             game.bonuses_for(HandKind::Flush)[0].as_ref().unwrap().text,
             "+1 mult"
         );
+    }
+
+    #[test]
+    fn closed_source_and_code_signing_add_cards() {
+        let game = playing(30, vec![Joker::ClosedSource, Joker::CodeSigning]);
+        let s = game.state();
+        assert_eq!(s.deck_size, 54);
+        assert_eq!(s.hand.len(), HAND_SIZE + 1);
+        assert!(s.hand.iter().any(|c| c.id == 53 && c.seal.is_some()));
+        assert!(
+            game.deck
+                .iter()
+                .any(|c| c.id == 52 && c.is(Enhancement::BinaryBlob))
+        );
+    }
+
+    #[test]
+    fn enterprise_sales_then_garbage_collector() {
+        let mut game = playing(31, vec![Joker::EnterpriseSales, Joker::GarbageCollector]);
+        game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
+        game.deck.extend(game.hand.clone());
+        game.play(&[0, 1]).unwrap();
+        // The kings became Enterprise cards, then lost it: ×1.2 for the collector.
+        assert!((game.jokers[1].counter - 1.2).abs() < 1e-9);
+        assert!(
+            game.deck
+                .iter()
+                .filter(|c| c.id == 100 || c.id == 101)
+                .all(|c| c.enhancement.is_none())
+        );
+    }
+
+    #[test]
+    fn enterprise_cards_pay_when_held_and_theme_sync_creates_themes() {
+        let mut game = playing(32, vec![Joker::CronJob]);
+        game.hand = cards("AS KS QS JS 10S 2H 3D 4C");
+        game.hand[5] = game.hand[5].with_enhancement(Enhancement::Enterprise);
+        game.hand[6] = game.hand[6].with_seal(Seal::ThemeSync);
+        game.play(&[0, 1, 2, 3, 4]).unwrap();
+        let s = game.state();
+        // $3, twice with Cron Job.
+        assert_eq!(s.reward.as_ref().unwrap().cards, 6);
+        assert_eq!(s.consumables[0].name, "Tokyo Night");
+    }
+
+    #[test]
+    fn incremental_build_adds_chips_for_good() {
+        let mut game = playing(33, vec![Joker::IncrementalBuild]);
+        let king = game.hand[0];
+        game.play(&[0]).unwrap();
+        let card = game.deck.iter().find(|c| c.id == king.id).unwrap();
+        assert_eq!(card.bonus_chips, 5);
+    }
+
+    #[test]
+    fn transparent_cards_enlarge_the_hand() {
+        let mut game = playing(34, vec![]);
+        let id = game.hand[0].id;
+        game.modify_card(id, |c| c.edition = Some(Edition::Transparent));
+        game.discard(&[7]).unwrap();
+        assert_eq!(game.hand.len(), HAND_SIZE + 1);
+    }
+
+    #[test]
+    fn broken_cards_leave_the_deck() {
+        let mut game = playing(35, vec![Joker::RmaDepartment]);
+        game.ante = 30;
+        game.hands_left = 100;
+        let mut broke = 0;
+        for _ in 0..30 {
+            let id = game.hand[0].id;
+            game.modify_card(id, |c| c.enhancement = Some(Enhancement::Overclocked));
+            let b = game.play(&[0]).unwrap();
+            broke += b.broken.len();
+            assert_eq!(game.deck.iter().any(|c| c.id == id), b.broken.is_empty());
+            if game.hand.is_empty() {
+                break;
+            }
+        }
+        assert!(broke > 0);
+        assert_eq!(game.jokers[0].counter, 1.0 + 0.75 * broke as f64);
     }
 
     #[test]

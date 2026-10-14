@@ -180,19 +180,16 @@ pub fn evaluate(cards: &[Card]) -> Evaluated {
 /// Cards of a straight: a run of `need` consecutive ranks, the ace also
 /// counting low; the highest run wins.
 fn straight_run(cards: &[Card], need: u8) -> Vec<usize> {
-    // Rank 1 stands for the ace played low.
-    let has = |rank: u8| {
-        cards
-            .iter()
-            .any(|c| c.rank == rank || (rank == 1 && c.rank == ACE))
+    // Rank 1 stands for the ace played low; Binary Blobs have no rank.
+    let in_run = |card: &Card, low: u8, top: u8| {
+        card.has_rank() && ((low..=top).contains(&card.rank) || (low == 1 && card.rank == ACE))
     };
     for top in (need..=ACE).rev() {
         let low = top + 1 - need;
+        let has = |rank: u8| cards.iter().any(|c| in_run(c, rank, rank));
         if (low..=top).all(has) {
             return (0..cards.len())
-                .filter(|&i| {
-                    (low..=top).contains(&cards[i].rank) || (low == 1 && cards[i].rank == ACE)
-                })
+                .filter(|&i| in_run(&cards[i], low, top))
                 .collect();
         }
     }
@@ -200,14 +197,22 @@ fn straight_run(cards: &[Card], need: u8) -> Vec<usize> {
 }
 
 /// `four_fingers`: flushes and straights need only 4 cards (the MVP joker).
+/// Binary Blobs take no part in the hand but always score; Symlinks count as
+/// every suit.
 pub fn evaluate_with(cards: &[Card], four_fingers: bool) -> Evaluated {
     assert!((1..=5).contains(&cards.len()), "play 1 to 5 cards");
     let all: Vec<usize> = (0..cards.len()).collect();
     let need = if four_fingers { 4 } else { 5 };
 
+    let blobs: Vec<usize> = all
+        .iter()
+        .copied()
+        .filter(|&i| !cards[i].has_rank())
+        .collect();
+
     // Groups of cards of the same rank, largest then highest first.
     let mut groups: Vec<Vec<usize>> = Vec::new();
-    for (i, card) in cards.iter().enumerate() {
+    for (i, card) in cards.iter().enumerate().filter(|(_, c)| c.has_rank()) {
         match groups.iter_mut().find(|g| cards[g[0]].rank == card.rank) {
             Some(group) => group.push(i),
             None => groups.push(vec![i]),
@@ -225,7 +230,7 @@ pub fn evaluate_with(cards: &[Card], four_fingers: bool) -> Evaluated {
         .map(|&suit| {
             all.iter()
                 .copied()
-                .filter(|&i| cards[i].suit == suit)
+                .filter(|&i| cards[i].is_suit(suit))
                 .collect::<Vec<_>>()
         })
         .find(|suited| suited.len() >= need as usize)
@@ -234,22 +239,24 @@ pub fn evaluate_with(cards: &[Card], four_fingers: bool) -> Evaluated {
     let (flush, straight) = (!flush_cards.is_empty(), !straight_cards.is_empty());
 
     let pairs = sizes.iter().filter(|&&s| s >= 2).count();
+    let largest = sizes.first().copied().unwrap_or(0);
     let mut contains = vec![HandKind::HighCard];
     let mut include = |kind, yes: bool| {
         if yes {
             contains.push(kind);
         }
     };
-    include(HandKind::Pair, sizes[0] >= 2);
+    include(HandKind::Pair, largest >= 2);
     include(HandKind::TwoPair, pairs >= 2);
-    include(HandKind::ThreeOfAKind, sizes[0] >= 3);
-    include(HandKind::FourOfAKind, sizes[0] >= 4);
-    include(HandKind::FullHouse, sizes[0] >= 3 && pairs >= 2);
+    include(HandKind::ThreeOfAKind, largest >= 3);
+    include(HandKind::FourOfAKind, largest >= 4);
+    include(HandKind::FullHouse, largest >= 3 && pairs >= 2);
     include(HandKind::Straight, straight);
     include(HandKind::Flush, flush);
     include(HandKind::StraightFlush, straight && flush);
 
-    let hand = |kind, mut scoring: Vec<usize>| {
+    let hand = |kind, scoring: Vec<usize>| {
+        let mut scoring = [scoring, blobs.clone()].concat();
         scoring.sort();
         scoring.dedup();
         let mut contains = contains.clone();
@@ -266,6 +273,7 @@ pub fn evaluate_with(cards: &[Card], four_fingers: bool) -> Evaluated {
         [5] if flush => hand(HandKind::ForkBomb, all),
         [3, 2] if flush => hand(HandKind::MajesticMonolith, all),
         [5] => hand(HandKind::FiveOfAKind, all),
+        [] => hand(HandKind::HighCard, Vec::new()),
         _ if straight && flush => hand(
             HandKind::StraightFlush,
             [straight_cards, flush_cards].concat(),
@@ -351,6 +359,26 @@ mod tests {
         assert_eq!(four("AH 2H 3H 4H 9C").kind, HandKind::StraightFlush);
         assert_eq!(four("AH 2H 3H 4H 9C").scoring, [0, 1, 2, 3]);
         assert_eq!(evaluate(&cards("2H 9H KH 4H 6S")).kind, HandKind::HighCard);
+    }
+
+    #[test]
+    fn binary_blobs_always_score_and_symlinks_suit_everything() {
+        use crate::modifier::Enhancement;
+        let mut played = cards("KH KD 2S");
+        played[2] = played[2].with_enhancement(Enhancement::BinaryBlob);
+        let result = evaluate(&played);
+        assert_eq!(
+            (result.kind, result.scoring),
+            (HandKind::Pair, vec![0, 1, 2])
+        );
+        let blobs: Vec<Card> = cards("KH 2D")
+            .into_iter()
+            .map(|c| c.with_enhancement(Enhancement::BinaryBlob))
+            .collect();
+        assert_eq!(evaluate(&blobs).scoring, [0, 1]);
+        let mut flush = cards("2H 9H KH 4H 6S");
+        flush[4] = flush[4].with_enhancement(Enhancement::Symlink);
+        assert_eq!(evaluate(&flush).kind, HandKind::Flush);
     }
 
     #[test]

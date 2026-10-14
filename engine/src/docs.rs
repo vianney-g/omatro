@@ -4,6 +4,7 @@
 use crate::consumable::Theme;
 use crate::hand::HandKind;
 use crate::joker::{Edition, Joker};
+use crate::modifier::{Enhancement, Seal};
 
 /// Snake-case id of a value, as in the protocol.
 fn id(value: impl serde::Serialize) -> String {
@@ -125,13 +126,50 @@ fn themes() -> String {
     doc
 }
 
+fn modifiers() -> String {
+    let mut doc = header(
+        "Card modifiers",
+        "Each card of the deck may carry an enhancement, a seal and an edition, for the\n\
+         whole game. When a card scores: its chips (with Optimized, and what it gained),\n\
+         then its enhancement, its edition, its seal, and the jokers; Retry and jokers\n\
+         may score it again. Cards held in hand then trigger (Daemon), once more per\n\
+         Cron Job.",
+    );
+    let table = |title: &str, rows: Vec<(String, &str, &str, &str)>| {
+        let mut part = format!("## {title}\n\n| Id | Name | Effect | Quip |\n|---|---|---|---|\n");
+        for (id, name, effect, quip) in rows {
+            part += &format!("| `{id}` | {name} | {effect} | *{}* |\n", cell(quip));
+        }
+        part
+    };
+    doc += &table(
+        "Enhancements",
+        Enhancement::ALL
+            .iter()
+            .map(|&e| (id(e), e.name(), e.description(), e.quip()))
+            .collect(),
+    );
+    doc += "\n";
+    doc += &table(
+        "Seals",
+        Seal::ALL
+            .iter()
+            .map(|&s| (id(s), s.name(), s.description(), s.quip()))
+            .collect(),
+    );
+    doc += "\nEditions are the same as on jokers ([editions.md](editions.md)); on a card,\n\
+            Transparent adds one card to the hand while the card is in it.\n";
+    doc
+}
+
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 4] = [
+    let docs: [(&str, fn() -> String); 5] = [
         ("jokers.md", jokers),
         ("editions.md", editions),
         ("hands.md", hands),
         ("themes.md", themes),
+        ("modifiers.md", modifiers),
     ];
     for (file, render) in docs {
         let path = format!("{}/../docs/{file}", env!("CARGO_MANIFEST_DIR"));

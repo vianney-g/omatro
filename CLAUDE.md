@@ -85,7 +85,9 @@ jokers new games start with, to screenshot specific jokers. To check the interfa
 window, drive it with `wtype` and capture it with `grim`. Hyprland 0.56 dispatchers use
 Lua: `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'`,
 `'hl.dsp.window.resize({ x = 1100, y = 800 })'`, `'hl.dsp.window.center()'`; the window
-geometry comes from `hyprctl clients -j`. Check that stderr has no QML warnings.
+geometry comes from `hyprctl clients -j`; `'hl.dsp.cursor.move({ x = …, y = … })'`
+moves the pointer, to check hover tooltips. F11 gives the cards in hand random
+modifiers. Check that stderr has no QML warnings.
 
 ## Adding a joker
 
@@ -109,6 +111,14 @@ actually applied.
 
 Fork copies through `score::copy_target`; `Game::abilities(joker)` counts a joker's
 ability with the Forks copying it. Then run `make docs`.
+
+## Card modifiers
+
+`modifier.rs` holds the enhancements, seals and editions (the edition also decorates
+jokers). A `Card` carries them for the whole game: change a card with
+`Game::modify_card(id, …)`, which updates the deck, the draw pile and the hand alike.
+Use `Card::is_suit`, `has_rank`, `is_face` and `chips` rather than reading `suit` or
+`rank`: a Binary Blob has neither, a Symlink counts as every suit.
 
 ## Consumables
 

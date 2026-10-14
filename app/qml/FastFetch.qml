@@ -112,9 +112,24 @@ Rectangle {
             font.pixelSize: Style.font.heading
             font.bold: true
           }
-          Header { text: "52 files, no hidden dotfiles. Yet."; font.italic: true }
+          Header {
+            text: (root.game ? root.game.deck_size : 52) + " files, no hidden dotfiles. Yet."
+            font.italic: true
+          }
           Label {
             text: root.game ? root.game.remaining.length + " / " + root.game.deck_size + " cards left" : ""
+          }
+          Label {
+            readonly property int blobs: {
+              if (!root.game) return 0
+              var n = 0
+              for (var i = 0; i < root.game.remaining.length; i++)
+                if (root.game.remaining[i].enhancement === "binary_blob") n++
+              return n
+            }
+            visible: blobs > 0
+            text: blobs + " Binary Blob" + (blobs > 1 ? "s" : "")
+            color: Color.muted
           }
           Repeater {
             model: ["spades", "hearts", "clubs", "diamonds"]
@@ -126,15 +141,20 @@ Rectangle {
                 text: Labels.suit(parent.suit)
                 color: Labels.isRed(parent.suit) ? Color.urgent : Color.foreground
               }
+              // Modified cards stand out, in the accent colour.
               Label {
                 width: Style.space(260)
                 wrapMode: Text.WordWrap
+                textFormat: Text.StyledText
                 text: {
                   if (!root.game) return ""
                   var ranks = []
                   for (var i = 0; i < root.game.remaining.length; i++) {
                     var card = root.game.remaining[i]
-                    if (card.suit === parent.suit) ranks.push(Labels.rank(card.rank))
+                    if (card.suit !== parent.suit || card.enhancement === "binary_blob") continue
+                    var label = Labels.rank(card.rank)
+                    var modified = card.enhancement || card.seal || card.edition || card.bonus_chips
+                    ranks.push(modified ? "<b><font color='" + Color.accent + "'>" + label + "</font></b>" : label)
                   }
                   return ranks.length ? ranks.join(" ") : "–"
                 }

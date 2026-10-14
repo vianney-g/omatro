@@ -10,4 +10,4 @@ Blur and Shadow apply before the joker's own effect, Animated after it.
 | `blur` | Blur | +50 chips | +$2 | 2% | *Looks expensive. Costs GPU.* |
 | `shadow` | Shadow | +10 mult | +$3 | 1.4000000000000001% | *Depth, for your flat design.* |
 | `animated` | Animated | ×1.5 mult | +$5 | 0.3% | *Wobbly windows are back.* |
-| `transparent` | Transparent | +1 joker slot | +$5 | 0.3% | *See-through. Takes no room.* |
+| `transparent` | Transparent | +1 joker slot, or +1 hand size on a card | +$5 | 0.3% | *See-through. Takes no room.* |

@@ -290,6 +290,7 @@ Window {
       else if (k === Qt.Key_F5) root.cheat({ win: true })
       else if (k === Qt.Key_F6) root.cheat({ money: root.game.money + 100 })
       else if (k === Qt.Key_F7) root.cheat({ ante: root.game.winning_ante, blind: "boss" })
+      else if (k === Qt.Key_F11) root.cheat({ enhance_hand: true })
       else if (k === Qt.Key_F10) root.cheat({ random_theme: true })
       else if (k === Qt.Key_F9) root.cheat({ random_joker: true })
       else if (k === Qt.Key_F8) root.cheat({ level_up: root.game.hands.map(function(h) { return h.kind }) })
@@ -683,6 +684,7 @@ Window {
               id: tableRepeater
               model: root.scoring ? root.scoring.cards : []
               CardView {
+                modifiers: root.game ? root.game.modifiers : null
                 card: modelData
                 interactive: false
                 dimmed: root.scoring !== null && root.scoring.scoring.indexOf(index) < 0
@@ -727,6 +729,7 @@ Window {
             id: handRepeater
             model: root.hand
             CardView {
+                modifiers: root.game ? root.game.modifiers : null
               width: handRow.cardWidth
               card: modelData
               selected: root.selected.indexOf(index) >= 0
@@ -836,6 +839,7 @@ Window {
                 if (!r) return []
                 var lines = [["Blind", r.blind], ["Hands left", r.hands], ["Interest", r.interest]]
                 if (r.jokers > 0) lines.push(["Jokers", r.jokers])
+                if (r.cards > 0) lines.push(["Enterprise cards", r.cards])
                 lines.push(["Total", r.total])
                 var cells = []
                 for (var i = 0; i < lines.length; i++)

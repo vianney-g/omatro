@@ -2,7 +2,8 @@
 
 use crate::card::Card;
 use crate::hand::{HandCounts, HandKind, HandLevels, evaluate_with};
-use crate::joker::{Edition, Effect, HandContext, Joker, OwnedJoker};
+use crate::joker::{Effect, HandContext, Joker, OwnedJoker};
+use crate::modifier::{Edition, Enhancement, Seal};
 use crate::rng::Rng;
 use serde::Serialize;
 
@@ -41,8 +42,14 @@ pub struct Breakdown {
     pub total: f64,
     /// Money earned while scoring.
     pub money: u32,
-    /// What happened to the jokers afterwards ("Free Trial ran out.").
+    /// What happened afterwards ("Free Trial ran out.").
     pub notes: Vec<String>,
+    /// Flaky Test cards that triggered (Flaky CI grows by as many).
+    #[serde(skip)]
+    pub lucky_hits: u32,
+    /// Ids of the Overclocked cards that broke.
+    #[serde(skip)]
+    pub broken: Vec<u32>,
 }
 
 /// Everything a hand is scored with.
@@ -56,6 +63,8 @@ pub struct Table<'a> {
     pub plays: &'a HandCounts,
     /// Flushes and straights of 4 cards (MVP).
     pub four_fingers: bool,
+    /// The whole deck (systemd, Blob Storage, Senior Engineer).
+    pub deck: &'a [Card],
 }
 
 /// The joker whose ability the one at `index` uses: itself, or for a Fork, the
@@ -111,43 +120,93 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
             .filter_map(|(j, t)| t.map(|t| (j, &jokers[t])))
     };
 
-    // Scoring cards, left to right, each scoring again once per retrigger.
+    // Scoring cards, left to right, each scoring again once per retrigger
+    // (Retry seal, jokers).
+    let mut lucky_hits = 0;
+    let mut broken = Vec::new();
     for (position, &index) in evaluated.scoring.iter().enumerate() {
         let card = played[index];
-        let retriggers: Vec<usize> = abilities()
-            .flat_map(|(j, owned)| {
-                let times = owned.joker.retriggers(card, position == 0) as usize;
-                std::iter::repeat_n(j, times)
-            })
-            .collect();
+        let source = Source::Card { index };
+        let mut retriggers: Vec<Source> = Vec::new();
+        if card.seal == Some(Seal::Retry) {
+            retriggers.push(source);
+        }
+        for (j, owned) in abilities() {
+            let times = owned.joker.retriggers(card, position == 0) as usize;
+            retriggers.extend(std::iter::repeat_n(Source::Joker { index: j }, times));
+        }
         for round in 0..=retriggers.len() {
             if round > 0 {
-                run.push(
-                    Source::Joker {
-                        index: retriggers[round - 1],
-                    },
-                    Effect::Again,
-                );
+                run.push(retriggers[round - 1], Effect::Again);
             }
-            run.push(Source::Card { index }, Effect::Chips(card.chips()));
+            run.push(source, Effect::Chips(card.chips()));
+            if card.is(Enhancement::Multithreaded) {
+                run.push(source, Effect::Mult(4.0));
+            }
+            if card.is(Enhancement::Overclocked) {
+                run.push(source, Effect::XMult(2.0));
+            }
+            if card.is(Enhancement::FlakyTest) {
+                if rng.chance(5) {
+                    run.push(source, Effect::Mult(20.0));
+                    lucky_hits += 1;
+                }
+                if rng.chance(15) {
+                    run.push(source, Effect::Money(20));
+                    lucky_hits += 1;
+                }
+            }
+            if let Some(effect) = card.edition.and_then(Edition::effect) {
+                run.push(source, effect);
+            }
+            if card.seal == Some(Seal::GoldStar) {
+                run.push(source, Effect::Money(3));
+            }
             for (j, owned) in abilities() {
                 for effect in owned.joker.on_card_scored(card, rng) {
                     run.push(Source::Joker { index: j }, effect);
                 }
             }
         }
+        if card.is(Enhancement::Overclocked) && rng.chance(4) {
+            broken.push(card.id);
+        }
     }
 
-    // Cards held in hand; the lowest is the rightmost of the lowest rank.
+    // Cards held in hand, once more per Cron Job; the lowest is the rightmost
+    // of the lowest rank.
+    let cron_jobs: Vec<usize> = abilities()
+        .filter(|(_, owned)| owned.joker == Joker::CronJob)
+        .map(|(j, _)| j)
+        .collect();
     let lowest = held
         .iter()
         .enumerate()
         .rev()
+        .filter(|(_, c)| c.has_rank())
         .min_by_key(|(_, c)| c.rank)
         .map(|(i, _)| i);
     for (index, &card) in held.iter().enumerate() {
+        let mut effects = Vec::new();
+        if card.is(Enhancement::Daemon) {
+            effects.push(Effect::XMult(1.5));
+        }
         for (_, owned) in abilities() {
-            for effect in owned.joker.on_held(card, Some(index) == lowest) {
+            effects.extend(owned.joker.on_held(card, Some(index) == lowest));
+        }
+        if effects.is_empty() {
+            continue;
+        }
+        for round in 0..=cron_jobs.len() {
+            if round > 0 {
+                run.push(
+                    Source::Joker {
+                        index: cron_jobs[round - 1],
+                    },
+                    Effect::Again,
+                );
+            }
+            for &effect in &effects {
                 run.push(Source::Held { index }, effect);
             }
         }
@@ -158,6 +217,8 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
         played,
         evaluated: &evaluated,
         times_played: table.plays.get(evaluated.kind),
+        deck: table.deck,
+        lucky_hits,
     };
     for (j, owned) in jokers.iter().enumerate() {
         let source = Source::Joker { index: j };
@@ -192,6 +253,8 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
         total: (run.chips as f64 * run.mult).floor(),
         money: run.money,
         notes: Vec::new(),
+        lucky_hits,
+        broken,
     }
 }
 
@@ -202,6 +265,7 @@ mod tests {
 
     struct Setup {
         held: Vec<Card>,
+        deck: Vec<Card>,
         jokers: Vec<OwnedJoker>,
         levels: HandLevels,
         four_fingers: bool,
@@ -210,6 +274,7 @@ mod tests {
     fn setup(jokers: &[Joker]) -> Setup {
         Setup {
             held: Vec::new(),
+            deck: Vec::new(),
             jokers: jokers.iter().map(|&j| OwnedJoker::new(j, None)).collect(),
             levels: HandLevels::default(),
             four_fingers: false,
@@ -218,7 +283,10 @@ mod tests {
 
     impl Setup {
         fn play(&self, text: &str) -> Breakdown {
-            let played = cards(text);
+            self.play_cards(cards(text))
+        }
+
+        fn play_cards(&self, played: Vec<Card>) -> Breakdown {
             let mut plays = HandCounts::default();
             plays.add(evaluate_with(&played, self.four_fingers).kind);
             let table = Table {
@@ -228,6 +296,7 @@ mod tests {
                 levels: &self.levels,
                 plays: &plays,
                 four_fingers: self.four_fingers,
+                deck: &self.deck,
             };
             score(&table, &mut Rng::new(7))
         }
@@ -354,6 +423,65 @@ mod tests {
     fn muscle_memory_counts_this_hand() {
         let b = setup(&[Joker::MuscleMemory]).play("KH 4D KS");
         assert_eq!(b.mult, 3.0);
+    }
+
+    #[test]
+    fn enhancements_seals_and_editions_score() {
+        let s = setup(&[]);
+        let mut played = cards("KH KD");
+        played[0] = played[0]
+            .with_enhancement(Enhancement::Optimized)
+            .with_seal(Seal::Retry)
+            .with_edition(Edition::Shadow);
+        played[1] = played[1].with_enhancement(Enhancement::Multithreaded);
+        let b = s.play_cards(played);
+        // Pair 10 × 2; first king twice: 40 chips +10 mult each; second: 10 chips +4 mult.
+        assert_eq!((b.chips, b.mult), (100, 26.0));
+        assert_eq!(
+            b.steps.iter().filter(|s| s.effect == Effect::Again).count(),
+            1
+        );
+    }
+
+    #[test]
+    fn daemons_in_hand_and_cron_jobs() {
+        let mut s = setup(&[Joker::CronJob]);
+        s.held = vec![cards("5S")[0].with_enhancement(Enhancement::Daemon)];
+        // High card ace: (5 + 11) × 1 × 1.5 × 1.5
+        assert_eq!(s.play("AH").total, (16.0 * 2.25f64).floor());
+    }
+
+    #[test]
+    fn overclocked_cards_may_break() {
+        let s = setup(&[]);
+        let breaks = (0..40)
+            .filter(|&seed| {
+                let played = vec![cards("KH")[0].with_enhancement(Enhancement::Overclocked)];
+                let table = Table {
+                    played: &played,
+                    held: &[],
+                    jokers: &s.jokers,
+                    levels: &s.levels,
+                    plays: &HandCounts::default(),
+                    four_fingers: false,
+                    deck: &[],
+                };
+                !score(&table, &mut Rng::new(seed)).broken.is_empty()
+            })
+            .count();
+        assert!((3..=20).contains(&breaks), "{breaks}");
+    }
+
+    #[test]
+    fn deck_jokers_count_enhanced_cards() {
+        let mut s = setup(&[Joker::Systemd, Joker::BlobStorage]);
+        s.deck = cards("2H 3H 4H")
+            .into_iter()
+            .map(|c| c.with_enhancement(Enhancement::Daemon))
+            .chain([cards("5H")[0].with_enhancement(Enhancement::BinaryBlob)])
+            .collect();
+        // High card ace: (5 + 11 + 25) × 1 × 1.6
+        assert_eq!(s.play("AH").total, (41.0 * 1.6f64).floor());
     }
 
     #[test]

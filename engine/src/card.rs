@@ -1,3 +1,4 @@
+use crate::modifier::{Edition, Enhancement, Seal};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -20,6 +21,15 @@ pub struct Card {
     pub suit: Suit,
     /// Tells apart cards of the deck, which lasts the whole game.
     pub id: u32,
+    #[serde(default)]
+    pub enhancement: Option<Enhancement>,
+    #[serde(default)]
+    pub seal: Option<Seal>,
+    #[serde(default)]
+    pub edition: Option<Edition>,
+    /// Chips gained for good (Incremental Build).
+    #[serde(default)]
+    pub bonus_chips: u64,
 }
 
 pub const ACE: u8 = 14;
@@ -27,15 +37,58 @@ pub const ACE: u8 = 14;
 impl Card {
     pub fn new(rank: u8, suit: Suit) -> Self {
         assert!((2..=ACE).contains(&rank), "invalid rank: {rank}");
-        Card { rank, suit, id: 0 }
+        Card {
+            rank,
+            suit,
+            id: 0,
+            enhancement: None,
+            seal: None,
+            edition: None,
+            bonus_chips: 0,
+        }
     }
 
     pub fn with_id(self, id: u32) -> Self {
         Card { id, ..self }
     }
 
-    /// Chips the card is worth when it scores.
-    pub fn chips(self) -> u64 {
+    pub fn with_enhancement(self, enhancement: Enhancement) -> Self {
+        Card {
+            enhancement: Some(enhancement),
+            ..self
+        }
+    }
+
+    pub fn with_seal(self, seal: Seal) -> Self {
+        Card {
+            seal: Some(seal),
+            ..self
+        }
+    }
+
+    pub fn with_edition(self, edition: Edition) -> Self {
+        Card {
+            edition: Some(edition),
+            ..self
+        }
+    }
+
+    pub fn is(self, enhancement: Enhancement) -> bool {
+        self.enhancement == Some(enhancement)
+    }
+
+    /// A Binary Blob has no rank and no suit.
+    pub fn has_rank(self) -> bool {
+        !self.is(Enhancement::BinaryBlob)
+    }
+
+    /// Whether the card counts as this suit: a Symlink counts as every suit.
+    pub fn is_suit(self, suit: Suit) -> bool {
+        self.has_rank() && (self.suit == suit || self.is(Enhancement::Symlink))
+    }
+
+    /// Chips of the rank alone: 2 to 10, 10 for a face card, 11 for an ace.
+    pub fn rank_chips(self) -> u64 {
         match self.rank {
             2..=10 => self.rank as u64,
             11..=13 => 10,
@@ -43,8 +96,24 @@ impl Card {
         }
     }
 
+    /// Chips the card is worth when it scores: its rank (50 for a Binary Blob),
+    /// plus Optimized and the chips it gained.
+    pub fn chips(self) -> u64 {
+        let base = if self.has_rank() {
+            self.rank_chips()
+        } else {
+            50
+        };
+        let optimized = if self.is(Enhancement::Optimized) {
+            30
+        } else {
+            0
+        };
+        base + optimized + self.bonus_chips
+    }
+
     pub fn is_face(self) -> bool {
-        (11..=13).contains(&self.rank)
+        self.has_rank() && (11..=13).contains(&self.rank)
     }
 }
 

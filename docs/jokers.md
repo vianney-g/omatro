@@ -52,18 +52,30 @@ Fork copies the joker on its right.
 | `ci_runner` | CI Runner | core | $5 | Gains +15 chips when the hand contains a Straight | *Green checks, one after another.* |
 | `beta_release` | Beta Release | core | $5 | +15 mult; 1 in 6 chance to break at the end of each blind | *Works great until it doesn't.* |
 | `auto_update` | Auto Update | core | $5 | 1 in 4 chance to level up the played hand type | *pacman -Syu, every hand.* |
+| `support_contract` | Support Contract | core | $5 | Enterprise cards give +$4 when scored | *Billed per incident.* |
 | `uptime` | Uptime | core | $6 | +1 mult per hand in a row without a scoring face card | *847 days without a reboot.* |
 | `sponsorware` | Sponsorware | core | $6 | +$4 at the end of each blind | *Thank you for your sponsorship.* |
+| `incremental_build` | Incremental Build | extra | $5 | Every played card permanently gains +5 chips | *A little faster every time.* |
+| `cron_job` | Cron Job | extra | $5 | Retriggers the effects of cards held in hand | *Runs again at midnight. And again.* |
 | `super_key` | Super Key | extra | $6 | +2 mult for each scoring card | *Every good shortcut starts here.* |
 | `watch_mode` | Watch Mode | extra | $6 | Retriggers every scoring face card | *Every face, hot-reloaded.* |
 | `theme_collector` | Theme Collector | extra | $6 | Gains ×0.1 mult per theme applied | *37 themes installed, 1 in use.* |
 | `unixporn` | r/unixporn | extra | $6 | +$1 at the end of each blind per unique theme applied | *Karma, but you can spend it.* |
+| `blob_storage` | Blob Storage | extra | $6 | +25 chips per Binary Blob card in the deck | *S3 buckets all the way down.* |
+| `flaky_ci` | Flaky CI | extra | $6 | Gains ×0.25 mult each time a Flaky Test card triggers | *Green on the third try.* |
+| `rma_department` | RMA Department | extra | $6 | Gains ×0.75 mult per Overclocked card that breaks | *We've seen worse. Probably.* |
+| `code_signing` | Code Signing | extra | $6 | When a blind starts, adds a random card with a random seal to the hand | *Signed, sealed, delivered.* |
 | `no_build` | No Build | extra | $7 | ×2 mult if the played hand has 3 cards or fewer | *Webpack? Never heard of her.* |
 | `heartbleed` | Heartbleed | extra | $7 | 1 in 2 chance of ×1.5 mult for each scoring heart | *Your heart leaks, 64 KB at a time.* |
 | `mvp` | MVP | extra | $7 | Flushes and Straights can be made with 4 cards | *Minimum viable flush.* |
+| `closed_source` | Closed Source | extra | $7 | Adds a Binary Blob card to the deck when a blind starts | *Can't read it. Can't remove it.* |
+| `enterprise_sales` | Enterprise Sales | extra | $7 | Scoring face cards become Enterprise cards | *Every face, upsold.* |
+| `garbage_collector` | Garbage Collector | extra | $7 | Gains ×0.1 mult per enhanced card played, and removes the enhancement | *Frees memory. And your upgrades.* |
+| `systemd` | systemd | extra | $7 | ×0.2 mult per Daemon card in the deck | *One daemon to rule them all.* |
 | `recursion` | Recursion | extra | $8 | +8 mult for each scoring A, 2, 3, 5 or 8 | *To understand recursion, see Recursion.* |
 | `free_as_in_beer` | Free as in Beer | extra | $8 | Themes in the shop cost $0 | *Also free as in freedom.* |
 | `config_reload` | Config Reload | extra | $8 | Levels up the hand type of the first discard of each blind | *Super+Shift+R: everything, but fresher.* |
+| `senior_engineer` | Senior Engineer | AUR | $7 | ×3 mult if the deck holds at least 16 enhanced cards | *Has seen every config.* |
 | `hotwire` | Hotwire | AUR | $8 | ×3 mult if the hand is a three of a kind | *Three frameworks walk into a monolith.* |
 | `code_review` | Code Review | AUR | $8 | ×2 mult if the hand contains a Pair | *Looks good to me. Ship it.* |
 | `quad_core` | Quad Core | AUR | $8 | ×4 mult if the hand contains a Four of a Kind | *All cores busy compiling Rust.* |
