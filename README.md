@@ -81,15 +81,4 @@ Cards are written `{"rank":14,"suit":"spades"}` (rank 2 to 14: 11 jack, 12 queen
 
 ## Jokers
 
-| Id | Name | Price | Effect |
-|---|---|---|---|
-| `baobab` | Baobab | $4 | +30 chips |
-| `calabash` | Calabash | $4 | +5 mult |
-| `market` | Market | $5 | +2 mult for each scoring diamond |
-| `wrapper` | Wrapper | $5 | +15 chips for each scoring heart |
-| `griot` | Griot | $5 | +20 chips for each scoring face card |
-| `zemidjan` | Zemidjan | $5 | +12 mult if the hand is a straight |
-| `tontine` | Tontine | $5 | +$1 per discard left at the end of the blind |
-| `djembe` | Djembe | $6 | +2 mult for each scoring card |
-| `harmattan` | Harmattan | $7 | ×2 mult if the played hand has 3 cards or fewer |
-| `mask` | Mask | $8 | ×3 mult if the hand is a three of a kind |
+See [docs/jokers.md](docs/jokers.md), generated from the engine code.

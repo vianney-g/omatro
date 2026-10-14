@@ -3,7 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 omatro is a Balatro-like card game for Omarchy: a standalone Qt Quick application written
-in Rust with cxx-qt. The README covers the rules, the JSON protocol and the joker list.
+in Rust with cxx-qt. The README covers the rules and the JSON protocol; the jokers are listed in
+`docs/jokers.md`.
 
 The whole codebase and the interface are in English: code, comments, error messages,
 UI text, README and commit messages. Numbers are displayed in English format
@@ -56,7 +57,10 @@ A Cargo workspace with two crates:
 
 Add a variant to the `Joker` enum and to `Joker::ALL` (fixed-size array), then `name`,
 `description`, `price` and the relevant trigger (`on_card_scored`, `on_hand` or
-`on_blind_won`) in `engine/src/joker.rs`. Add the row to the README joker table.
+`on_blind_won`) in `engine/src/joker.rs`. Then run `make jokers-doc`: `docs/jokers.md`,
+the human-readable joker reference, is generated from the code, and the
+`joker_reference_is_up_to_date` test fails whenever it no longer matches. Never edit
+it by hand; to change its layout or intro text, edit `reference()` in `joker.rs`.
 
 ## Tests
 

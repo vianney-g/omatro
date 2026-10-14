@@ -142,4 +142,46 @@ mod tests {
             assert!(joker.sell_value() >= 1 && joker.sell_value() < joker.price());
         }
     }
+
+    /// The human-readable joker reference, `docs/jokers.md`.
+    fn reference() -> String {
+        let mut jokers = Joker::ALL.to_vec();
+        jokers.sort_by_key(|j| j.price());
+        let mut doc = String::from(
+            "# Jokers\n\n\
+             <!-- Generated from engine/src/joker.rs by `make jokers-doc`: do not edit by hand. -->\n\n\
+             Jokers are bought in the shop between blinds (5 slots at most) and sell for\n\
+             half their price. While a hand is scored, card jokers trigger for each scoring\n\
+             card right after its chips; hand jokers then trigger once, left to right.\n\n\
+             | Id | Name | Price | Sells for | Effect |\n\
+             |---|---|---|---|---|\n",
+        );
+        for joker in jokers {
+            let id = serde_json::to_value(joker).unwrap();
+            doc += &format!(
+                "| `{}` | {} | ${} | ${} | {} |\n",
+                id.as_str().unwrap(),
+                joker.name(),
+                joker.price(),
+                joker.sell_value(),
+                joker.description()
+            );
+        }
+        doc
+    }
+
+    /// Fails when `docs/jokers.md` no longer matches the code; `make jokers-doc`
+    /// rewrites it.
+    #[test]
+    fn joker_reference_is_up_to_date() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../docs/jokers.md");
+        if std::env::var_os("UPDATE_JOKERS_DOC").is_some() {
+            std::fs::write(path, reference()).unwrap();
+        }
+        let current = std::fs::read_to_string(path).unwrap_or_default();
+        assert!(
+            current == reference(),
+            "docs/jokers.md is out of date: run `make jokers-doc`"
+        );
+    }
 }
