@@ -24,6 +24,11 @@ function number(n) {
 
 function money(n) { return "$" + n }
 
+// "1 card", "2 cards", "1–3 cards".
+function range(min, max) {
+  return (min === max ? String(min) : min + "–" + max) + (max === 1 ? " card" : " cards")
+}
+
 function mult(m) {
   return Number.isInteger(m) ? String(m) : m.toFixed(1)
 }

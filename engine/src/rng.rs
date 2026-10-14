@@ -3,6 +3,7 @@
 //! Hand-written rather than taken from `rand`: the same seed must give the
 //! same game whatever the dependency versions.
 
+#[derive(Debug, Clone)]
 pub struct Rng(u64);
 
 impl Rng {

@@ -1,7 +1,7 @@
 //! Human-readable references in `docs/`, generated from the code. A test fails
 //! when one no longer matches; `make docs` rewrites them.
 
-use crate::consumable::Theme;
+use crate::consumable::{Command, Theme};
 use crate::hand::HandKind;
 use crate::joker::{Edition, Joker};
 use crate::modifier::{Enhancement, Seal};
@@ -162,13 +162,40 @@ fn modifiers() -> String {
     doc
 }
 
+fn commands() -> String {
+    let mut doc = header(
+        "Commands",
+        "Commands are consumables (tarots, in the original): bought in the shop for $3,\n\
+         they wait in the clipboard (2 slots) until applied. Those that change cards\n\
+         need them selected in the hand, during a blind; the others work at any time.",
+    );
+    doc += "| Id | Command | Effect | Cards | Quip |\n|---|---|---|---|---|\n";
+    for command in Command::ALL {
+        let cards = match command.targets() {
+            Some((min, max)) if min == max => min.to_string(),
+            Some((min, max)) => format!("{min} to {max}"),
+            None => String::new(),
+        };
+        doc += &format!(
+            "| `{}` | `{}` | {} | {} | *{}* |\n",
+            id(command),
+            command.name(),
+            command.description(),
+            cards,
+            cell(command.quip())
+        );
+    }
+    doc
+}
+
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 5] = [
+    let docs: [(&str, fn() -> String); 6] = [
         ("jokers.md", jokers),
         ("editions.md", editions),
         ("hands.md", hands),
         ("themes.md", themes),
+        ("commands.md", commands),
         ("modifiers.md", modifiers),
     ];
     for (file, render) in docs {

@@ -28,6 +28,7 @@ Cron Job.
 | `gold_star` | Gold Star | +$3 when scored | *A GitHub star, but it pays.* |
 | `retry` | Retry | Scores one more time | *Exit code 1. Trying again.* |
 | `theme_sync` | Theme Sync | If held in hand at the end of the blind, creates the theme of the last hand played | *Syncs your theme. Eventually.* |
+| `shell_history` | Shell History | When discarded, creates a command | *Every discard, saved for later.* |
 
 Editions are the same as on jokers ([editions.md](editions.md)); on a card,
 Transparent adds one card to the hand while the card is in it.

@@ -77,16 +77,23 @@ pub enum Seal {
     GoldStar,
     Retry,
     ThemeSync,
+    ShellHistory,
 }
 
 impl Seal {
-    pub const ALL: [Seal; 3] = [Seal::GoldStar, Seal::Retry, Seal::ThemeSync];
+    pub const ALL: [Seal; 4] = [
+        Seal::GoldStar,
+        Seal::Retry,
+        Seal::ThemeSync,
+        Seal::ShellHistory,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Seal::GoldStar => "Gold Star",
             Seal::Retry => "Retry",
             Seal::ThemeSync => "Theme Sync",
+            Seal::ShellHistory => "Shell History",
         }
     }
 
@@ -97,6 +104,7 @@ impl Seal {
             Seal::ThemeSync => {
                 "If held in hand at the end of the blind, creates the theme of the last hand played"
             }
+            Seal::ShellHistory => "When discarded, creates a command",
         }
     }
 
@@ -105,6 +113,7 @@ impl Seal {
             Seal::GoldStar => "A GitHub star, but it pays.",
             Seal::Retry => "Exit code 1. Trying again.",
             Seal::ThemeSync => "Syncs your theme. Eventually.",
+            Seal::ShellHistory => "Every discard, saved for later.",
         }
     }
 }

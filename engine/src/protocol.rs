@@ -37,6 +37,9 @@ pub enum Command {
     },
     UseConsumable {
         index: usize,
+        /// Cards of the hand a command changes.
+        #[serde(default)]
+        cards: Vec<usize>,
     },
     SellConsumable {
         index: usize,
@@ -165,9 +168,9 @@ impl Session {
             Command::CashOut => game.cash_out().map_err(|e| e.to_string())?,
             Command::Buy { offer } => game.buy(offer).map_err(|e| e.to_string())?,
             Command::Sell { joker } => game.sell(joker).map_err(|e| e.to_string())?,
-            Command::UseConsumable { index } => {
-                game.use_consumable(index).map_err(|e| e.to_string())?
-            }
+            Command::UseConsumable { index, cards } => game
+                .use_consumable(index, &cards)
+                .map_err(|e| e.to_string())?,
             Command::SellConsumable { index } => {
                 game.sell_consumable(index).map_err(|e| e.to_string())?
             }

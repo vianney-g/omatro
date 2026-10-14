@@ -1,8 +1,8 @@
 //! How a game unfolds: antes of three blinds, hands and discards, the shop.
 
 use crate::blind::{self, BlindKind, WINNING_ANTE};
-use crate::card::{Card, Suit, standard_deck};
-use crate::consumable::{CONSUMABLE_SLOTS, Consumable, Theme};
+use crate::card::{ACE, Card, Suit, standard_deck};
+use crate::consumable::{CONSUMABLE_SLOTS, Command, Consumable, Theme};
 use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, evaluate_with};
 use crate::joker::{Bonus, Joker, OwnedJoker, Rarity};
 use crate::modifier::{Edition, Enhancement, Seal};
@@ -138,6 +138,9 @@ pub struct ConsumableInfo {
     pub quip: &'static str,
     pub price: u32,
     pub sell_value: u32,
+    /// Cards of the hand to select before using it (both 0 when none).
+    pub min_cards: usize,
+    pub max_cards: usize,
 }
 
 impl ConsumableInfo {
@@ -149,6 +152,8 @@ impl ConsumableInfo {
             quip: consumable.quip(),
             price,
             sell_value: consumable.sell_value(),
+            min_cards: consumable.targets().map_or(0, |t| t.0),
+            max_cards: consumable.targets().map_or(0, |t| t.1),
         }
     }
 }
@@ -337,6 +342,9 @@ pub struct Cheat {
     /// Adds a random theme to the clipboard.
     #[serde(default)]
     pub random_theme: bool,
+    /// Adds a random command to the clipboard.
+    #[serde(default)]
+    pub random_command: bool,
     /// Gives the cards in hand random enhancements, seals and editions.
     #[serde(default)]
     pub enhance_hand: bool,
@@ -364,6 +372,10 @@ pub struct Game {
     card_rng: Rng,
     /// Id of the next card added to the deck.
     next_card_id: u32,
+    /// What commands and jokers create (Up Arrow, omarchy-menu, yay -S…).
+    command_rng: Rng,
+    /// The last command or theme used, but Up Arrow (for Up Arrow).
+    last_used: Option<Consumable>,
     /// The last hand type played (Theme Sync).
     last_hand: Option<HandKind>,
     /// The player's deck, which lasts the whole game.
@@ -405,6 +417,8 @@ impl Game {
             round_rng: Rng::stream(seed, "round"),
             card_rng: Rng::stream(seed, "cards"),
             next_card_id: 52,
+            command_rng: Rng::stream(seed, "commands"),
+            last_used: None,
             last_hand: None,
             deck: standard_deck(),
             draw_pile: Vec::new(),
@@ -542,6 +556,10 @@ impl Game {
         self.deck_rng.shuffle(&mut self.draw_pile);
         self.phase = Phase::Playing;
         self.draw();
+        for _ in 0..self.abilities(Joker::AliasCollection) {
+            let command = self.random_command();
+            self.create(command);
+        }
         for _ in 0..self.abilities(Joker::CodeSigning) {
             let seal = Seal::ALL[self.card_rng.below(Seal::ALL.len() as u64) as usize];
             let card = self.new_card().with_seal(seal);
@@ -609,6 +627,7 @@ impl Game {
 
     pub fn play(&mut self, indices: &[usize]) -> Result<Breakdown, GameError> {
         let played = self.take(indices)?;
+        let money_before = self.money;
         let four_fingers = self.four_fingers();
         let evaluated = evaluate_with(&played, four_fingers);
         self.plays.add(evaluated.kind);
@@ -643,6 +662,7 @@ impl Game {
         breakdown.notes = notes;
         self.money += breakdown.money;
         self.after_scoring(&mut breakdown, &scoring);
+        self.create_from_hand(&evaluated, &scoring, money_before, &mut breakdown.notes);
         let notes = &mut breakdown.notes;
         self.jokers.retain_mut(|joker| {
             let kept = joker.after_hand();
@@ -717,6 +737,31 @@ impl Game {
         }
     }
 
+    /// Jokers that create commands from the hand played: Vim Golf (an ace and a
+    /// Straight), Free Tier ($4 or less), man 8 (1 in 4 per scoring 8).
+    fn create_from_hand(
+        &mut self,
+        evaluated: &Evaluated,
+        scoring: &[Card],
+        money: u32,
+        notes: &mut Vec<String>,
+    ) {
+        let ace = scoring.iter().any(|c| c.has_rank() && c.rank == ACE);
+        if ace && evaluated.contains(HandKind::Straight) {
+            self.create_commands(self.abilities(Joker::VimGolf), "Vim Golf", notes);
+        }
+        if money <= 4 {
+            self.create_commands(self.abilities(Joker::FreeTier), "Free Tier", notes);
+        }
+        let eights = scoring
+            .iter()
+            .filter(|c| c.has_rank() && c.rank == 8)
+            .count();
+        let rolls = eights * self.abilities(Joker::Man8);
+        let hits = (0..rolls).filter(|_| self.command_rng.chance(4)).count();
+        self.create_commands(hits, "man 8", notes);
+    }
+
     fn win_blind(&mut self) {
         self.phase = Phase::Won;
         let mut reward = self.reward();
@@ -771,6 +816,14 @@ impl Game {
             return Err(GameError::NoDiscardsLeft);
         }
         let discarded = self.take(indices)?;
+        let histories = discarded
+            .iter()
+            .filter(|c| c.seal == Some(Seal::ShellHistory))
+            .count();
+        for _ in 0..histories {
+            let command = self.random_command();
+            self.create(command);
+        }
         if self.discards_used == 0 {
             let reloads = self.abilities(Joker::ConfigReload) as u32;
             if reloads > 0 {
@@ -848,25 +901,32 @@ impl Game {
         !owned && !offered && lifecycle && joker.rarity() != Rarity::Legendary
     }
 
-    /// Draws new offers: for each slot, a joker (weight 20) or a theme (4).
+    /// Draws new offers: for each slot, a joker (weight 20), a theme (4) or a
+    /// command (4).
     fn roll_offers(&mut self) {
         self.offers.clear();
+        let mut rng = self.shop_rng.clone();
         for _ in 0..SHOP_OFFERS {
-            let offer = if self.shop_rng.below(24) < 20 {
-                self.roll_joker()
+            let roll = rng.below(28);
+            let offer = if roll < 20 {
+                self.roll_joker(&mut rng)
+            } else if roll < 24 {
+                self.roll_theme(&mut rng)
             } else {
-                self.roll_theme()
+                let command = Command::ALL[rng.below(Command::ALL.len() as u64) as usize];
+                Some(Offer::Consumable(Consumable::Command(command)))
             };
             match offer {
                 Some(offer) => self.offers.push(offer),
                 None => break,
             }
         }
+        self.shop_rng = rng;
     }
 
     /// A theme whose hand type is known (secret hands once played), not on
     /// offer yet.
-    fn roll_theme(&mut self) -> Option<Offer> {
+    fn roll_theme(&self, rng: &mut Rng) -> Option<Offer> {
         let pool: Vec<Theme> = Theme::ALL
             .into_iter()
             .filter(|t| !t.hand().secret() || self.plays.get(t.hand()) > 0)
@@ -876,14 +936,14 @@ impl Game {
                     .contains(&Offer::Consumable(Consumable::Theme(t)))
             })
             .collect();
-        let theme = *pool.get(self.shop_rng.below(pool.len() as u64) as usize)?;
+        let theme = *pool.get(rng.below(pool.len() as u64) as usize)?;
         Some(Offer::Consumable(Consumable::Theme(theme)))
     }
 
     /// A rarity (70% core, 25% extra, 5% AUR), a joker of that rarity not owned
     /// yet, and sometimes an edition.
-    fn roll_joker(&mut self) -> Option<Offer> {
-        let roll = self.shop_rng.unit();
+    fn roll_joker(&self, rng: &mut Rng) -> Option<Offer> {
+        let roll = rng.unit();
         let mut odds = 0.0;
         let rarity = Rarity::ALL
             .into_iter()
@@ -907,8 +967,8 @@ impl Game {
         if pool.is_empty() {
             return None;
         }
-        let joker = pool[self.shop_rng.below(pool.len() as u64) as usize];
-        let roll = self.shop_rng.unit();
+        let joker = pool[rng.below(pool.len() as u64) as usize];
+        let roll = rng.unit();
         let mut odds = 0.0;
         let edition = Edition::ALL.into_iter().rev().find(|e| {
             odds += e.odds();
@@ -1006,12 +1066,55 @@ impl Game {
             .ok_or_else(|| GameError::BadSelection(format!("no consumable #{index}")))
     }
 
-    /// Uses a consumable from the clipboard, at any time but after a loss.
-    pub fn use_consumable(&mut self, index: usize) -> Result<(), GameError> {
+    /// Adds a consumable to the clipboard if there is room.
+    fn create(&mut self, consumable: Consumable) -> bool {
+        let room = self.consumables.len() < CONSUMABLE_SLOTS;
+        if room {
+            self.consumables.push(consumable);
+        }
+        room
+    }
+
+    fn random_command(&mut self) -> Consumable {
+        Consumable::Command(
+            Command::ALL[self.command_rng.below(Command::ALL.len() as u64) as usize],
+        )
+    }
+
+    /// Creates a random command for each of `times`, while there is room; says so.
+    fn create_commands(&mut self, times: usize, source: &str, notes: &mut Vec<String>) {
+        for _ in 0..times {
+            let command = self.random_command();
+            if self.create(command) {
+                notes.push(format!(
+                    "{source}: {} added to the clipboard.",
+                    command.name()
+                ));
+            }
+        }
+    }
+
+    /// Uses a consumable from the clipboard, at any time but after a loss;
+    /// commands that change cards need them selected in the hand (`cards`).
+    pub fn use_consumable(&mut self, index: usize, cards: &[usize]) -> Result<(), GameError> {
         if self.phase == Phase::Lost {
             return Err(GameError::NotPlaying);
         }
         let consumable = self.consumable(index)?;
+        let targets = match consumable.targets() {
+            Some((min, max)) => {
+                let sorted = self.validate(cards)?;
+                if !(min..=max).contains(&sorted.len()) {
+                    return Err(GameError::BadSelection(format!(
+                        "{} needs {min} to {max} cards",
+                        consumable.name()
+                    )));
+                }
+                sorted
+            }
+            None => Vec::new(),
+        };
+        self.check_usable(consumable)?;
         self.consumables.remove(index);
         match consumable {
             Consumable::Theme(theme) => {
@@ -1021,8 +1124,123 @@ impl Game {
                     joker.on_theme_used();
                 }
             }
+            Consumable::Command(command) => {
+                self.run_command(command, &targets);
+                for joker in &mut self.jokers {
+                    joker.on_command_used();
+                }
+            }
+        }
+        if consumable != Consumable::Command(Command::UpArrow) {
+            self.last_used = Some(consumable);
         }
         Ok(())
+    }
+
+    /// Refuses a consumable that could do nothing.
+    fn check_usable(&self, consumable: Consumable) -> Result<(), GameError> {
+        let refuse = |why: &str| Err(GameError::BadSelection(why.to_string()));
+        match consumable {
+            Consumable::Command(Command::UpArrow) if self.last_used.is_none() => {
+                refuse("no command or theme used yet")
+            }
+            Consumable::Command(Command::HyprctlReload)
+                if self.jokers.iter().all(|j| j.edition.is_some()) =>
+            {
+                refuse("no joker without an edition")
+            }
+            Consumable::Command(Command::YayS) if !self.has_room(None) => {
+                Err(GameError::JokerSlotsFull)
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn run_command(&mut self, command: Command, targets: &[usize]) {
+        let ids: Vec<u32> = targets.iter().map(|&i| self.hand[i].id).collect();
+        let enhance = |enhancement| move |card: &mut Card| card.enhancement = Some(enhancement);
+        let suit = |suit| move |card: &mut Card| card.suit = suit;
+        let change: Option<Box<dyn Fn(&mut Card)>> = match command {
+            Command::NpmTest => Some(Box::new(enhance(Enhancement::FlakyTest))),
+            Command::MakeJ => Some(Box::new(enhance(Enhancement::Multithreaded))),
+            Command::CargoRelease => Some(Box::new(enhance(Enhancement::Optimized))),
+            Command::LnS => Some(Box::new(enhance(Enhancement::Symlink))),
+            Command::SystemctlEnable => Some(Box::new(enhance(Enhancement::Daemon))),
+            Command::Cpupower => Some(Box::new(enhance(Enhancement::Overclocked))),
+            Command::AcceptEula => Some(Box::new(enhance(Enhancement::Enterprise))),
+            Command::Strip => Some(Box::new(enhance(Enhancement::BinaryBlob))),
+            Command::MvDiamonds => Some(Box::new(suit(Suit::Diamonds))),
+            Command::MvClubs => Some(Box::new(suit(Suit::Clubs))),
+            Command::MvHearts => Some(Box::new(suit(Suit::Hearts))),
+            Command::MvSpades => Some(Box::new(suit(Suit::Spades))),
+            // The king becomes an ace, the ace a two.
+            Command::NpmVersionPatch => Some(Box::new(|card: &mut Card| {
+                card.rank = if card.rank == ACE { 2 } else { card.rank + 1 }
+            })),
+            _ => None,
+        };
+        if let Some(change) = change {
+            for &id in &ids {
+                self.modify_card(id, &change);
+            }
+            self.sort_hand();
+            return;
+        }
+        match command {
+            Command::UpArrow => {
+                if let Some(last) = self.last_used {
+                    self.create(last);
+                }
+            }
+            Command::ThemeInstall => {
+                for _ in 0..2 {
+                    let mut rng = self.command_rng.clone();
+                    let theme = self.roll_theme(&mut rng);
+                    self.command_rng = rng;
+                    if let Some(Offer::Consumable(theme)) = theme {
+                        self.create(theme);
+                    }
+                }
+            }
+            Command::OmarchyMenu => {
+                for _ in 0..2 {
+                    let command = self.random_command();
+                    self.create(command);
+                }
+            }
+            Command::Rsync => self.money += self.money.min(20),
+            Command::HyprctlReload => {
+                let bare: Vec<usize> = (0..self.jokers.len())
+                    .filter(|&j| self.jokers[j].edition.is_none())
+                    .collect();
+                if self.command_rng.chance(4) && !bare.is_empty() {
+                    let j = bare[self.command_rng.below(bare.len() as u64) as usize];
+                    let edition = Edition::ALL[self.command_rng.below(3) as usize];
+                    self.jokers[j].edition = Some(edition);
+                }
+            }
+            Command::RmRf => {
+                self.deck.retain(|c| !ids.contains(&c.id));
+                self.hand.retain(|c| !ids.contains(&c.id));
+            }
+            Command::CpF => {
+                let (left, right) = (self.hand[targets[0]], self.hand[targets[1]]);
+                self.modify_card(left.id, |card| *card = right.with_id(left.id));
+                self.sort_hand();
+            }
+            Command::DuSh => {
+                let value: u32 = self.jokers.iter().map(OwnedJoker::sell_value).sum();
+                self.money += value.min(50);
+            }
+            Command::YayS => {
+                let mut rng = self.command_rng.clone();
+                if let Some(Offer::Joker { joker, .. }) = self.roll_joker(&mut rng) {
+                    self.jokers.push(OwnedJoker::new(joker, None));
+                }
+                self.command_rng = rng;
+            }
+            _ => {}
+        }
     }
 
     pub fn sell_consumable(&mut self, index: usize) -> Result<(), GameError> {
@@ -1105,12 +1323,18 @@ impl Game {
         if cheat.enhance_hand {
             let ids: Vec<u32> = self.hand.iter().map(|c| c.id).collect();
             for id in ids {
-                let roll = self.card_rng.below(8 * 4 * 5);
+                let roll = self.card_rng.below(8 * 5 * 4);
                 self.modify_card(id, |card| {
                     card.enhancement = Some(Enhancement::ALL[roll as usize % 8]);
-                    card.seal = Seal::ALL.get(roll as usize / 8 % 4).copied();
-                    card.edition = Edition::ALL[..3].get(roll as usize / 32).copied();
+                    card.seal = Seal::ALL.get(roll as usize / 8 % 5).copied();
+                    card.edition = Edition::ALL[..3].get(roll as usize / 40).copied();
                 });
+            }
+        }
+        if cheat.random_command {
+            let command = self.random_command();
+            if !self.create(command) {
+                return Err(GameError::ClipboardFull);
             }
         }
         if cheat.random_theme {
@@ -1780,9 +2004,9 @@ mod tests {
             }
         }
         let total: usize = counts.values().sum();
-        // Themes take about 1 slot in 6.
+        // Themes and commands take about 2 slots in 7.
         assert!(
-            (total as f64 / 4000.0 - 20.0 / 24.0).abs() < 0.03,
+            (total as f64 / 4000.0 - 20.0 / 28.0).abs() < 0.03,
             "{total}"
         );
         let share = |r| counts.get(&r).copied().unwrap_or(0) as f64 / total as f64;
@@ -1809,13 +2033,13 @@ mod tests {
         game.buy(0).unwrap();
         assert_eq!(game.buy(0), Err(GameError::ClipboardFull));
         assert_eq!(game.money, 14);
-        game.use_consumable(0).unwrap();
-        game.use_consumable(0).unwrap();
+        game.use_consumable(0, &[]).unwrap();
+        game.use_consumable(0, &[]).unwrap();
         let s = game.state();
         assert_eq!(s.hands[1].level, 3);
         assert_eq!(s.jokers[0].bonus.as_ref().unwrap().text, "×1.2 mult");
         assert_eq!(s.jokers[1].bonus.as_ref().unwrap().text, "+$1 / blind");
-        assert!(game.use_consumable(0).is_err());
+        assert!(game.use_consumable(0, &[]).is_err());
     }
 
     #[test]
@@ -1832,9 +2056,10 @@ mod tests {
     #[test]
     fn secret_themes_wait_for_their_hand() {
         let mut game = Game::new(23, vec![]);
-        for _ in 0..300 {
+        for seed in 0..300 {
             game.offers.clear();
-            let Some(Offer::Consumable(Consumable::Theme(theme))) = game.roll_theme() else {
+            let roll = game.roll_theme(&mut Rng::new(seed));
+            let Some(Offer::Consumable(Consumable::Theme(theme))) = roll else {
                 panic!("no theme");
             };
             assert!(!theme.hand().secret());
@@ -1962,6 +2187,135 @@ mod tests {
         }
         assert!(broke > 0);
         assert_eq!(game.jokers[0].counter, 1.0 + 0.75 * broke as f64);
+    }
+
+    /// A game in its first blind with this command in the clipboard.
+    fn with_command(seed: u64, command: Command, jokers: Vec<Joker>) -> Game {
+        let mut game = playing(seed, jokers);
+        game.consumables = vec![Consumable::Command(command)];
+        game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
+        game.deck = game.hand.clone();
+        game
+    }
+
+    #[test]
+    fn commands_change_the_selected_cards() {
+        let mut game = with_command(40, Command::MakeJ, vec![Joker::ShellFu]);
+        assert!(matches!(
+            game.use_consumable(0, &[]),
+            Err(GameError::BadSelection(_))
+        ));
+        assert!(matches!(
+            game.use_consumable(0, &[0, 1, 2]),
+            Err(GameError::BadSelection(_))
+        ));
+        game.use_consumable(0, &[0, 2]).unwrap();
+        assert!(
+            game.hand[0].is(Enhancement::Multithreaded)
+                && game.hand[2].is(Enhancement::Multithreaded)
+        );
+        assert!(
+            game.deck
+                .iter()
+                .filter(|c| c.is(Enhancement::Multithreaded))
+                .count()
+                == 2
+        );
+        assert_eq!(
+            game.state().jokers[0].bonus.as_ref().unwrap().text,
+            "+1 mult"
+        );
+
+        let mut game = with_command(41, Command::MvSpades, vec![]);
+        game.use_consumable(0, &[0, 1, 4]).unwrap();
+        assert!(game.hand.iter().filter(|c| c.suit == Suit::Spades).count() == 5);
+
+        let mut game = with_command(42, Command::NpmVersionPatch, vec![]);
+        game.use_consumable(0, &[0]).unwrap();
+        assert_eq!(game.hand[0].rank, ACE);
+    }
+
+    #[test]
+    fn rm_rf_and_cp_f() {
+        let mut game = with_command(43, Command::RmRf, vec![]);
+        game.use_consumable(0, &[0, 1]).unwrap();
+        assert_eq!((game.hand.len(), game.deck.len()), (6, 6));
+
+        let mut game = with_command(44, Command::CpF, vec![]);
+        game.hand[7] = game.hand[7].with_seal(Seal::Retry);
+        game.deck = game.hand.clone();
+        game.use_consumable(0, &[2, 7]).unwrap();
+        let copy = game.hand.iter().find(|c| c.id == 102).unwrap();
+        assert_eq!(
+            (copy.rank, copy.suit, copy.seal),
+            (2, Suit::Clubs, Some(Seal::Retry))
+        );
+    }
+
+    #[test]
+    fn money_commands() {
+        let mut game = with_command(45, Command::Rsync, vec![]);
+        game.money = 15;
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!(game.money, 30);
+        game.consumables = vec![Consumable::Command(Command::Rsync)];
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!(game.money, 50);
+
+        let mut game = with_command(46, Command::DuSh, vec![Joker::Fork, Joker::Hotwire]);
+        game.money = 0;
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!(game.money, 5 + 4);
+    }
+
+    #[test]
+    fn up_arrow_recalls_the_last_consumable() {
+        let mut game = with_command(47, Command::UpArrow, vec![]);
+        assert!(game.use_consumable(0, &[]).is_err());
+        game.consumables.insert(0, Consumable::Theme(Theme::Nord));
+        game.use_consumable(0, &[]).unwrap();
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!(game.consumables, [Consumable::Theme(Theme::Nord)]);
+    }
+
+    #[test]
+    fn creating_commands() {
+        let mut game = with_command(48, Command::OmarchyMenu, vec![]);
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!(game.consumables.len(), 2);
+
+        let mut game = with_command(49, Command::YayS, vec![]);
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!(game.jokers.len(), 1);
+
+        let mut game = playing(50, vec![Joker::AliasCollection]);
+        game.consumables.clear();
+        game.cheat(Cheat {
+            blind: Some(BlindKind::Big),
+            ..Cheat::default()
+        })
+        .unwrap();
+        game.select_blind().unwrap();
+        assert_eq!(game.consumables.len(), 1);
+    }
+
+    #[test]
+    fn shell_history_creates_a_command_when_discarded() {
+        let mut game = playing(51, vec![]);
+        let id = game.hand[0].id;
+        game.modify_card(id, |c| c.seal = Some(Seal::ShellHistory));
+        game.discard(&[0]).unwrap();
+        assert!(matches!(game.consumables[..], [Consumable::Command(_)]));
+    }
+
+    #[test]
+    fn vim_golf_and_free_tier() {
+        let mut game = playing(52, vec![Joker::VimGolf, Joker::FreeTier]);
+        game.money = 4;
+        game.hand = cards("AH KD QS JC 10H 4D 3S 2C");
+        let b = game.play(&[0, 1, 2, 3, 4]).unwrap();
+        assert_eq!(game.consumables.len(), 2);
+        assert_eq!(b.notes.len(), 2);
     }
 
     #[test]

@@ -46,14 +46,16 @@ wins the game; you may then go on in endless mode, where targets explode.
 Each poker hand type has a level, which raises its starting chips and mult (see
 [docs/hands.md](docs/hands.md)); three secret hands need duplicate cards. Themes
 ([docs/themes.md](docs/themes.md)) level up a hand type: bought in the shop, they wait
-in the clipboard (2 slots) until applied, at any time. Your deck lasts
+in the clipboard (2 slots) until applied, at any time. Commands
+([docs/commands.md](docs/commands.md)) change the selected cards, make money or create
+things; those that change cards are applied during a blind, with the cards selected. Your deck lasts
 the whole game: every played or discarded card comes back to it after each blind. Cards
 may carry an enhancement, a seal and an edition ([docs/modifiers.md](docs/modifiers.md));
 hover a card to read them.
 
 A won blind pays $3, $4 or $5, plus $1 per unplayed hand, plus $1 of interest per $5
-held ($5 at most). Cash out, then the shop offers 2 cards: each slot holds a theme
-($3, 1 chance in 6) or a joker you don't own yet, of a rarity drawn for each slot (core
+held ($5 at most). Cash out, then the shop offers 2 cards: each slot holds a theme or
+a command ($3, 1 chance in 7 each) or a joker you don't own yet, of a rarity drawn for each slot (core
 70%, extra 25%, AUR 5%), sometimes with an edition (5 joker slots,
 resold at half price; reroll for $5, then $1 more each time). Jokers trigger left to
 right, so their order matters. You start with $4 and no jokers.
@@ -68,7 +70,7 @@ With `OMATRO_DEBUG=1`, the engine accepts `debug` commands, and the app maps the
 F5 (win the blind in progress), F6 (+$100), F7 (jump to the boss of ante 8), F8 (raise
 every known hand type one level), F9 (add a random joker with a random edition), F10
 (add a random theme to the clipboard) and F11 (give the cards in hand random
-enhancements, seals and editions). `OMATRO_JOKERS=uptime,fork` sets the jokers
+enhancements, seals and editions), F12 (add a random command to the clipboard). `OMATRO_JOKERS=uptime,fork` sets the jokers
 every new game starts with.
 
 ## Protocol
@@ -88,11 +90,11 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"buy","offer":0}` | Buys a shop offer |
 | `{"cmd":"sell","joker":0}` | Sells a joker (in the shop) |
 | `{"cmd":"move_joker","from":0,"to":2}` | Moves a joker within the row |
-| `{"cmd":"use_consumable","index":0}` | Uses a consumable of the clipboard (any time but after a loss) |
+| `{"cmd":"use_consumable","index":0,"cards":[1,3]}` | Uses a consumable of the clipboard (any time but after a loss); `cards`: the hand cards a command changes |
 | `{"cmd":"sell_consumable","index":0}` | Sells a consumable of the clipboard |
 | `{"cmd":"reroll"}` | Rerolls the shop offers |
 | `{"cmd":"next_blind"}` | Leaves the shop for the choice of the next blind |
-| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
+| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true,"random_command":true}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
 
 Responses:
 
@@ -105,8 +107,8 @@ Responses:
   jokers (`id`, `name`, `description`, `quip`, `rarity`, `edition`, `price`,
   `sell_value`, `bonus` for what a growing joker gives now, `current` for what a Fork
   copies), `max_jokers`, `modifiers` (names and effects of every enhancement, seal and
-  edition), `consumables` (`kind`, `id`, `name`, `description`, `quip`,
-  `price`, `sell_value`), `consumable_slots`, `unique_themes`, `money`,
+  edition), `consumables` (`kind` = `theme` / `command`, `id`, `name`,
+  `description`, `quip`, `price`, `sell_value`, and `min_cards` / `max_cards` to select), `consumable_slots`, `unique_themes`, `money`,
   `reward` in the `won` phase (with `cards` for Enterprise cards held, and `notes` such
   as "Beta Release broke."), `shop` offers
   (jokers or consumables, told apart by `kind`) and `reroll_cost` in the shop. Scores and

@@ -38,6 +38,7 @@ Fork copies the joker on its right.
 | `bang_bang` | Bang Bang | core | $4 | Retriggers the first scoring card 2 more times | *!! — run it again, louder.* |
 | `ultrawide` | Ultrawide | core | $4 | +1 hand size | *More screen, more cards.* |
 | `undo_history` | Undo History | core | $4 | +1 discard each blind | *Ctrl+Z, but for cards.* |
+| `vim_golf` | Vim Golf | core | $4 | Creates a command if the hand contains an ace and a Straight | *Done in four keystrokes.* |
 | `ruby_gem` | Ruby Gem | core | $5 | +2 mult for each scoring diamond | *Optimized for programmer happiness.* |
 | `fan_mail` | Fan Mail | core | $5 | +15 chips for each scoring heart | *HEY, someone loves your pull request.* |
 | `rails_world` | Rails World | core | $5 | +20 chips for each scoring face card | *Everyone came for the keynote. And the opinions.* |
@@ -53,8 +54,11 @@ Fork copies the joker on its right.
 | `beta_release` | Beta Release | core | $5 | +15 mult; 1 in 6 chance to break at the end of each blind | *Works great until it doesn't.* |
 | `auto_update` | Auto Update | core | $5 | 1 in 4 chance to level up the played hand type | *pacman -Syu, every hand.* |
 | `support_contract` | Support Contract | core | $5 | Enterprise cards give +$4 when scored | *Billed per incident.* |
+| `free_tier` | Free Tier | core | $5 | Creates a command when a hand is played with $4 or less | *Rate-limited, but it works.* |
+| `man8` | man 8 | core | $5 | 1 in 4 chance per scoring 8 to create a command | *System administration commands.* |
 | `uptime` | Uptime | core | $6 | +1 mult per hand in a row without a scoring face card | *847 days without a reboot.* |
 | `sponsorware` | Sponsorware | core | $6 | +$4 at the end of each blind | *Thank you for your sponsorship.* |
+| `shell_fu` | Shell Fu | core | $6 | +1 mult per command used this game | *Pipes, loops, one-liners.* |
 | `incremental_build` | Incremental Build | extra | $5 | Every played card permanently gains +5 chips | *A little faster every time.* |
 | `cron_job` | Cron Job | extra | $5 | Retriggers the effects of cards held in hand | *Runs again at midnight. And again.* |
 | `super_key` | Super Key | extra | $6 | +2 mult for each scoring card | *Every good shortcut starts here.* |
@@ -65,6 +69,7 @@ Fork copies the joker on its right.
 | `flaky_ci` | Flaky CI | extra | $6 | Gains ×0.25 mult each time a Flaky Test card triggers | *Green on the third try.* |
 | `rma_department` | RMA Department | extra | $6 | Gains ×0.75 mult per Overclocked card that breaks | *We've seen worse. Probably.* |
 | `code_signing` | Code Signing | extra | $6 | When a blind starts, adds a random card with a random seal to the hand | *Signed, sealed, delivered.* |
+| `alias_collection` | Alias Collection | extra | $6 | Creates a command when a blind starts (if there is room) | *alias ll='ls -la'. And 400 more.* |
 | `no_build` | No Build | extra | $7 | ×2 mult if the played hand has 3 cards or fewer | *Webpack? Never heard of her.* |
 | `heartbleed` | Heartbleed | extra | $7 | 1 in 2 chance of ×1.5 mult for each scoring heart | *Your heart leaks, 64 KB at a time.* |
 | `mvp` | MVP | extra | $7 | Flushes and Straights can be made with 4 cards | *Minimum viable flush.* |

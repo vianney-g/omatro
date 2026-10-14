@@ -137,6 +137,11 @@ pub enum Joker {
     IncrementalBuild,
     CodeSigning,
     CronJob,
+    AliasCollection,
+    ShellFu,
+    VimGolf,
+    FreeTier,
+    Man8,
 }
 
 /// What a joker sees of the hand being scored.
@@ -172,7 +177,7 @@ fn is_even(card: Card) -> bool {
 }
 
 impl Joker {
-    pub const ALL: [Joker; 69] = [
+    pub const ALL: [Joker; 74] = [
         Joker::Dotfiles,
         Joker::Omakase,
         Joker::RubyGem,
@@ -242,6 +247,11 @@ impl Joker {
         Joker::IncrementalBuild,
         Joker::CodeSigning,
         Joker::CronJob,
+        Joker::AliasCollection,
+        Joker::ShellFu,
+        Joker::VimGolf,
+        Joker::FreeTier,
+        Joker::Man8,
     ];
 
     pub fn name(self) -> &'static str {
@@ -315,6 +325,11 @@ impl Joker {
             Joker::IncrementalBuild => "Incremental Build",
             Joker::CodeSigning => "Code Signing",
             Joker::CronJob => "Cron Job",
+            Joker::AliasCollection => "Alias Collection",
+            Joker::ShellFu => "Shell Fu",
+            Joker::VimGolf => "Vim Golf",
+            Joker::FreeTier => "Free Tier",
+            Joker::Man8 => "man 8",
         }
     }
 
@@ -393,6 +408,11 @@ impl Joker {
                 "When a blind starts, adds a random card with a random seal to the hand"
             }
             Joker::CronJob => "Retriggers the effects of cards held in hand",
+            Joker::AliasCollection => "Creates a command when a blind starts (if there is room)",
+            Joker::ShellFu => "+1 mult per command used this game",
+            Joker::VimGolf => "Creates a command if the hand contains an ace and a Straight",
+            Joker::FreeTier => "Creates a command when a hand is played with $4 or less",
+            Joker::Man8 => "1 in 4 chance per scoring 8 to create a command",
         }
     }
 
@@ -469,6 +489,11 @@ impl Joker {
             Joker::IncrementalBuild => "A little faster every time.",
             Joker::CodeSigning => "Signed, sealed, delivered.",
             Joker::CronJob => "Runs again at midnight. And again.",
+            Joker::AliasCollection => "alias ll='ls -la'. And 400 more.",
+            Joker::ShellFu => "Pipes, loops, one-liners.",
+            Joker::VimGolf => "Done in four keystrokes.",
+            Joker::FreeTier => "Rate-limited, but it works.",
+            Joker::Man8 => "System administration commands.",
         }
     }
 
@@ -493,7 +518,8 @@ impl Joker {
             | Joker::RmaDepartment
             | Joker::IncrementalBuild
             | Joker::CodeSigning
-            | Joker::CronJob => Rarity::Extra,
+            | Joker::CronJob
+            | Joker::AliasCollection => Rarity::Extra,
             Joker::Hotwire
             | Joker::CodeReview
             | Joker::QuadCore
@@ -531,7 +557,8 @@ impl Joker {
             | Joker::StableRelease
             | Joker::BangBang
             | Joker::Ultrawide
-            | Joker::UndoHistory => 4,
+            | Joker::UndoHistory
+            | Joker::VimGolf => 4,
             Joker::RubyGem
             | Joker::FanMail
             | Joker::RailsWorld
@@ -548,7 +575,9 @@ impl Joker {
             | Joker::AutoUpdate
             | Joker::SupportContract
             | Joker::IncrementalBuild
-            | Joker::CronJob => 5,
+            | Joker::CronJob
+            | Joker::FreeTier
+            | Joker::Man8 => 5,
             Joker::SuperKey
             | Joker::Uptime
             | Joker::Sponsorware
@@ -558,7 +587,9 @@ impl Joker {
             | Joker::BlobStorage
             | Joker::FlakyCi
             | Joker::RmaDepartment
-            | Joker::CodeSigning => 6,
+            | Joker::CodeSigning
+            | Joker::AliasCollection
+            | Joker::ShellFu => 6,
             Joker::NoBuild
             | Joker::Heartbleed
             | Joker::Mvp
@@ -684,7 +715,9 @@ impl Joker {
             Joker::QuadCore if has(HandKind::FourOfAKind) => Effect::XMult(4.0),
             Joker::GitBisect if has(HandKind::Straight) => Effect::XMult(3.0),
             Joker::Monorepo if has(HandKind::Flush) => Effect::XMult(2.0),
-            Joker::Uptime | Joker::GreenBuild if counter > 0.0 => Effect::Mult(counter),
+            Joker::Uptime | Joker::GreenBuild | Joker::ShellFu if counter > 0.0 => {
+                Effect::Mult(counter)
+            }
             Joker::FreeTrial | Joker::CiRunner if counter > 0.0 => Effect::Chips(counter as u64),
             Joker::MuscleMemory if hand.times_played > 0 => Effect::Mult(hand.times_played as f64),
             Joker::OrphanCleanup | Joker::ThemeCollector if counter > 1.0 => Effect::XMult(counter),
@@ -798,7 +831,7 @@ impl OwnedJoker {
                 "progress",
                 format!("{enhanced} / {SENIOR_THRESHOLD} enhanced"),
             ),
-            Joker::Uptime | Joker::GreenBuild => ("mult", format!("+{c} mult")),
+            Joker::Uptime | Joker::GreenBuild | Joker::ShellFu => ("mult", format!("+{c} mult")),
             Joker::FreeTrial | Joker::CiRunner => ("chips", format!("+{c} chips")),
             Joker::OrphanCleanup | Joker::ThemeCollector => ("x_mult", format!("×{c} mult")),
             Joker::MuscleMemory => ("mult", format!("+{} mult", hand_plays?)),
@@ -831,6 +864,12 @@ impl OwnedJoker {
     pub fn on_discard(&mut self) {
         if self.joker == Joker::GreenBuild {
             self.counter = (self.counter - 1.0).max(0.0);
+        }
+    }
+
+    pub fn on_command_used(&mut self) {
+        if self.joker == Joker::ShellFu {
+            self.counter += 1.0;
         }
     }
 

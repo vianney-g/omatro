@@ -171,11 +171,22 @@ Window {
   function sell(i) {
     if (shopping) send({ cmd: "sell", joker: i })
   }
+  // Whether a consumable can be used now: commands that change cards need
+  // the right number of them selected, during a blind.
+  function canUse(c) {
+    if (busy || !game || game.phase === "lost") return false
+    if (c.max_cards === 0) return true
+    return playing && selected.length >= c.min_cards && selected.length <= c.max_cards
+  }
   function useConsumable(i) {
-    if (busy || !game || i >= game.consumables.length) return
+    if (!game || i >= game.consumables.length) return
     var c = game.consumables[i]
-    send({ cmd: "use_consumable", index: i })
-    notice = "Applied " + c.name + ": " + c.description + "."
+    if (!canUse(c)) {
+      if (c.max_cards > 0) notice = c.name + ": select " + Labels.range(c.min_cards, c.max_cards) + " during a blind."
+      return
+    }
+    send({ cmd: "use_consumable", index: i, cards: c.max_cards > 0 ? selected : [] })
+    notice = (c.kind === "command" ? "Ran " : "Applied ") + c.name + "."
   }
   function sellConsumable(i) {
     if (!busy) send({ cmd: "sell_consumable", index: i })
@@ -290,6 +301,7 @@ Window {
       else if (k === Qt.Key_F5) root.cheat({ win: true })
       else if (k === Qt.Key_F6) root.cheat({ money: root.game.money + 100 })
       else if (k === Qt.Key_F7) root.cheat({ ante: root.game.winning_ante, blind: "boss" })
+      else if (k === Qt.Key_F12) root.cheat({ random_command: true })
       else if (k === Qt.Key_F11) root.cheat({ enhance_hand: true })
       else if (k === Qt.Key_F10) root.cheat({ random_theme: true })
       else if (k === Qt.Key_F9) root.cheat({ random_joker: true })
@@ -464,13 +476,20 @@ Window {
               Column {
                 spacing: Style.spacing.sm
                 ConsumableView { item: modelData; width: Style.space(117) }
+                Caption {
+                  width: Style.space(117)
+                  visible: modelData.max_cards > 0
+                  horizontalAlignment: Text.AlignHCenter
+                  text: "select " + Labels.range(modelData.min_cards, modelData.max_cards)
+                }
                 Row {
                   anchors.horizontalCenter: parent.horizontalCenter
                   spacing: Style.spacing.xs
                   Button {
                     compact: true
                     text: "Apply"
-                    enabled: !root.busy && root.game.phase !== "lost"
+                    enabled: root.canUse(modelData)
+                    opacity: enabled ? 1 : 0.5
                     onClicked: root.useConsumable(index)
                   }
                   Button {

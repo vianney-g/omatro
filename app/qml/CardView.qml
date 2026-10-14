@@ -40,7 +40,8 @@ Item {
   readonly property int bonusChips: card && card.bonus_chips ? card.bonus_chips : 0
 
   readonly property string sealSymbol: !card || !card.seal ? ""
-    : card.seal === "gold_star" ? "★" : card.seal === "retry" ? "↻" : "◐"
+    : card.seal === "gold_star" ? "★" : card.seal === "retry" ? "↻"
+    : card.seal === "theme_sync" ? "◐" : "❯"
   readonly property string details: {
     var lines = []
     if (enhancement) lines.push(enhancement.name + ": " + enhancement.description)

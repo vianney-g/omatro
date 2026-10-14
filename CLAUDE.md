@@ -87,7 +87,7 @@ Lua: `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'`,
 `'hl.dsp.window.resize({ x = 1100, y = 800 })'`, `'hl.dsp.window.center()'`; the window
 geometry comes from `hyprctl clients -j`; `'hl.dsp.cursor.move({ x = …, y = … })'`
 moves the pointer, to check hover tooltips. F11 gives the cards in hand random
-modifiers. Check that stderr has no QML warnings.
+modifiers, F12 adds a random command. Check that stderr has no QML warnings.
 
 ## Adding a joker
 
@@ -122,10 +122,15 @@ Use `Card::is_suit`, `has_rank`, `is_face` and `chips` rather than reading `suit
 
 ## Consumables
 
-`consumable.rs` holds the consumables (`Consumable::Theme` for now; commands and sudo
-cards will join it), kept in the clipboard (`Game::consumables`, 2 slots) and used by
-`Game::use_consumable`. The shop draws a joker (weight 20) or a theme (weight 4) for
-each slot (`Offer`); the state sends offers as `OfferInfo`, told apart by `kind`.
+`consumable.rs` holds the consumables (`Consumable::Theme` and `Consumable::Command`;
+sudo cards will join them), kept in the clipboard (`Game::consumables`, 2 slots) and
+used by `Game::use_consumable(index, cards)`: `targets()` says how many hand cards a
+command needs selected, `check_usable` refuses one that could do nothing, `run_command`
+applies it. Add things to the clipboard with `Game::create`, which respects the slots.
+The shop draws a joker (weight 20), a theme (4) or a command (4) for each slot
+(`Offer`); the state sends offers as `OfferInfo`, told apart by `kind`. Random
+creations draw from the `commands` stream; `roll_joker` and `roll_theme` take the
+stream to draw from.
 
 ## Generated references
 
