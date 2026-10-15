@@ -18,6 +18,8 @@ pub enum Source {
     Joker { index: usize },
     /// A consumable in the clipboard (index into it): Theme Showcase.
     Clipboard { index: usize },
+    /// The deck itself (Hyprland Dwindle).
+    Deck,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -75,6 +77,8 @@ pub struct Table<'a> {
     pub disabled_joker: Option<usize>,
     /// Theme Showcase: clipboard indices of the themes of the hand type played.
     pub showcase: &'a [usize],
+    /// Hyprland Dwindle: chips and mult become their average.
+    pub balance: bool,
 }
 
 /// The joker whose ability the one at `index` uses: itself, or for a Fork, the
@@ -271,6 +275,19 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
         run.push(Source::Clipboard { index }, Effect::XMult(1.5));
     }
 
+    // Hyprland Dwindle: chips and mult both become their average.
+    if table.balance {
+        let average = ((run.chips as f64 + run.mult) / 2.0).round();
+        run.chips = average as u64;
+        run.mult = average;
+        run.steps.push(Step {
+            source: Source::Deck,
+            effect: Effect::Balance,
+            chips: run.chips,
+            mult: run.mult,
+        });
+    }
+
     Breakdown {
         cards: played.to_vec(),
         hand: evaluated.kind,
@@ -332,6 +349,7 @@ mod tests {
                 halve_base: false,
                 disabled_joker: None,
                 showcase: &[],
+                balance: false,
             };
             score(&table, &mut Rng::new(7))
         }
@@ -504,6 +522,7 @@ mod tests {
                     halve_base: false,
                     disabled_joker: None,
                     showcase: &[],
+                    balance: false,
                 };
                 !score(&table, &mut Rng::new(seed)).broken.is_empty()
             })

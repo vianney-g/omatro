@@ -37,6 +37,7 @@ function mult(m) {
 function effect(e) {
   if (e === "again") return "Again!"
   if (e === "debuffed") return "Debuffed"
+  if (e === "balance") return "Balanced"
   if (e.money !== undefined) return "+" + money(e.money)
   if (e.chips !== undefined) return "+" + e.chips
   if (e.mult !== undefined) return "+" + mult(e.mult) + " mult"

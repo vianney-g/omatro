@@ -10,6 +10,7 @@ fn main() {
         QmlFile::from("qml/PackOpening.qml"),
         QmlFile::from("qml/VoucherView.qml"),
         QmlFile::from("qml/BadgeView.qml"),
+        QmlFile::from("qml/NewGame.qml"),
         QmlFile::from("qml/CardView.qml"),
         QmlFile::from("qml/JokerView.qml"),
         QmlFile::from("qml/Button.qml"),

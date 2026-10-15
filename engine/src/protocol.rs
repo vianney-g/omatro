@@ -1,9 +1,10 @@
 //! Protocol between the engine and the display: one JSON command per line
 //! in, one JSON response per line out.
 
-use crate::game::{Cheat, Game, State};
+use crate::game::{Cheat, DeckInfo, Game, State};
 use crate::hand::HandKind;
 use crate::joker::{Bonus, Joker};
+use crate::run_deck::Deck;
 use crate::score::Breakdown;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -15,7 +16,11 @@ pub enum Command {
         seed: Option<u64>,
         #[serde(default)]
         jokers: Vec<Joker>,
+        /// The starting deck (none: the plain one).
+        deck: Option<Deck>,
     },
+    /// Lists the starting decks, for the new game screen.
+    Decks,
     State,
     SelectBlind,
     SkipBlind,
@@ -93,6 +98,9 @@ pub enum Response {
     Error {
         message: String,
     },
+    Decks {
+        decks: Vec<DeckInfo>,
+    },
 }
 
 #[derive(Default)]
@@ -134,14 +142,24 @@ impl Session {
     }
 
     fn run(&mut self, command: Command) -> Result<Response, String> {
-        if let Command::NewGame { seed, mut jokers } = command {
+        if let Command::NewGame {
+            seed,
+            mut jokers,
+            deck,
+        } = command
+        {
             if jokers.is_empty() {
                 jokers = self.start_jokers.clone();
             }
             let seed = seed.unwrap_or_else(random_seed);
-            let game = self.game.insert(Game::new(seed, jokers));
+            let game = self.game.insert(Game::with_deck(seed, jokers, deck));
             return Ok(Response::State {
                 state: game.state(),
+            });
+        }
+        if let Command::Decks = command {
+            return Ok(Response::Decks {
+                decks: Deck::ALL.iter().map(|&d| d.into()).collect(),
             });
         }
         if matches!(command, Command::Debug(_)) && !self.debug {
@@ -149,7 +167,7 @@ impl Session {
         }
         let game = self.game.as_mut().ok_or("no game in progress")?;
         match command {
-            Command::NewGame { .. } => unreachable!(),
+            Command::NewGame { .. } | Command::Decks => unreachable!(),
             Command::State => {}
             Command::SelectBlind => game.select_blind().map_err(|e| e.to_string())?,
             Command::SkipBlind => game.skip_blind().map_err(|e| e.to_string())?,
@@ -239,7 +257,8 @@ mod tests {
                 .unwrap(),
             Command::NewGame {
                 seed: Some(3),
-                jokers: vec![Joker::Dotfiles]
+                jokers: vec![Joker::Dotfiles],
+                deck: None,
             }
         );
         assert_eq!(
@@ -264,6 +283,21 @@ mod tests {
         assert_eq!(
             (r["base_chips"].as_u64(), r["base_mult"].as_f64()),
             (Some(10), Some(2.0))
+        );
+    }
+
+    #[test]
+    fn decks_are_listed_and_chosen() {
+        let mut session = Session::default();
+        let r = send(&mut session, r#"{"cmd":"decks"}"#);
+        assert_eq!(r["decks"].as_array().unwrap().len(), 15);
+        let r = send(
+            &mut session,
+            r#"{"cmd":"new_game","seed":1,"deck":"basecamp"}"#,
+        );
+        assert_eq!(
+            (&r["state"]["money"], &r["state"]["run_deck"]["name"]),
+            (&14.into(), &"Basecamp".into())
         );
     }
 

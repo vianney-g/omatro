@@ -151,6 +151,14 @@ were opened from) or keeps the badge in `Game::tags` until its moment: `shop_tag
 cash-out (free offers in `free_offers`, `free_packs`), `select_blind` (`juggle`),
 `win_blind` (funding). Take waiting badges with `take_tags`.
 
+## Decks
+
+`run_deck.rs` lists the decks (`Deck`), picked on the new game screen (`NewGame.qml`,
+the last one remembered with `Settings`) and passed to `Game::with_deck`. `set_up_deck`
+builds the cards and the starting items; the rules ask `deck_is(Deck::…)` where they
+apply (`hands_per_blind`, `joker_slots`, `target_of`, `reward`, `roll_offers`…).
+Hyprland Dwindle scores through a `Source::Deck` step (`Effect::Balance`).
+
 ## Packs
 
 `pack.rs` defines the packs (kind × size, their names, prices and shop odds). The shop

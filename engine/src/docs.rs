@@ -7,6 +7,7 @@ use crate::hand::HandKind;
 use crate::joker::{Edition, Joker};
 use crate::modifier::{Enhancement, Seal};
 use crate::pack::{Pack, PackKind, PackSize};
+use crate::run_deck::Deck;
 use crate::tag::Tag;
 use crate::voucher::{VOUCHER_PRICE, Voucher};
 
@@ -337,9 +338,28 @@ fn tags() -> String {
     doc
 }
 
+fn decks() -> String {
+    let mut doc = header(
+        "Decks",
+        "The machine a game is played on (decks, in the original), chosen on the new\n\
+         game screen: an advantage, sometimes a drawback.",
+    );
+    doc += "| Id | Deck | Effect | Quip |\n|---|---|---|---|\n";
+    for deck in Deck::ALL {
+        doc += &format!(
+            "| `{}` | {} | {} | *{}* |\n",
+            id(deck),
+            deck.name(),
+            deck.description(),
+            cell(deck.quip())
+        );
+    }
+    doc
+}
+
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 11] = [
+    let docs: [(&str, fn() -> String); 12] = [
         ("jokers.md", jokers),
         ("editions.md", editions),
         ("hands.md", hands),
@@ -350,6 +370,7 @@ fn docs_are_up_to_date() {
         ("bosses.md", bosses),
         ("vouchers.md", vouchers),
         ("tags.md", tags),
+        ("decks.md", decks),
         ("modifiers.md", modifiers),
     ];
     for (file, render) in docs {

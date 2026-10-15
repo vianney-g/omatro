@@ -56,7 +56,8 @@ Rectangle {
         }
         Header {
           anchors.baseline: parent.children[0].baseline
-          text: "Your run, beautifully over-reported. · I or Esc: close"
+          text: (root.game && root.game.run_deck ? "on " + root.game.run_deck.name + " · " : "")
+            + "Your run, beautifully over-reported. · I or Esc: close"
           font.italic: true
         }
       }

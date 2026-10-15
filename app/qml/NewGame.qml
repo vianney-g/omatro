@@ -1,0 +1,111 @@
+import QtQuick
+import omatro
+
+// The new game screen: pick the machine to play on (arrows, Enter), or go back
+// to the game in progress (Escape).
+Rectangle {
+  id: root
+
+  property var decks: []
+  property int current: 0
+  property bool canCancel: false
+  signal start(string deck)
+  signal cancel()
+
+  color: Util.alpha(Color.background, 0.96)
+
+  function move(step) {
+    if (decks.length > 0) current = (current + step + decks.length) % decks.length
+  }
+
+  MouseArea { anchors.fill: parent }
+
+  Column {
+    anchors.centerIn: parent
+    spacing: Style.spacing.huge
+
+    Text {
+      anchors.horizontalCenter: parent.horizontalCenter
+      text: "New game"
+      color: Color.accent
+      font.family: Style.font.family
+      font.pixelSize: Style.font.displayLarge
+      font.bold: true
+    }
+    Text {
+      anchors.horizontalCenter: parent.horizontalCenter
+      text: "Pick your machine · arrows to choose · Enter to start" + (root.canCancel ? " · Escape to go back" : "")
+      color: Color.muted
+      font.family: Style.font.family
+      font.pixelSize: Style.font.body
+    }
+
+    Grid {
+      anchors.horizontalCenter: parent.horizontalCenter
+      columns: 3
+      spacing: Style.spacing.lg
+      Repeater {
+        model: root.decks
+        Rectangle {
+          readonly property bool chosen: index === root.current
+          width: Style.space(285)
+          height: Style.space(88)
+          radius: Style.cornerRadius
+          color: chosen ? Qt.tint(Color.background, Util.alpha(Color.accent, 0.15)) : Style.normalFill
+          border.width: chosen ? Style.space(2) : Style.normalBorderWidth
+          border.color: chosen ? Color.accent : Style.normalBorderColor
+          Column {
+            anchors { fill: parent; margins: Style.space(8) }
+            spacing: Style.space(3)
+            Text {
+              text: modelData.name
+              color: chosen ? Color.accent : Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.subtitle
+              font.bold: true
+            }
+            Text {
+              width: parent.width
+              wrapMode: Text.WordWrap
+              maximumLineCount: 2
+              elide: Text.ElideRight
+              text: modelData.description
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+            Text {
+              width: parent.width
+              elide: Text.ElideRight
+              text: modelData.quip
+              color: Color.muted
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              font.italic: true
+            }
+          }
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.current === index ? root.start(modelData.id) : root.current = index
+          }
+        }
+      }
+    }
+
+    Row {
+      anchors.horizontalCenter: parent.horizontalCenter
+      spacing: Style.spacing.xxl
+      Button {
+        text: "Start (Enter)"
+        enabled: root.decks.length > 0
+        onClicked: root.start(root.decks[root.current].id)
+      }
+      Button {
+        visible: root.canCancel
+        text: "Back (Escape)"
+        onClicked: root.cancel()
+      }
+    }
+  }
+}

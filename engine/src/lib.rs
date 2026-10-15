@@ -13,6 +13,7 @@ pub mod modifier;
 pub mod pack;
 pub mod protocol;
 pub mod rng;
+pub mod run_deck;
 pub mod score;
 pub mod tag;
 pub mod voucher;

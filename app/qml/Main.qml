@@ -1,3 +1,4 @@
+import QtCore
 import QtQuick
 import QtQuick.Layouts
 import omatro
@@ -44,6 +45,11 @@ Window {
     else if (r.event === "preview") showPreview(r)
     else if (r.event === "scored") startScoring(r)
     else if (r.event === "error") notice = r.message
+    else if (r.event === "decks") {
+      decks = r.decks
+      var last = decks.findIndex(function(d) { return d.id === settings.lastDeck })
+      newGameScreen.current = Math.max(0, last)
+    }
   }
 
   // Omarchy theme switch: reload its files if they changed.
@@ -102,9 +108,26 @@ Window {
   readonly property string handName: scoring ? scoring.hand_name
     : (preview && preview.hand ? preview.hand_name : "")
 
+  // ---- new game: pick the deck first ------------------------------------
+  property var decks: []
+  property bool choosingDeck: false
+  Settings {
+    id: settings
+    category: "omatro"
+    property string lastDeck: ""
+  }
+
   function newGame() {
+    if (decks.length === 0) send({ cmd: "decks" })
+    var last = decks.findIndex(function(d) { return d.id === settings.lastDeck })
+    newGameScreen.current = Math.max(0, last)
+    choosingDeck = true
+  }
+  function startGame(deck) {
+    settings.lastDeck = deck
+    choosingDeck = false
     notice = ""
-    send({ cmd: "new_game" })
+    send({ cmd: "new_game", deck: deck })
   }
 
   function applyState(s) {
@@ -298,6 +321,7 @@ Window {
         : step.source.kind === "held" ? handRepeater.itemAt(step.source.index)
         : step.source.kind === "joker" ? jokerRepeater.itemAt(step.source.index)
         : null
+      if (step.effect === "balance") notice = "Hyprland Dwindle balanced chips and mult"
       if (view) view.flash(Labels.effect(step.effect), color)
     } else if (stepIndex === steps.length) {
       showTotal = true
@@ -349,6 +373,17 @@ Window {
     Keys.onPressed: function(event) {
       var k = event.key
       if (k === Qt.Key_Q && (event.modifiers & Qt.ControlModifier)) Qt.quit()
+      else if (root.choosingDeck) {
+        if (k === Qt.Key_Left) newGameScreen.move(-1)
+        else if (k === Qt.Key_Right) newGameScreen.move(1)
+        else if (k === Qt.Key_Up) newGameScreen.move(-3)
+        else if (k === Qt.Key_Down) newGameScreen.move(3)
+        else if (k === Qt.Key_Return || k === Qt.Key_Enter) {
+          if (root.decks.length) root.startGame(root.decks[newGameScreen.current].id)
+        }
+        else if (k === Qt.Key_Escape && root.game !== null) root.choosingDeck = false
+        else return
+      }
       else if (k === Qt.Key_I) root.infoOpen = !root.infoOpen
       else if (root.infoOpen) {
         if (k === Qt.Key_Escape) root.infoOpen = false
@@ -404,12 +439,19 @@ Window {
         Layout.fillHeight: true
         spacing: Style.spacing.xxl
 
-        Text {
-          text: "omatro"
-          color: Color.accent
-          font.family: Style.font.family
-          font.pixelSize: Style.font.displayLarge
-          font.bold: true
+        Column {
+          Text {
+            text: "omatro"
+            color: Color.accent
+            font.family: Style.font.family
+            font.pixelSize: Style.font.displayLarge
+            font.bold: true
+          }
+          // The machine the game is played on.
+          Caption {
+            visible: root.game !== null && root.game.run_deck !== null
+            text: visible ? "on " + root.game.run_deck.name : ""
+          }
         }
 
         Box {
@@ -1069,6 +1111,7 @@ Window {
                 if (r.jokers > 0) lines.push(["Jokers", r.jokers])
                 if (r.cards > 0) lines.push(["Enterprise cards", r.cards])
                 if (r.badges > 0) lines.push(["Badges", r.badges])
+                if (r.discards > 0) lines.push(["Discards left", r.discards])
                 lines.push(["Total", r.total])
                 var cells = []
                 for (var i = 0; i < lines.length; i++)
@@ -1111,6 +1154,17 @@ Window {
       visible: root.infoOpen
       game: root.game
       onClose: root.infoOpen = false
+    }
+
+    // ---- new game: the deck to play with
+    NewGame {
+      id: newGameScreen
+      anchors.fill: parent
+      visible: root.choosingDeck
+      decks: root.decks
+      canCancel: root.game !== null
+      onStart: function(deck) { root.startGame(deck) }
+      onCancel: root.choosingDeck = false
     }
   }
 }

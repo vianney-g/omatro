@@ -29,6 +29,10 @@ make run       # build and run without installing
 make test
 ```
 
+A new game starts by picking a deck, the machine you play on
+([docs/decks.md](docs/decks.md)): more hands or discards, money, slots, a deck without
+face cards, starting pull requests… The last one picked is remembered.
+
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, N for a new game, I for
 fastfetch (run info: hand levels, cards left), Ctrl+Q to quit. Before a blind: Enter to
 play it, S to skip it. Ctrl+1 and Ctrl+2 apply the consumables of the clipboard. In the
@@ -95,7 +99,8 @@ One JSON command per line on standard input, one JSON response per line on outpu
 
 | Command | Effect |
 |---|---|
-| `{"cmd":"new_game","seed":42,"jokers":["dotfiles"]}` | New game (`seed` and `jokers` optional) |
+| `{"cmd":"new_game","seed":42,"jokers":["dotfiles"],"deck":"thinkpad"}` | New game (`seed`, `jokers` and `deck` optional) |
+| `{"cmd":"decks"}` | Lists the decks a new game may start with |
 | `{"cmd":"state"}` | Returns the state |
 | `{"cmd":"select_blind"}` | Plays the blind on offer: deals a hand |
 | `{"cmd":"skip_blind"}` | Skips the blind on offer (not the boss) |
@@ -119,7 +124,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 
 Responses:
 
-- `{"event":"state","state":{…}}`: game state: `ante`, `blind` (`small` / `big` /
+- `{"event":"state","state":{…}}`: game state: `run_deck` (the deck picked, or `null`), `ante`, `blind` (`small` / `big` /
   `boss`), the ante's three `blinds` (name, the boss's `description`, target, reward,
   `status`, and the `tag` skipping it gives), the ante's `boss` and `boss_active`, `target`, `score`,
   hands and discards left (in the `pack` phase, the hand is the one a coreutils pack
@@ -134,7 +139,8 @@ Responses:
   edition), `consumables` (`kind` = `theme` / `command` / `oligarchy`, `id`, `name`,
   `description`, `quip`, `price`, `sell_value`, `min_cards` / `max_cards` to select,
   `needs_hand` when it works on the cards in hand, `transparent` when it takes no slot), `consumable_slots`, `unique_themes`, `money`,
-  `reward` in the `won` phase (with `cards` for Enterprise cards held, and `notes` such
+  `reward` in the `won` phase (with `cards` for Enterprise cards held, `discards` for
+  the Raspberry Pi's unused discards, and `notes` such
   as "Beta Release broke."), `shop` offers
   (jokers, consumables or `{"kind":"card","card":…,"price":n}`, told apart by `kind`), `packs` for sale, and `opened`: the
   pack being opened (`name`, `description`, `picks_left`, `with_hand`, and its
@@ -145,11 +151,14 @@ Responses:
   trigger, with chips and mult afterwards) to animate the calculation, and the `total`.
   A step's `source` is a played `card`, a `held` card or a `joker`; its `effect` is
   `{"chips":n}`, `{"mult":n}`, `{"x_mult":n}`, `{"money":n}`, `"again"` (a retrigger) or
-  `"debuffed"` (the boss keeps the card from scoring).
+  `"debuffed"` (the boss keeps the card from scoring) or `"balance"` (a `deck` source:
+  Hyprland Dwindle evens out chips and mult).
   `money` is what the hand earned, `notes` what happened to the jokers.
 - `{"event":"preview","cards":[…],"hand":"pair","hand_name":"Pair","scoring":[…],"base_chips":10,"base_mult":2.0}`
   (`hand` is `null` when nothing is chosen, `scoring` holds hand indices), with
   `bonuses`: each joker's badge if this hand were played.
+- `{"event":"decks","decks":[…]}` after `decks`: each deck's `id`, `name`,
+  `description` and `quip`.
 - `{"event":"error","message":"…"}`.
 
 The hand is always sorted by descending rank.

@@ -54,6 +54,8 @@ pub enum Effect {
     Again,
     /// A boss keeps the card from scoring.
     Debuffed,
+    /// Hyprland Dwindle: chips and mult are balanced.
+    Balance,
 }
 
 impl Effect {
@@ -62,7 +64,7 @@ impl Effect {
             Effect::Chips(c) => *chips += c,
             Effect::Mult(m) => *mult += m,
             Effect::XMult(x) => *mult *= x,
-            Effect::Money(_) | Effect::Again | Effect::Debuffed => {}
+            Effect::Money(_) | Effect::Again | Effect::Debuffed | Effect::Balance => {}
         }
     }
 }

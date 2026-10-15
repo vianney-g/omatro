@@ -9,6 +9,7 @@ use crate::joker::{Bonus, Joker, OwnedJoker, Rarity};
 use crate::modifier::{Edition, Enhancement, Seal};
 use crate::pack::{Pack, PackKind, SHOP_PACKS};
 use crate::rng::Rng;
+use crate::run_deck::Deck;
 use crate::score::{Breakdown, Table, copy_target, score};
 use crate::tag::Tag;
 use crate::voucher::{VOUCHER_PRICE, Voucher};
@@ -247,6 +248,26 @@ pub struct BlindInfo {
     pub tag: Option<TagInfo>,
 }
 
+/// A starting deck.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DeckInfo {
+    pub id: Deck,
+    pub name: &'static str,
+    pub description: &'static str,
+    pub quip: &'static str,
+}
+
+impl From<Deck> for DeckInfo {
+    fn from(deck: Deck) -> Self {
+        DeckInfo {
+            id: deck,
+            name: deck.name(),
+            description: deck.description(),
+            quip: deck.quip(),
+        }
+    }
+}
+
 /// A badge: "label: value", like a README badge.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct TagInfo {
@@ -296,6 +317,8 @@ pub struct Reward {
     pub cards: u32,
     /// funding: series A.
     pub badges: u32,
+    /// Raspberry Pi: $1 per discard left.
+    pub discards: u32,
     pub total: u32,
     /// What happened to the jokers ("Beta Release broke.").
     pub notes: Vec<String>,
@@ -436,6 +459,8 @@ pub struct State {
     pub vouchers_for_sale: Vec<VoucherInfo>,
     /// Badges won and waiting for their moment.
     pub tags: Vec<TagInfo>,
+    /// The deck the game is played with.
+    pub run_deck: Option<DeckInfo>,
     /// Change Request: what rerolling the boss costs, when allowed now.
     pub boss_reroll_cost: Option<u32>,
     pub hand_size: usize,
@@ -688,12 +713,18 @@ pub struct Game {
     free_packs: bool,
     /// Packs won by badges, opened one after the other.
     pending_packs: Vec<Pack>,
+    /// The deck the game is played with (none: the plain one).
+    run_deck: Option<Deck>,
     /// Beta Release broke: it is gone from the shop, Stable Release shows up.
     beta_broken: bool,
 }
 
 impl Game {
     pub fn new(seed: u64, jokers: Vec<Joker>) -> Self {
+        Self::with_deck(seed, jokers, None)
+    }
+
+    pub fn with_deck(seed: u64, jokers: Vec<Joker>, deck: Option<Deck>) -> Self {
         let mut game = Game {
             seed,
             deck_rng: Rng::stream(seed, "deck"),
@@ -758,13 +789,65 @@ impl Game {
             free_offers: Vec::new(),
             free_packs: false,
             pending_packs: Vec::new(),
+            run_deck: deck,
             beta_broken: false,
         };
+        game.set_up_deck();
         game.roll_boss();
         game.roll_voucher();
         game.roll_blind_tags();
         game.await_blind();
         game
+    }
+
+    fn deck_is(&self, deck: Deck) -> bool {
+        self.run_deck == Some(deck)
+    }
+
+    /// What the deck gives at the start: money, pull requests, consumables, and
+    /// the cards themselves.
+    fn set_up_deck(&mut self) {
+        let Some(deck) = self.run_deck else { return };
+        match deck {
+            Deck::Basecamp => self.money += 10,
+            Deck::OmakaseInstall => {
+                self.merge(Voucher::ClipboardManager);
+                for _ in 0..2 {
+                    self.consumables
+                        .push(Consumable::Command(Command::UpArrow).into());
+                }
+            }
+            Deck::ThemeHopper => self.merge(Voucher::ThemePreview),
+            Deck::BoardMember => self
+                .consumables
+                .push(Consumable::Oligarchy(Oligarchy::Restructuring).into()),
+            Deck::PowerUser => {
+                for voucher in [
+                    Voucher::ShellAliases,
+                    Voucher::ThemeGallery,
+                    Voucher::MoreWorkspaces,
+                ] {
+                    self.merge(voucher);
+                }
+            }
+            Deck::MacRefugee => self.deck.retain(|c| !c.is_face()),
+            Deck::DualBoot => {
+                for card in &mut self.deck {
+                    card.suit = match card.suit {
+                        Suit::Clubs => Suit::Spades,
+                        Suit::Diamonds => Suit::Hearts,
+                        suit => suit,
+                    };
+                }
+            }
+            Deck::LiveUsb => {
+                for card in &mut self.deck {
+                    card.rank = 2 + self.card_rng.below(13) as u8;
+                    card.suit = Suit::ALL[self.card_rng.below(4) as usize];
+                }
+            }
+            _ => {}
+        }
     }
 
     /// The badges the small and big blinds of this ante give if skipped.
@@ -996,14 +1079,17 @@ impl Game {
     }
 
     fn hands_per_blind(&self) -> u32 {
-        let more = self.merged(&[Voucher::Overtime, Voucher::CrunchTime]) as u32;
-        let less = self.merged(&[Voucher::GitRevert]) as u32;
+        let more = self.merged(&[Voucher::Overtime, Voucher::CrunchTime]) as u32
+            + u32::from(self.deck_is(Deck::Framework));
+        let less =
+            self.merged(&[Voucher::GitRevert]) as u32 + u32::from(self.deck_is(Deck::GamingRig));
         (HANDS_PER_BLIND + more).saturating_sub(less).max(1)
     }
 
     fn discards_per_blind(&self) -> u32 {
-        let more =
-            self.count(Joker::UndoHistory) + self.merged(&[Voucher::RmI, Voucher::EmptyTrash]);
+        let more = self.count(Joker::UndoHistory)
+            + self.merged(&[Voucher::RmI, Voucher::EmptyTrash])
+            + usize::from(self.deck_is(Deck::ThinkPad));
         let less = self.merged(&[Voucher::GitResetHard]);
         (DISCARDS_PER_BLIND + more as u32).saturating_sub(less as u32)
     }
@@ -1019,7 +1105,8 @@ impl Game {
     }
 
     fn consumable_slots(&self) -> usize {
-        CONSUMABLE_SLOTS + self.merged(&[Voucher::ClipboardManager])
+        (CONSUMABLE_SLOTS + self.merged(&[Voucher::ClipboardManager]))
+            .saturating_sub(usize::from(self.deck_is(Deck::ThemeHopper)))
     }
 
     fn base_reroll_cost(&self) -> u32 {
@@ -1064,9 +1151,15 @@ impl Game {
 
     /// The boss blind's target follows the boss (The Kubernetes Cluster ×4…).
     fn target_of(&self, kind: BlindKind) -> f64 {
-        match kind {
+        let base = match kind {
             BlindKind::Boss => blind::ante_base(self.ante) * self.boss.multiplier(),
             _ => blind::target(self.ante, kind),
+        };
+        // Hyprland Dwindle: blinds are twice as big.
+        if self.deck_is(Deck::HyprlandDwindle) {
+            base * 2.0
+        } else {
+            base
         }
     }
 
@@ -1179,7 +1272,12 @@ impl Game {
             .count();
         let monitor = usize::from(self.boss_is(Boss::Monitor43));
         let displays = self.merged(&[Voucher::Hidpi, Voucher::Display4k]);
-        (HAND_SIZE + self.count(Joker::Ultrawide) + transparent + displays + self.juggle)
+        let studio = if self.deck_is(Deck::StudioDisplay) {
+            2
+        } else {
+            0
+        };
+        (HAND_SIZE + self.count(Joker::Ultrawide) + transparent + displays + self.juggle + studio)
             .saturating_sub(self.hand_size_penalty + monitor)
             .max(1)
     }
@@ -1211,7 +1309,11 @@ impl Game {
             .iter()
             .filter(|j| j.edition == Some(Edition::Transparent))
             .count();
-        MAX_JOKERS + transparent + self.merged(&[Voucher::FeatureFlag])
+        (MAX_JOKERS
+            + transparent
+            + self.merged(&[Voucher::FeatureFlag])
+            + usize::from(self.deck_is(Deck::GamingRig)))
+        .saturating_sub(usize::from(self.deck_is(Deck::StudioDisplay)))
     }
 
     fn four_fingers(&self) -> bool {
@@ -1466,6 +1568,7 @@ impl Game {
             halve_base: boss == Some(Boss::ThermalThrottle),
             disabled_joker: self.disabled_joker,
             showcase: &showcase,
+            balance: self.deck_is(Deck::HyprlandDwindle),
         };
         let mut breakdown = score(&table, &mut self.score_rng);
         breakdown.notes = notes;
@@ -1662,6 +1765,10 @@ impl Game {
         self.phase = Phase::Won;
         self.unused_discards += self.discards_left;
         let mut reward = self.reward();
+        if self.blind == BlindKind::Boss && self.deck_is(Deck::GithubProfile) {
+            self.gain_tag(Tag::Badges2x);
+            reward.notes.push("GitHub Profile: badges: 2x.".into());
+        }
         if self.blind == BlindKind::Boss {
             let funded = 25 * self.take_tags(&[Tag::SeriesA]).len() as u32;
             if funded > 0 {
@@ -1776,8 +1883,15 @@ impl Game {
             BlindKind::Boss => self.boss.reward(),
             kind => kind.reward(),
         };
-        let hands = self.hands_left;
-        let interest = (self.money / 5).min(self.max_interest());
+        // Raspberry Pi: $2 per hand and $1 per discard left, but no interest.
+        let pi = self.deck_is(Deck::RaspberryPi);
+        let hands = self.hands_left * if pi { 2 } else { 1 };
+        let discards = if pi { self.discards_left } else { 0 };
+        let interest = if pi {
+            0
+        } else {
+            (self.money / 5).min(self.max_interest())
+        };
         let jokers = (0..self.jokers.len())
             .filter_map(|i| copy_target(&self.jokers, i))
             .map(|t| {
@@ -1795,7 +1909,8 @@ impl Game {
             jokers,
             cards,
             badges: 0,
-            total: blind + hands + interest + jokers + cards,
+            discards,
+            total: blind + hands + discards + interest + jokers + cards,
             notes: Vec::new(),
         }
     }
@@ -1854,10 +1969,15 @@ impl Game {
         } else {
             0.0
         };
+        let oligarchy = if self.deck_is(Deck::BoardMember) {
+            2.0
+        } else {
+            0.0
+        };
         let slots =
             SHOP_OFFERS + self.merged(&[Voucher::MoreWorkspaces, Voucher::EvenMoreWorkspaces]);
         for _ in 0..slots {
-            let roll = rng.unit() * (20.0 + theme + command + card);
+            let roll = rng.unit() * (20.0 + theme + command + card + oligarchy);
             let offer = if roll < 20.0 {
                 self.roll_joker(&mut rng)
             } else if roll < 20.0 + theme {
@@ -1865,8 +1985,12 @@ impl Game {
             } else if roll < 20.0 + theme + command {
                 let command = Command::ALL[rng.below(Command::ALL.len() as u64) as usize];
                 Some(Offer::Consumable(Consumable::Command(command)))
-            } else {
+            } else if roll < 20.0 + theme + command + card {
                 Some(Offer::Card(self.shop_card(&mut rng)))
+            } else {
+                Some(Offer::Consumable(Consumable::Oligarchy(roll_oligarchy(
+                    &mut rng,
+                ))))
             };
             match offer {
                 Some(offer) => {
@@ -2931,6 +3055,7 @@ impl Game {
             },
             boss_reroll_cost: self.boss_reroll_cost(),
             tags: self.tags.iter().map(|&t| t.into()).collect(),
+            run_deck: self.run_deck.map(DeckInfo::from),
             hand_size: self.hand_size(),
             remaining: {
                 let mut cards = match self.phase {
@@ -3271,6 +3396,7 @@ mod tests {
                 jokers: 3,
                 cards: 0,
                 badges: 0,
+                discards: 0,
                 total: 9,
                 notes: vec![],
             })
@@ -4491,6 +4617,105 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    fn deck_game(seed: u64, deck: Deck) -> Game {
+        Game::with_deck(seed, vec![], Some(deck))
+    }
+
+    #[test]
+    fn decks_change_the_rules() {
+        let mut game = deck_game(130, Deck::ThinkPad);
+        game.select_blind().unwrap();
+        assert_eq!(game.discards_left, DISCARDS_PER_BLIND + 1);
+        let game = deck_game(131, Deck::GamingRig);
+        assert_eq!(
+            (game.hands_per_blind(), game.joker_slots()),
+            (HANDS_PER_BLIND - 1, MAX_JOKERS + 1)
+        );
+        let game = deck_game(132, Deck::StudioDisplay);
+        assert_eq!(
+            (game.hand_size(), game.joker_slots()),
+            (HAND_SIZE + 2, MAX_JOKERS - 1)
+        );
+        let game = deck_game(133, Deck::Basecamp);
+        assert_eq!(game.money, START_MONEY + 10);
+        let game = deck_game(134, Deck::ThemeHopper);
+        assert!(game.has(Voucher::ThemePreview));
+        assert_eq!(game.consumable_slots(), CONSUMABLE_SLOTS - 1);
+        let game = deck_game(135, Deck::OmakaseInstall);
+        assert_eq!((game.consumables.len(), game.consumable_slots()), (2, 3));
+        assert!(!game.voucher_offers.contains(&Voucher::ClipboardManager));
+    }
+
+    #[test]
+    fn decks_change_the_cards() {
+        let game = deck_game(136, Deck::MacRefugee);
+        assert_eq!(game.deck.len(), 40);
+        assert!(game.deck.iter().all(|c| !c.is_face()));
+        let game = deck_game(137, Deck::DualBoot);
+        assert_eq!(
+            game.deck.iter().filter(|c| c.suit == Suit::Spades).count(),
+            26
+        );
+        assert_eq!(
+            game.deck.iter().filter(|c| c.suit == Suit::Hearts).count(),
+            26
+        );
+        let live = deck_game(138, Deck::LiveUsb);
+        assert_ne!(live.deck, standard_deck());
+    }
+
+    #[test]
+    fn raspberry_pi_pays_hands_and_discards_but_no_interest() {
+        let mut game = deck_game(139, Deck::RaspberryPi);
+        game.money = 50;
+        game.select_blind().unwrap();
+        win(&mut game);
+        let reward = game.state().reward.unwrap();
+        assert_eq!((reward.hands, reward.discards, reward.interest), (6, 3, 0));
+    }
+
+    #[test]
+    fn hyprland_dwindle_balances_and_doubles_targets() {
+        let mut game = deck_game(140, Deck::HyprlandDwindle);
+        assert_eq!(game.target(), 600.0);
+        game.select_blind().unwrap();
+        game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
+        // Pair: 30 chips × 2 mult, balanced to 16 × 16.
+        let b = game.play(&[0, 1]).unwrap();
+        assert_eq!((b.chips, b.mult, b.total), (16, 16.0, 256.0));
+    }
+
+    #[test]
+    fn github_profile_doubles_the_next_badge_after_a_boss() {
+        let mut game = Game::with_deck(141, vec![Joker::Kill9], Some(Deck::GithubProfile));
+        game.cheat(Cheat {
+            blind: Some(BlindKind::Boss),
+            ..Cheat::default()
+        })
+        .unwrap();
+        game.select_blind().unwrap();
+        win(&mut game);
+        assert_eq!(game.tags, [Tag::Badges2x]);
+    }
+
+    #[test]
+    fn board_member_sells_oligarchy_cards() {
+        let mut game = Game::with_deck(142, vec![], Some(Deck::BoardMember));
+        assert!(matches!(
+            game.consumables[0].consumable,
+            Consumable::Oligarchy(Oligarchy::Restructuring)
+        ));
+        let mut seen = false;
+        for _ in 0..300 {
+            game.roll_offers();
+            seen |= game
+                .offers
+                .iter()
+                .any(|o| matches!(o, Offer::Consumable(Consumable::Oligarchy(_))));
+        }
+        assert!(seen);
     }
 
     #[test]
