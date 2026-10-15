@@ -1731,7 +1731,7 @@ impl Game {
         match boss {
             Some(Boss::ThermalThrottle) => triggered = true,
             Some(Boss::PerSeatLicense) => {
-                self.money -= played.len() as i64;
+                self.money = (self.money - played.len() as i64).max(-self.credit());
                 triggered = true;
             }
             Some(Boss::CloudBill) if most_played => {
@@ -1807,20 +1807,7 @@ impl Game {
         if self.score >= self.target() {
             self.win_blind();
         } else if self.hands_left == 0 {
-            let snapshot = self
-                .jokers
-                .iter()
-                .position(|j| j.joker == Joker::BtrfsSnapshot);
-            match snapshot {
-                Some(i) if self.score >= self.target() / 4.0 => {
-                    self.jokers.remove(i);
-                    breakdown
-                        .notes
-                        .push("Btrfs Snapshot rolled the blind back to a win.".into());
-                    self.win_blind();
-                }
-                _ => self.phase = Phase::Lost,
-            }
+            breakdown.notes.extend(self.fail_blind());
         } else {
             if self.boss_is(Boss::OomKiller) && !self.hand.is_empty() {
                 let mut ids: Vec<u32> = self.hand.iter().map(|c| c.id).collect();
@@ -1834,8 +1821,39 @@ impl Game {
             self.draw(Draw::AfterHand);
             self.pick_disabled_joker();
             self.pick_forced_card();
+            breakdown.notes.extend(self.out_of_cards());
         }
         breakdown
+    }
+
+    /// The blind ends short of its target: lost, unless Btrfs Snapshot saves
+    /// it (then says so).
+    fn fail_blind(&mut self) -> Option<String> {
+        let snapshot = self
+            .jokers
+            .iter()
+            .position(|j| j.joker == Joker::BtrfsSnapshot);
+        match snapshot {
+            Some(i) if self.score >= self.target() / 4.0 => {
+                self.jokers.remove(i);
+                self.win_blind();
+                Some("Btrfs Snapshot rolled the blind back to a win.".into())
+            }
+            _ => {
+                self.phase = Phase::Lost;
+                None
+            }
+        }
+    }
+
+    /// No card left in hand nor to draw: the blind cannot go on.
+    fn out_of_cards(&mut self) -> Option<String> {
+        let empty = self.hand.is_empty() && self.draw_pile.is_empty();
+        if self.phase == Phase::Playing && empty {
+            self.fail_blind()
+        } else {
+            None
+        }
     }
 
     /// Jokers that change the played cards before they score, left to right:
@@ -2082,6 +2100,7 @@ impl Game {
         });
         self.draw(Draw::AfterDiscard);
         self.pick_forced_card();
+        self.out_of_cards();
         Ok(())
     }
 
@@ -2647,8 +2666,14 @@ impl Game {
         let consumable = self.consumable(index)?;
         let targets = self.targets(consumable, cards)?;
         self.check_usable(consumable)?;
+        self.update_luck();
         self.consumables.remove(index);
         self.apply_consumable(consumable, &targets);
+        // A hand destroyed whole is dealt again, or nothing could be played.
+        if self.phase == Phase::Playing && self.hand.is_empty() {
+            self.draw(Draw::AfterHand);
+        }
+        self.out_of_cards();
         Ok(())
     }
 
@@ -5012,6 +5037,32 @@ mod tests {
             assert!(swap.end_of_blind(false, &mut Rng::new(1)));
         }
         assert!(!swap.end_of_blind(false, &mut Rng::new(1)));
+    }
+
+    #[test]
+    fn running_out_of_cards_loses_the_blind() {
+        let mut game = playing(1, vec![]);
+        game.draw_pile.clear();
+        game.hand.truncate(1);
+        game.play(&[0]).unwrap();
+        assert_eq!((game.phase, game.hands_left), (Phase::Lost, HANDS_PER_BLIND - 1));
+    }
+
+    #[test]
+    fn a_hand_destroyed_whole_is_dealt_again() {
+        let mut game = playing(1, vec![]);
+        game.consumables = vec![Consumable::Oligarchy(Oligarchy::MassLayoffs).into()];
+        game.hand.truncate(3);
+        game.use_consumable(0, &[]).unwrap();
+        assert_eq!(game.hand.len(), HAND_SIZE);
+    }
+
+    #[test]
+    fn per_seat_license_stops_at_zero() {
+        let mut game = boss_game(1, Boss::PerSeatLicense, vec![]);
+        game.money = 2;
+        game.play(&[0, 1, 2, 3, 4]).unwrap();
+        assert_eq!(game.money, 0);
     }
 
     #[test]

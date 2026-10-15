@@ -1,7 +1,7 @@
 PREFIX ?= $(HOME)/.local
 OLD_PLUGIN := $(HOME)/.config/omarchy/plugins/io.github.vianney-g.omatro
 
-.PHONY: test docs build run install uninstall
+.PHONY: test docs bot build run install uninstall
 
 test:
 	cargo test --workspace
@@ -9,6 +9,11 @@ test:
 # Regenerates the references in docs/ from the engine code.
 docs:
 	UPDATE_DOCS=1 cargo test -q -p omatro-engine docs_are_up_to_date
+
+# Plays many games through the protocol: crashes, stuck games, broken
+# invariants, and wins per deck, joker and boss. ARGS="2000 1 --endless --chaos".
+bot:
+	cargo run --release -q -p omatro-engine --example bot -- $(ARGS)
 
 build:
 	cargo build --release -p omatro

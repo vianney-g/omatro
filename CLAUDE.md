@@ -26,6 +26,7 @@ cargo test -p omatro-engine        # engine tests only (no Qt build needed)
 cargo test -p omatro-engine hand:: # one module, or a specific test name
 make run                           # release build, then runs target/release/omatro
 make install                       # installs into ~/.local (binary, .desktop, icon)
+make bot ARGS="2000 1 --chaos"     # bot games: crashes, stuck games, invariants, stats
 cargo run -p omatro-engine         # engine alone: JSON commands on stdin, one per line
 ```
 
@@ -76,6 +77,13 @@ A Cargo workspace with two crates:
   `jokerRow.jokerWidth`).
 
 ## Debugging and screenshots
+
+`engine/examples/bot.rs` plays whole games through `Session::handle` on many seeds
+(`[games] [first seed]`, `--endless`, `--chaos` for debug money, jokers and
+consumables, `--trace` to follow one seed on stderr). It reports panics, stuck games,
+broken invariants (`Bot::check`: add new ones there) and refused commands, then wins
+per deck, joker and boss. Run it in both modes after changing rules: every problem
+it lists is a bug, in the engine or in the bot.
 
 `OMATRO_DEBUG=1` makes `Session::from_env()` accept the `debug` command (`Cheat` in
 `game.rs`: money, jokers, jump to an ante or blind, win the blind in progress); the app
