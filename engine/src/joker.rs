@@ -158,18 +158,253 @@ pub enum Joker {
     IncidentCommander,
     Rollback,
     SkipIntro,
+    DeepDive,
+    MeetupPizza,
+    GemInstall,
+    EmojiReaction,
+    Error404,
+    BitTwiddling,
+    ProfilePicture,
+    QueueManager,
+    TwoFactorAuth,
+    MiddleManagement,
+    SplitBrain,
+    RainbowPrompt,
+    PitchBlack,
+    JqFilter,
+    FuzzyFinder,
+    Identicon,
+    BigBangRelease,
+    FastForward,
+    ChaosMonkey,
+    RollingRelease,
+    DailyDriver,
+    LogRotation,
+    BugBounty,
+    TodoMd,
+    GarageSale,
+    Quine,
+    Headhunter,
+    EmptyWorkspace,
+    InboxZero,
+    ReleaseTrain,
+    CrunchTime,
+    FridayDeploy,
+    WarmStart,
+    GridLayout,
+    DotfilesBak,
+    HipsterStack,
+    EspressoShot,
+    HypeCycle,
+    EnergyDrink,
+    SwapFile,
+    Bloatware,
+    Backspace,
+    VerticalMonitor,
+    ForcePush,
+    MinimalWaybar,
+    PluginManager,
+    PacmanCache,
+    BitRot,
+    FreeRam,
+    OwnedServers,
+    Bootstrapped,
+    Homelab,
+    PackageMaintainer,
+    CloudCredits,
+    SemverInflation,
+    NineNines,
+    HockeyStick,
+    CompoundInterest,
+    StickerPack,
+    RefreshSpam,
+    Paru,
+    Flatpak,
+    BtrfsSnapshot,
+    Syncthing,
+    Upstream,
+    TransitiveDependencies,
+    RmRfNodeModules,
+    DistroHopping,
+}
+
+/// What the jokers that aim at something get at each blind.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Targets {
+    /// Rolling Release: the suit that scores ×1.5.
+    pub suit: Suit,
+    /// Daily Driver: the card (rank, suit) that scores ×2.
+    pub card: (u8, Suit),
+    /// Log Rotation: the suit to discard.
+    pub discard_suit: Suit,
+    /// Bug Bounty: the rank to discard.
+    pub rank: u8,
+    /// TODO.md: the hand type to play.
+    pub hand: HandKind,
+}
+
+impl Default for Targets {
+    fn default() -> Self {
+        Targets {
+            suit: Suit::Spades,
+            card: (ACE, Suit::Spades),
+            discard_suit: Suit::Spades,
+            rank: ACE,
+            hand: HandKind::HighCard,
+        }
+    }
+}
+
+impl Targets {
+    pub fn draw(rng: &mut Rng, deck: &[Card]) -> Self {
+        let suit = |rng: &mut Rng| Suit::ALL[rng.below(4) as usize];
+        let ranked: Vec<&Card> = deck.iter().filter(|c| c.has_rank()).collect();
+        let card = match ranked.len() {
+            0 => (ACE, Suit::Spades),
+            n => {
+                let c = ranked[rng.below(n as u64) as usize];
+                (c.rank, c.suit)
+            }
+        };
+        let hands: Vec<HandKind> = HandKind::ALL.into_iter().filter(|k| !k.secret()).collect();
+        Targets {
+            suit: suit(rng),
+            card,
+            discard_suit: suit(rng),
+            rank: 2 + rng.below(13) as u8,
+            hand: hands[rng.below(hands.len() as u64) as usize],
+        }
+    }
+}
+
+/// A rank as written on the cards: 2 to 10, J, Q, K, A.
+pub fn rank_label(rank: u8) -> String {
+    match rank {
+        11 => "J".into(),
+        12 => "Q".into(),
+        13 => "K".into(),
+        ACE => "A".into(),
+        n => n.to_string(),
+    }
+}
+
+/// What jokers see of the game, while scoring and for their badges.
+#[derive(Default)]
+pub struct Board<'a> {
+    /// The whole deck.
+    pub deck: &'a [Card],
+    /// Cards left to draw.
+    pub draw_pile: usize,
+    /// Size of the deck at the start of the game (Bit Rot).
+    pub starting_deck: usize,
+    pub jokers: &'a [OwnedJoker],
+    pub joker_slots: usize,
+    pub money: i64,
+    /// Hands left, the one being played included.
+    pub hands_left: u32,
+    pub discards_left: u32,
+    pub unique_themes: u32,
+    pub targets: Targets,
+    /// Hand types played earlier in this blind.
+    pub blind_hands: &'a [HandKind],
+}
+
+impl Board<'_> {
+    /// Minimal Waybar: empty slots, and itself.
+    fn waybar(&self) -> f64 {
+        let waybars = self
+            .jokers
+            .iter()
+            .filter(|j| j.joker == Joker::MinimalWaybar)
+            .count();
+        (self.joker_slots.saturating_sub(self.jokers.len()) + waybars) as f64
+    }
+
+    /// Bit Rot: cards the deck lost since the start.
+    fn lost_cards(&self) -> usize {
+        self.starting_deck.saturating_sub(self.deck.len())
+    }
+
+    /// Homelab: sell value of the other jokers.
+    fn resale(&self) -> u32 {
+        self.jokers
+            .iter()
+            .filter(|j| j.joker != Joker::Homelab)
+            .map(OwnedJoker::sell_value)
+            .sum()
+    }
+
+    /// Package Maintainer: ×1.5 per extra joker.
+    fn maintained(&self) -> f64 {
+        let extras = self
+            .jokers
+            .iter()
+            .filter(|j| j.joker.rarity() == Rarity::Extra)
+            .count();
+        1.5f64.powi(extras as i32)
+    }
+
+    fn nines(&self) -> u32 {
+        self.deck
+            .iter()
+            .filter(|c| c.has_rank() && c.rank == 9)
+            .count() as u32
+    }
 }
 
 /// What a joker sees of the hand being scored.
 pub struct HandContext<'a> {
     pub played: &'a [Card],
+    /// Cards left in hand.
+    pub held: &'a [Card],
     pub evaluated: &'a Evaluated,
     /// Times this hand type was played this game, this one included.
     pub times_played: u32,
-    /// The whole deck.
-    pub deck: &'a [Card],
     /// Flaky Test cards that triggered in this hand.
     pub lucky_hits: u32,
+    pub board: &'a Board<'a>,
+}
+
+impl HandContext<'_> {
+    fn scoring(&self) -> Vec<Card> {
+        self.evaluated
+            .scoring
+            .iter()
+            .map(|&i| self.played[i])
+            .collect()
+    }
+}
+
+/// Split Brain: a club and a card of another suit, two different cards.
+fn split_brain(cards: &[Card]) -> bool {
+    let others = [Suit::Hearts, Suit::Diamonds, Suit::Spades];
+    cards.iter().enumerate().any(|(i, a)| {
+        a.is_suit(Suit::Clubs)
+            && cards
+                .iter()
+                .enumerate()
+                .any(|(j, b)| i != j && others.iter().any(|&s| b.is_suit(s)))
+    })
+}
+
+/// Rainbow Prompt: each suit covered by a different card.
+fn all_suits(cards: &[Card]) -> bool {
+    fn cover(cards: &[Card], used: &mut Vec<usize>, suit: usize) -> bool {
+        if suit == Suit::ALL.len() {
+            return true;
+        }
+        for i in 0..cards.len() {
+            if !used.contains(&i) && cards[i].is_suit(Suit::ALL[suit]) {
+                used.push(i);
+                if cover(cards, used, suit + 1) {
+                    return true;
+                }
+                used.pop();
+            }
+        }
+        false
+    }
+    cover(cards, &mut Vec::new(), 0)
 }
 
 fn count(deck: &[Card], enhancement: Enhancement) -> usize {
@@ -193,7 +428,7 @@ fn is_even(card: Card) -> bool {
 }
 
 impl Joker {
-    pub const ALL: [Joker; 86] = [
+    pub const ALL: [Joker; 154] = [
         Joker::Dotfiles,
         Joker::Omakase,
         Joker::RubyGem,
@@ -280,6 +515,74 @@ impl Joker {
         Joker::IncidentCommander,
         Joker::Rollback,
         Joker::SkipIntro,
+        Joker::DeepDive,
+        Joker::MeetupPizza,
+        Joker::GemInstall,
+        Joker::EmojiReaction,
+        Joker::Error404,
+        Joker::BitTwiddling,
+        Joker::ProfilePicture,
+        Joker::QueueManager,
+        Joker::TwoFactorAuth,
+        Joker::MiddleManagement,
+        Joker::SplitBrain,
+        Joker::RainbowPrompt,
+        Joker::PitchBlack,
+        Joker::JqFilter,
+        Joker::FuzzyFinder,
+        Joker::Identicon,
+        Joker::BigBangRelease,
+        Joker::FastForward,
+        Joker::ChaosMonkey,
+        Joker::RollingRelease,
+        Joker::DailyDriver,
+        Joker::LogRotation,
+        Joker::BugBounty,
+        Joker::TodoMd,
+        Joker::GarageSale,
+        Joker::Quine,
+        Joker::Headhunter,
+        Joker::EmptyWorkspace,
+        Joker::InboxZero,
+        Joker::ReleaseTrain,
+        Joker::CrunchTime,
+        Joker::FridayDeploy,
+        Joker::WarmStart,
+        Joker::GridLayout,
+        Joker::DotfilesBak,
+        Joker::HipsterStack,
+        Joker::EspressoShot,
+        Joker::HypeCycle,
+        Joker::EnergyDrink,
+        Joker::SwapFile,
+        Joker::Bloatware,
+        Joker::Backspace,
+        Joker::VerticalMonitor,
+        Joker::ForcePush,
+        Joker::MinimalWaybar,
+        Joker::PluginManager,
+        Joker::PacmanCache,
+        Joker::BitRot,
+        Joker::FreeRam,
+        Joker::OwnedServers,
+        Joker::Bootstrapped,
+        Joker::Homelab,
+        Joker::PackageMaintainer,
+        Joker::CloudCredits,
+        Joker::SemverInflation,
+        Joker::NineNines,
+        Joker::HockeyStick,
+        Joker::CompoundInterest,
+        Joker::StickerPack,
+        Joker::RefreshSpam,
+        Joker::Paru,
+        Joker::Flatpak,
+        Joker::BtrfsSnapshot,
+        Joker::Syncthing,
+        Joker::Upstream,
+        Joker::TransitiveDependencies,
+        Joker::RmRfNodeModules,
+        Joker::DistroHopping,
     ];
 
     pub fn name(self) -> &'static str {
@@ -370,6 +673,74 @@ impl Joker {
             Joker::IncidentCommander => "Incident Commander",
             Joker::Rollback => "Rollback",
             Joker::SkipIntro => "Skip Intro",
+            Joker::DeepDive => "Deep Dive",
+            Joker::MeetupPizza => "Meetup Pizza",
+            Joker::GemInstall => "Gem Install",
+            Joker::EmojiReaction => "Emoji Reaction",
+            Joker::Error404 => "Error 404",
+            Joker::BitTwiddling => "Bit Twiddling",
+            Joker::ProfilePicture => "Profile Picture",
+            Joker::QueueManager => "Queue Manager",
+            Joker::TwoFactorAuth => "Two-Factor Auth",
+            Joker::MiddleManagement => "Middle Management",
+            Joker::SplitBrain => "Split Brain",
+            Joker::RainbowPrompt => "Rainbow Prompt",
+            Joker::PitchBlack => "Pitch Black",
+            Joker::JqFilter => "jq Filter",
+            Joker::FuzzyFinder => "Fuzzy Finder",
+            Joker::Identicon => "Identicon",
+            Joker::BigBangRelease => "Big Bang Release",
+            Joker::FastForward => "Fast-Forward",
+            Joker::ChaosMonkey => "Chaos Monkey",
+            Joker::RollingRelease => "Rolling Release",
+            Joker::DailyDriver => "Daily Driver",
+            Joker::LogRotation => "Log Rotation",
+            Joker::BugBounty => "Bug Bounty",
+            Joker::TodoMd => "TODO.md",
+            Joker::GarageSale => "Garage Sale",
+            Joker::Quine => "Quine",
+            Joker::Headhunter => "Headhunter",
+            Joker::EmptyWorkspace => "Empty Workspace",
+            Joker::InboxZero => "Inbox Zero",
+            Joker::ReleaseTrain => "Release Train",
+            Joker::CrunchTime => "Crunch Time",
+            Joker::FridayDeploy => "Friday Deploy",
+            Joker::WarmStart => "Warm Start",
+            Joker::GridLayout => "Grid Layout",
+            Joker::DotfilesBak => "dotfiles.bak",
+            Joker::HipsterStack => "Hipster Stack",
+            Joker::EspressoShot => "Espresso Shot",
+            Joker::HypeCycle => "Hype Cycle",
+            Joker::EnergyDrink => "Energy Drink",
+            Joker::SwapFile => "Swap File",
+            Joker::Bloatware => "Bloatware",
+            Joker::Backspace => "Backspace",
+            Joker::VerticalMonitor => "Vertical Monitor",
+            Joker::ForcePush => "Force Push",
+            Joker::MinimalWaybar => "Minimal Waybar",
+            Joker::PluginManager => "Plugin Manager",
+            Joker::PacmanCache => "Pacman Cache",
+            Joker::BitRot => "Bit Rot",
+            Joker::FreeRam => "Free RAM",
+            Joker::OwnedServers => "Owned Servers",
+            Joker::Bootstrapped => "Bootstrapped",
+            Joker::Homelab => "Homelab",
+            Joker::PackageMaintainer => "Package Maintainer",
+            Joker::CloudCredits => "Cloud Credits",
+            Joker::SemverInflation => "Semver Inflation",
+            Joker::NineNines => "Nine Nines",
+            Joker::HockeyStick => "Hockey Stick",
+            Joker::CompoundInterest => "Compound Interest",
+            Joker::StickerPack => "Sticker Pack",
+            Joker::RefreshSpam => "Refresh Spam",
+            Joker::Paru => "paru",
+            Joker::Flatpak => "Flatpak",
+            Joker::BtrfsSnapshot => "Btrfs Snapshot",
+            Joker::Syncthing => "Syncthing",
+            Joker::Upstream => "Upstream",
+            Joker::TransitiveDependencies => "Transitive Dependencies",
+            Joker::RmRfNodeModules => "rm -rf node_modules",
+            Joker::DistroHopping => "Distro Hopping",
         }
     }
 
@@ -471,6 +842,74 @@ impl Joker {
             Joker::IncidentCommander => "+$8 each time a boss blind's effect triggers",
             Joker::Rollback => "Sell it to disable the current boss blind's effect",
             Joker::SkipIntro => "Gains ×0.25 mult per blind skipped",
+            Joker::DeepDive => "+50 chips for each scoring spade",
+            Joker::MeetupPizza => "+7 mult for each scoring club",
+            Joker::GemInstall => "+$1 for each scoring diamond",
+            Joker::EmojiReaction => "+5 mult for each scoring face card",
+            Joker::Error404 => "+10 chips and +4 mult for each scoring 10 or 4",
+            Joker::BitTwiddling => "Retriggers every scoring 2, 3, 4 and 5",
+            Joker::ProfilePicture => "×2 mult for the first scoring face card",
+            Joker::QueueManager => "+13 mult for each queen held in hand",
+            Joker::TwoFactorAuth => "Gains +8 chips for each scoring 2",
+            Joker::MiddleManagement => "1 in 2 chance of +$1 for each face card held in hand",
+            Joker::SplitBrain => "×2 mult if a club and a card of another suit score",
+            Joker::RainbowPrompt => "×3 mult if all four suits score",
+            Joker::PitchBlack => "×3 mult if every card held in hand is a spade or a club",
+            Joker::JqFilter => "Gains ×0.5 mult per jack discarded; resets after each blind",
+            Joker::FuzzyFinder => "Hearts and diamonds count as each other, and so do spades and clubs",
+            Joker::Identicon => "Every card counts as a face card",
+            Joker::BigBangRelease => "Every played card scores",
+            Joker::FastForward => "Straights may skip one rank between two cards",
+            Joker::ChaosMonkey => "Doubles every chance (1 in 4 becomes 2 in 4)",
+            Joker::RollingRelease => "×1.5 mult for each scoring card of a suit drawn at each blind",
+            Joker::DailyDriver => "×2 mult for each scoring card matching a card drawn at each blind",
+            Joker::LogRotation => "Gains +3 chips per discarded card of a suit drawn at each blind",
+            Joker::BugBounty => "+$5 per discarded card of a rank drawn at each blind",
+            Joker::TodoMd => "+$4 if the hand is of a type drawn at each blind",
+            Joker::GarageSale => "If the first discard of a blind is a single card, destroys it and gives $3",
+            Joker::Quine => "If the first hand of a blind is a single card, adds a copy of it to the deck and the hand",
+            Joker::Headhunter => "+$5 when 3 face cards or more are discarded at once",
+            Joker::EmptyWorkspace => "+30 chips per discard left",
+            Joker::InboxZero => "+15 mult when no discard is left",
+            Joker::ReleaseTrain => "×4 mult every 6 hands played",
+            Joker::CrunchTime => "Retriggers every scoring card of the last hand of a blind",
+            Joker::FridayDeploy => "×3 mult on the last hand of a blind",
+            Joker::WarmStart => "×3 mult if the hand type was already played this blind",
+            Joker::GridLayout => "Gains +4 chips per hand of exactly 4 cards",
+            Joker::DotfilesBak => "Gains +2 mult per hand containing a Two Pair",
+            Joker::HipsterStack => "Gains ×0.2 mult per hand in a row that isn't your most played type",
+            Joker::EspressoShot => "Retriggers every scoring card, for 10 hands",
+            Joker::HypeCycle => "+20 mult, −4 mult at the end of each blind",
+            Joker::EnergyDrink => "×2 mult, −×0.01 mult per card discarded",
+            Joker::SwapFile => "+5 hand size, −1 at the end of each blind",
+            Joker::Bloatware => "+250 chips, −2 hand size",
+            Joker::Backspace => "+3 discards each blind, −1 hand size",
+            Joker::VerticalMonitor => "+2 hand size, −1 hand each blind",
+            Joker::ForcePush => "When a blind starts, +3 hands and no discards",
+            Joker::MinimalWaybar => "×1 mult per empty joker slot (Minimal Waybar counts as empty)",
+            Joker::PluginManager => "+3 mult per joker",
+            Joker::PacmanCache => "Gains ×0.25 mult per card added to the deck",
+            Joker::BitRot => "+4 mult per card the deck has lost since the start",
+            Joker::FreeRam => "+2 chips per card left to draw",
+            Joker::OwnedServers => "+2 chips per $1 you have",
+            Joker::Bootstrapped => "+2 mult per $5 you have",
+            Joker::Homelab => "Adds the sell value of your other jokers to mult",
+            Joker::PackageMaintainer => "×1.5 mult per extra joker you own",
+            Joker::CloudCredits => "You can spend down to −$20",
+            Joker::SemverInflation => "+$1 sell value to every joker and consumable at the end of each blind",
+            Joker::NineNines => "+$1 per 9 in the deck at the end of each blind",
+            Joker::HockeyStick => "+$1 at the end of each blind, +$2 more after each boss",
+            Joker::CompoundInterest => "+$1 of interest per $5 you have (same cap)",
+            Joker::StickerPack => "Sell it to win the badge badges: 2x",
+            Joker::RefreshSpam => "Gains +2 mult per shop reroll",
+            Joker::Paru => "One free reroll per shop",
+            Joker::Flatpak => "Jokers you own can show up in the shop again",
+            Joker::BtrfsSnapshot => "Saves a lost blind if you scored 25% of the target, then disappears",
+            Joker::Syncthing => "Sold after 2 blinds, copies another random joker",
+            Joker::Upstream => "Copies the ability of the leftmost joker",
+            Joker::TransitiveDependencies => "When a blind starts, creates 2 core jokers (if there is room)",
+            Joker::RmRfNodeModules => "When a blind starts, destroys the joker on its right and gains twice its sell value as mult",
+            Joker::DistroHopping => "When a small or big blind starts, gains ×0.5 mult and destroys another random joker",
         }
     }
 
@@ -564,6 +1003,74 @@ impl Joker {
             Joker::IncidentCommander => "Paged at 3 a.m. Billed at 9.",
             Joker::Rollback => "git revert HEAD. Everyone relax.",
             Joker::SkipIntro => "Netflix taught us well.",
+            Joker::DeepDive => "Three hours in, still reading source.",
+            Joker::MeetupPizza => "Free pizza, mandatory lightning talk.",
+            Joker::GemInstall => "bundle install, then go make coffee.",
+            Joker::EmojiReaction => "A rocket on every pull request.",
+            Joker::Error404 => "Card not found. Scored anyway.",
+            Joker::BitTwiddling => "Small values, flipped twice as hard.",
+            Joker::ProfilePicture => "First impression: doubled.",
+            Joker::QueueManager => "Queens waiting in line. Patiently.",
+            Joker::TwoFactorAuth => "Every 2 adds a layer. Every layer, a prompt.",
+            Joker::MiddleManagement => "Paid to be in the room.",
+            Joker::SplitBrain => "Two nodes, both think they're leader.",
+            Joker::RainbowPrompt => "Starship, with every glyph enabled.",
+            Joker::PitchBlack => "Black on black. Readable to you only.",
+            Joker::JqFilter => "Filters out the jacks. Keeps the value.",
+            Joker::FuzzyFinder => "fzf: close enough is a match.",
+            Joker::Identicon => "Every card gets a face. Even the twos.",
+            Joker::BigBangRelease => "Every card ships. No feature flags.",
+            Joker::FastForward => "Skips a commit or two. No one checks.",
+            Joker::ChaosMonkey => "Doubles the odds of everything.",
+            Joker::RollingRelease => "Today's favorite suit, until the next update.",
+            Joker::DailyDriver => "This one card. Today, anyway.",
+            Joker::LogRotation => "Rotates daily. Keeps every line.",
+            Joker::BugBounty => "Report the right bug, get paid.",
+            Joker::TodoMd => "One item. Changes every blind.",
+            Joker::GarageSale => "Old hardware, cash only.",
+            Joker::Quine => "Prints itself. Adds itself to the deck.",
+            Joker::Headhunter => "Three managers out. Budget's back.",
+            Joker::EmptyWorkspace => "Workspaces 6 through 10, still empty.",
+            Joker::InboxZero => "Everything discarded. Finally at peace.",
+            Joker::ReleaseTrain => "Leaves every six hands. Packed.",
+            Joker::CrunchTime => "Final hand. Everything runs twice.",
+            Joker::FridayDeploy => "Last hand, no rollback, maximum mult.",
+            Joker::WarmStart => "Seen it this blind. Faster now.",
+            Joker::GridLayout => "Four windows, not a pixel wasted.",
+            Joker::DotfilesBak => "Two of everything. Just in case.",
+            Joker::HipsterStack => "Never the popular framework.",
+            Joker::EspressoShot => "Everything twice, for ten hands.",
+            Joker::HypeCycle => "Peak of inflated expectations.",
+            Joker::EnergyDrink => "×2 now. Crash later.",
+            Joker::SwapFile => "Plenty of room. Shrinks every reboot.",
+            Joker::Bloatware => "Huge numbers. No room for anything.",
+            Joker::Backspace => "Worn smooth from all the deleting.",
+            Joker::VerticalMonitor => "Taller view, fewer turns.",
+            Joker::ForcePush => "No discards. No regrets. Push.",
+            Joker::MinimalWaybar => "Less widgets, more wallpaper.",
+            Joker::PluginManager => "lazy.nvim, 87 plugins, 12 ms startup.",
+            Joker::PacmanCache => "Every package you add, kept forever.",
+            Joker::BitRot => "Fewer cards, sharper teeth.",
+            Joker::FreeRam => "Unused RAM is wasted RAM.",
+            Joker::OwnedServers => "Paid once. Yours forever.",
+            Joker::Bootstrapped => "No VCs. Profitable since day one.",
+            Joker::Homelab => "Spare parts, adding up.",
+            Joker::PackageMaintainer => "Every extra package, lovingly maintained.",
+            Joker::CloudCredits => "Free until the invoice arrives.",
+            Joker::SemverInflation => "1.0.0 to 47.2.0, same features.",
+            Joker::NineNines => "99.9999999% uptime, billed per nine.",
+            Joker::HockeyStick => "Growth chart up and to the right.",
+            Joker::CompoundInterest => "Einstein's favorite. Allegedly.",
+            Joker::StickerPack => "Free stickers at every conference.",
+            Joker::RefreshSpam => "F5 until something changes.",
+            Joker::Paru => "Free reroll, now in Rust.",
+            Joker::Flatpak => "The same app, installed three times.",
+            Joker::BtrfsSnapshot => "Rolled back from the brink. Once.",
+            Joker::Syncthing => "Two blinds to sync, then a perfect copy.",
+            Joker::Upstream => "Tracks the first joker, always.",
+            Joker::TransitiveDependencies => "You installed one. Got two more.",
+            Joker::RmRfNodeModules => "Frees 2 GB. Feels like a win.",
+            Joker::DistroHopping => "Wipe everything, reinstall, feel alive.",
         }
     }
 
@@ -609,6 +1116,55 @@ impl Joker {
             | Joker::OrphanCleanup
             | Joker::Fork
             | Joker::SeniorEngineer => Rarity::Aur,
+            Joker::DeepDive
+            | Joker::MeetupPizza
+            | Joker::GemInstall
+            | Joker::BitTwiddling
+            | Joker::SplitBrain
+            | Joker::RainbowPrompt
+            | Joker::PitchBlack
+            | Joker::FuzzyFinder
+            | Joker::Identicon
+            | Joker::FastForward
+            | Joker::ChaosMonkey
+            | Joker::DailyDriver
+            | Joker::LogRotation
+            | Joker::GarageSale
+            | Joker::ReleaseTrain
+            | Joker::CrunchTime
+            | Joker::FridayDeploy
+            | Joker::WarmStart
+            | Joker::DotfilesBak
+            | Joker::EspressoShot
+            | Joker::EnergyDrink
+            | Joker::SwapFile
+            | Joker::Backspace
+            | Joker::VerticalMonitor
+            | Joker::ForcePush
+            | Joker::MinimalWaybar
+            | Joker::PacmanCache
+            | Joker::BitRot
+            | Joker::OwnedServers
+            | Joker::Bootstrapped
+            | Joker::SemverInflation
+            | Joker::NineNines
+            | Joker::HockeyStick
+            | Joker::CompoundInterest
+            | Joker::StickerPack
+            | Joker::RefreshSpam
+            | Joker::Flatpak
+            | Joker::BtrfsSnapshot
+            | Joker::RmRfNodeModules
+            | Joker::DistroHopping => Rarity::Extra,
+            Joker::TwoFactorAuth
+            | Joker::JqFilter
+            | Joker::RollingRelease
+            | Joker::Quine
+            | Joker::HipsterStack
+            | Joker::Bloatware
+            | Joker::PackageMaintainer
+            | Joker::Syncthing
+            | Joker::Upstream => Rarity::Aur,
             _ => Rarity::Core,
         }
     }
@@ -700,6 +1256,74 @@ impl Joker {
             | Joker::MailingList
             | Joker::Kill9
             | Joker::CopyOnWrite => 20,
+            Joker::CloudCredits => 2,
+            Joker::BigBangRelease => 3,
+            Joker::EmojiReaction
+            | Joker::Error404
+            | Joker::ChaosMonkey
+            | Joker::BugBounty
+            | Joker::TodoMd
+            | Joker::Headhunter
+            | Joker::GridLayout
+            | Joker::PluginManager
+            | Joker::Homelab
+            | Joker::Paru => 4,
+            Joker::ProfilePicture
+            | Joker::QueueManager
+            | Joker::Identicon
+            | Joker::EmptyWorkspace
+            | Joker::InboxZero
+            | Joker::ReleaseTrain
+            | Joker::CrunchTime
+            | Joker::HypeCycle
+            | Joker::FreeRam
+            | Joker::CompoundInterest
+            | Joker::RefreshSpam
+            | Joker::Flatpak
+            | Joker::BtrfsSnapshot => 5,
+            Joker::DeepDive
+            | Joker::BitTwiddling
+            | Joker::MiddleManagement
+            | Joker::SplitBrain
+            | Joker::RainbowPrompt
+            | Joker::PitchBlack
+            | Joker::DailyDriver
+            | Joker::LogRotation
+            | Joker::GarageSale
+            | Joker::FridayDeploy
+            | Joker::WarmStart
+            | Joker::DotfilesBak
+            | Joker::EspressoShot
+            | Joker::EnergyDrink
+            | Joker::SwapFile
+            | Joker::VerticalMonitor
+            | Joker::ForcePush
+            | Joker::BitRot
+            | Joker::OwnedServers
+            | Joker::SemverInflation
+            | Joker::HockeyStick
+            | Joker::StickerPack
+            | Joker::TransitiveDependencies
+            | Joker::RmRfNodeModules => 6,
+            Joker::MeetupPizza
+            | Joker::GemInstall
+            | Joker::FuzzyFinder
+            | Joker::FastForward
+            | Joker::Bloatware
+            | Joker::Backspace
+            | Joker::PacmanCache
+            | Joker::Bootstrapped
+            | Joker::NineNines
+            | Joker::DistroHopping => 7,
+            Joker::TwoFactorAuth
+            | Joker::JqFilter
+            | Joker::RollingRelease
+            | Joker::Quine
+            | Joker::HipsterStack
+            | Joker::MinimalWaybar
+            | Joker::PackageMaintainer
+            | Joker::Syncthing => 8,
+            Joker::Upstream => 10,
         }
     }
 
@@ -716,6 +1340,21 @@ impl Joker {
                 | Joker::EnterpriseSales
                 | Joker::Kill9
                 | Joker::Rollback
+                | Joker::FuzzyFinder
+                | Joker::Identicon
+                | Joker::BigBangRelease
+                | Joker::FastForward
+                | Joker::ChaosMonkey
+                | Joker::SwapFile
+                | Joker::Backspace
+                | Joker::VerticalMonitor
+                | Joker::CloudCredits
+                | Joker::CompoundInterest
+                | Joker::StickerPack
+                | Joker::Paru
+                | Joker::Flatpak
+                | Joker::BtrfsSnapshot
+                | Joker::Syncthing
         )
     }
 
@@ -723,7 +1362,16 @@ impl Joker {
     fn initial_counter(self) -> f64 {
         match self {
             Joker::FreeTrial => 100.0,
-            Joker::OrphanCleanup
+            Joker::HypeCycle => 20.0,
+            Joker::EspressoShot => 10.0,
+            Joker::SwapFile => 5.0,
+            Joker::EnergyDrink => 2.0,
+            Joker::HockeyStick => 1.0,
+            Joker::JqFilter
+            | Joker::HipsterStack
+            | Joker::PacmanCache
+            | Joker::DistroHopping
+            | Joker::OrphanCleanup
             | Joker::ThemeCollector
             | Joker::GarbageCollector
             | Joker::FlakyCi
@@ -735,10 +1383,32 @@ impl Joker {
         }
     }
 
-    /// Triggered for each scoring card, right after its chips.
-    pub fn on_card_scored(self, card: Card, rng: &mut Rng) -> Vec<Effect> {
+    /// Triggered for each scoring card, right after its chips (`first_face`:
+    /// the first scoring face card).
+    pub fn on_card_scored(
+        self,
+        card: Card,
+        first_face: bool,
+        board: &Board,
+        rng: &mut Rng,
+    ) -> Vec<Effect> {
         let face = card.is_face();
+        let targets = board.targets;
         match self {
+            Joker::DeepDive if card.is_suit(Suit::Spades) => vec![Effect::Chips(50)],
+            Joker::MeetupPizza if card.is_suit(Suit::Clubs) => vec![Effect::Mult(7.0)],
+            Joker::GemInstall if card.is_suit(Suit::Diamonds) => vec![Effect::Money(1)],
+            Joker::EmojiReaction if face => vec![Effect::Mult(5.0)],
+            Joker::Error404 if card.has_rank() && matches!(card.rank, 4 | 10) => {
+                vec![Effect::Chips(10), Effect::Mult(4.0)]
+            }
+            Joker::ProfilePicture if first_face => vec![Effect::XMult(2.0)],
+            Joker::RollingRelease if card.is_suit(targets.suit) => vec![Effect::XMult(1.5)],
+            Joker::DailyDriver
+                if card.has_rank() && card.rank == targets.card.0 && card.is_suit(targets.card.1) =>
+            {
+                vec![Effect::XMult(2.0)]
+            }
             Joker::RubyGem if card.is_suit(Suit::Diamonds) => vec![Effect::Mult(2.0)],
             Joker::FanMail if card.is_suit(Suit::Hearts) => vec![Effect::Chips(15)],
             Joker::RailsWorld if face => vec![Effect::Chips(20)],
@@ -766,18 +1436,24 @@ impl Joker {
         }
     }
 
-    /// How many more times a scoring card scores (`first`: the first scoring card).
-    pub fn retriggers(self, card: Card, first: bool) -> u32 {
+    /// How many more times a scoring card scores (`first`: the first scoring
+    /// card; `final_hand`: the last hand of the blind).
+    pub fn retriggers(self, card: Card, first: bool, final_hand: bool) -> u32 {
         match self {
             Joker::BangBang if first => 2,
             Joker::WatchMode if card.is_face() => 1,
+            Joker::BitTwiddling if card.has_rank() && (2..=5).contains(&card.rank) => 1,
+            Joker::CrunchTime if final_hand => 1,
+            Joker::EspressoShot => 1,
             _ => 0,
         }
     }
 
     /// Triggered for each card held in hand (`lowest`: the lowest of them).
-    pub fn on_held(self, card: Card, lowest: bool) -> Vec<Effect> {
+    pub fn on_held(self, card: Card, lowest: bool, rng: &mut Rng) -> Vec<Effect> {
         match self {
+            Joker::QueueManager if card.has_rank() && card.rank == 12 => vec![Effect::Mult(13.0)],
+            Joker::MiddleManagement if card.is_face() && rng.chance(2) => vec![Effect::Money(1)],
             Joker::LowBattery if lowest => vec![Effect::Mult(2.0 * card.rank_chips() as f64)],
             Joker::BenevolentDictator if card.has_rank() && card.rank == 13 => {
                 vec![Effect::XMult(1.5)]
@@ -791,7 +1467,54 @@ impl Joker {
     pub fn on_hand(self, counter: f64, hand: &HandContext, rng: &mut Rng) -> Vec<Effect> {
         let kind = hand.evaluated.kind;
         let has = |k| hand.evaluated.contains(k);
+        let board = hand.board;
         let effect = match self {
+            Joker::TwoFactorAuth | Joker::LogRotation | Joker::GridLayout if counter > 0.0 => {
+                Effect::Chips(counter as u64)
+            }
+            Joker::DotfilesBak | Joker::HypeCycle | Joker::RefreshSpam | Joker::RmRfNodeModules
+                if counter > 0.0 =>
+            {
+                Effect::Mult(counter)
+            }
+            Joker::JqFilter
+            | Joker::HipsterStack
+            | Joker::EnergyDrink
+            | Joker::PacmanCache
+            | Joker::DistroHopping
+                if counter > 1.0 =>
+            {
+                Effect::XMult(counter)
+            }
+            Joker::SplitBrain if split_brain(&hand.scoring()) => Effect::XMult(2.0),
+            Joker::RainbowPrompt if all_suits(&hand.scoring()) => Effect::XMult(3.0),
+            Joker::PitchBlack
+                if hand
+                    .held
+                    .iter()
+                    .all(|c| c.is_suit(Suit::Spades) || c.is_suit(Suit::Clubs)) =>
+            {
+                Effect::XMult(3.0)
+            }
+            Joker::TodoMd if kind == board.targets.hand => Effect::Money(4),
+            Joker::EmptyWorkspace if board.discards_left > 0 => {
+                Effect::Chips(30 * board.discards_left as u64)
+            }
+            Joker::InboxZero if board.discards_left == 0 => Effect::Mult(15.0),
+            Joker::ReleaseTrain if counter >= RELEASE_TRAIN as f64 => Effect::XMult(4.0),
+            Joker::FridayDeploy if board.hands_left == 1 => Effect::XMult(3.0),
+            Joker::WarmStart if board.blind_hands.contains(&kind) => Effect::XMult(3.0),
+            Joker::Bloatware => Effect::Chips(250),
+            Joker::MinimalWaybar if board.waybar() > 1.0 => Effect::XMult(board.waybar()),
+            Joker::PluginManager => Effect::Mult(3.0 * board.jokers.len() as f64),
+            Joker::BitRot if board.lost_cards() > 0 => Effect::Mult(4.0 * board.lost_cards() as f64),
+            Joker::FreeRam if board.draw_pile > 0 => Effect::Chips(2 * board.draw_pile as u64),
+            Joker::OwnedServers if board.money > 0 => Effect::Chips(2 * board.money as u64),
+            Joker::Bootstrapped if board.money >= 5 => Effect::Mult(2.0 * (board.money / 5) as f64),
+            Joker::Homelab if board.resale() > 0 => Effect::Mult(board.resale() as f64),
+            Joker::PackageMaintainer if board.maintained() > 1.0 => {
+                Effect::XMult(board.maintained())
+            }
             Joker::Dotfiles => Effect::Chips(30),
             Joker::Omakase => Effect::Mult(5.0),
             Joker::TilingManager
@@ -834,13 +1557,13 @@ impl Joker {
             Joker::FlakyCi if counter + 0.25 * hand.lucky_hits as f64 > 1.0 => {
                 Effect::XMult(counter + 0.25 * hand.lucky_hits as f64)
             }
-            Joker::Systemd if count(hand.deck, Enhancement::Daemon) > 0 => {
-                Effect::XMult(1.0 + 0.2 * count(hand.deck, Enhancement::Daemon) as f64)
+            Joker::Systemd if count(board.deck, Enhancement::Daemon) > 0 => {
+                Effect::XMult(1.0 + 0.2 * count(board.deck, Enhancement::Daemon) as f64)
             }
-            Joker::BlobStorage if count(hand.deck, Enhancement::BinaryBlob) > 0 => {
-                Effect::Chips(25 * count(hand.deck, Enhancement::BinaryBlob) as u64)
+            Joker::BlobStorage if count(board.deck, Enhancement::BinaryBlob) > 0 => {
+                Effect::Chips(25 * count(board.deck, Enhancement::BinaryBlob) as u64)
             }
-            Joker::SeniorEngineer if enhanced_cards(hand.deck) >= SENIOR_THRESHOLD => {
+            Joker::SeniorEngineer if enhanced_cards(board.deck) >= SENIOR_THRESHOLD => {
                 Effect::XMult(3.0)
             }
             Joker::Segfault => Effect::Mult(rng.below(24) as f64),
@@ -851,13 +1574,16 @@ impl Joker {
         vec![effect]
     }
 
-    /// Money earned at the end of a won blind.
-    pub fn blind_money(self, discards_left: u32, discards_used: u32, unique_themes: u32) -> u32 {
+    /// Money earned at the end of a won blind (`counter`: the joker's grown value).
+    pub fn blind_money(self, counter: f64, discards_used: u32, board: &Board) -> u32 {
+        let discards_left = board.discards_left;
         match self {
             Joker::CloudExit => discards_left,
-            Joker::Unixporn => unique_themes,
+            Joker::Unixporn => board.unique_themes,
             Joker::Sponsorware => 4,
             Joker::DataHoarder if discards_used == 0 => 2 * discards_left,
+            Joker::NineNines => board.nines(),
+            Joker::HockeyStick => counter as u32,
             _ => 0,
         }
     }
@@ -893,6 +1619,12 @@ pub struct OwnedJoker {
 /// Cards Mailing List needs discarded to gain ×1 mult.
 pub const MAILING_LIST_DISCARDS: u32 = 23;
 
+/// Hands Release Train waits for, the last one at ×4.
+pub const RELEASE_TRAIN: u32 = 6;
+
+/// Blinds Syncthing needs before it copies a joker.
+pub const SYNCTHING_BLINDS: f64 = 2.0;
+
 impl OwnedJoker {
     pub fn new(joker: Joker, edition: Option<Edition>) -> Self {
         OwnedJoker {
@@ -914,18 +1646,87 @@ impl OwnedJoker {
     }
 
     /// What a joker that grows, shrinks or depends on the game gives right now,
-    /// for its badge. `hand_plays`: times the selected hand type would have been
-    /// played, this hand included (none when no hand is selected).
-    pub fn bonus(
-        &self,
-        hand_plays: Option<u32>,
-        unique_themes: u32,
-        deck: &[Card],
-    ) -> Option<Bonus> {
+    /// for its badge. `selected`: the selected hand type and the times it would
+    /// have been played, this hand included (none when no hand is selected).
+    pub fn bonus(&self, selected: Option<(HandKind, u32)>, board: &Board) -> Option<Bonus> {
         let c = round(self.counter);
+        let deck = board.deck;
+        let unique_themes = board.unique_themes;
+        let hand_plays = selected.map(|(_, plays)| plays);
         let daemons = count(deck, Enhancement::Daemon);
         let enhanced = enhanced_cards(deck);
+        let targets = board.targets;
+        let to_go = |n: u32| format!("{n} hand{} to go", if n == 1 { "" } else { "s" });
         let (kind, text) = match self.joker {
+            Joker::TwoFactorAuth | Joker::GridLayout | Joker::EmptyWorkspace | Joker::FreeRam
+            | Joker::OwnedServers => {
+                let chips = match self.joker {
+                    Joker::EmptyWorkspace => 30 * board.discards_left as u64,
+                    Joker::FreeRam => 2 * board.draw_pile as u64,
+                    Joker::OwnedServers => 2 * board.money.max(0) as u64,
+                    _ => c as u64,
+                };
+                ("chips", format!("+{chips} chips"))
+            }
+            Joker::LogRotation => (
+                "chips",
+                format!("+{c} chips · {}", targets.discard_suit.symbol()),
+            ),
+            Joker::JqFilter
+            | Joker::HipsterStack
+            | Joker::EnergyDrink
+            | Joker::PacmanCache
+            | Joker::DistroHopping => ("x_mult", format!("×{c} mult")),
+            Joker::DotfilesBak | Joker::HypeCycle | Joker::RefreshSpam | Joker::RmRfNodeModules => {
+                ("mult", format!("+{c} mult"))
+            }
+            Joker::PluginManager | Joker::BitRot | Joker::Bootstrapped | Joker::Homelab => {
+                let mult = match self.joker {
+                    Joker::PluginManager => 3 * board.jokers.len() as u64,
+                    Joker::BitRot => 4 * board.lost_cards() as u64,
+                    Joker::Bootstrapped => 2 * (board.money.max(0) / 5) as u64,
+                    _ => board.resale() as u64,
+                };
+                ("mult", format!("+{mult} mult"))
+            }
+            Joker::MinimalWaybar => ("x_mult", format!("×{} mult", board.waybar())),
+            Joker::PackageMaintainer => ("x_mult", format!("×{} mult", round(board.maintained()))),
+            Joker::RollingRelease => ("x_mult", format!("×1.5 per {}", targets.suit.symbol())),
+            Joker::DailyDriver => (
+                "x_mult",
+                format!(
+                    "×2 per {}{}",
+                    rank_label(targets.card.0),
+                    targets.card.1.symbol()
+                ),
+            ),
+            Joker::BugBounty => ("money", format!("$5 per {}", rank_label(targets.rank))),
+            Joker::TodoMd => ("money", format!("$4 for {}", targets.hand.name())),
+            Joker::InboxZero if board.discards_left == 0 => ("mult", "+15 mult".to_string()),
+            Joker::InboxZero => (
+                "progress",
+                format!("{} discards left", board.discards_left),
+            ),
+            Joker::ReleaseTrain => match RELEASE_TRAIN - (self.counter as u32).min(RELEASE_TRAIN) {
+                0 | 1 => ("x_mult", "×4 next hand".to_string()),
+                n => ("progress", to_go(n - 1)),
+            },
+            Joker::FridayDeploy if board.hands_left == 1 => ("x_mult", "×3 mult".to_string()),
+            Joker::CrunchTime if board.hands_left == 1 => ("progress", "Retriggers".to_string()),
+            Joker::FridayDeploy | Joker::CrunchTime => {
+                ("progress", to_go(board.hands_left.saturating_sub(1)))
+            }
+            Joker::WarmStart if selected.is_some_and(|(k, _)| board.blind_hands.contains(&k)) => {
+                ("x_mult", "×3 mult".to_string())
+            }
+            Joker::EspressoShot => ("progress", format!("{c} hands left")),
+            Joker::SwapFile => ("progress", format!("+{c} hand size")),
+            Joker::NineNines => ("money", format!("+${} / blind", board.nines())),
+            Joker::HockeyStick => ("money", format!("+${c} / blind")),
+            Joker::Syncthing if self.counter >= SYNCTHING_BLINDS => {
+                ("progress", "Synced: sell it".to_string())
+            }
+            Joker::Syncthing => ("progress", format!("{c} / {SYNCTHING_BLINDS} blinds")),
             Joker::GarbageCollector
             | Joker::FlakyCi
             | Joker::RmaDepartment
@@ -963,9 +1764,25 @@ impl OwnedJoker {
         Some(Bonus { kind, text })
     }
 
-    /// Before a hand is scored: jokers that grow with the hands played.
-    pub fn before_hand(&mut self, evaluated: &Evaluated, scoring: &[Card]) {
+    /// Before a hand is scored: jokers that grow with the hands played
+    /// (`most_played`: the hand type is the most played one so far).
+    pub fn before_hand(
+        &mut self,
+        evaluated: &Evaluated,
+        played: &[Card],
+        scoring: &[Card],
+        most_played: bool,
+    ) {
         match self.joker {
+            Joker::TwoFactorAuth => {
+                let twos = scoring.iter().filter(|c| c.has_rank() && c.rank == 2).count();
+                self.counter += 8.0 * twos as f64;
+            }
+            Joker::GridLayout if played.len() == 4 => self.counter += 4.0,
+            Joker::DotfilesBak if evaluated.contains(HandKind::TwoPair) => self.counter += 2.0,
+            Joker::HipsterStack if most_played => self.counter = 1.0,
+            Joker::HipsterStack => self.counter += 0.2,
+            Joker::ReleaseTrain => self.counter += 1.0,
             Joker::Uptime if scoring.iter().any(|c| c.is_face()) => self.counter = 0.0,
             Joker::Uptime | Joker::GreenBuild => self.counter += 1.0,
             Joker::CiRunner if evaluated.contains(HandKind::Straight) => self.counter += 15.0,
@@ -975,9 +1792,17 @@ impl OwnedJoker {
 
     /// After a hand is scored; false when the joker is used up.
     pub fn after_hand(&mut self) -> bool {
-        if self.joker == Joker::FreeTrial {
-            self.counter -= 5.0;
-            return self.counter > 0.0;
+        match self.joker {
+            Joker::FreeTrial => {
+                self.counter -= 5.0;
+                return self.counter > 0.0;
+            }
+            Joker::EspressoShot => {
+                self.counter -= 1.0;
+                return self.counter > 0.0;
+            }
+            Joker::ReleaseTrain if self.counter >= RELEASE_TRAIN as f64 => self.counter = 0.0,
+            _ => {}
         }
         true
     }
@@ -995,12 +1820,46 @@ impl OwnedJoker {
         }
     }
 
-    /// Cards were discarded (Mailing List grows every 23).
-    pub fn on_cards_discarded(&mut self, cards: usize) {
-        if self.joker == Joker::MailingList {
-            self.progress += cards as u32;
-            self.counter += (self.progress / MAILING_LIST_DISCARDS) as f64;
-            self.progress %= MAILING_LIST_DISCARDS;
+    /// Cards were discarded (Mailing List grows every 23); false when the
+    /// joker is used up (Energy Drink).
+    pub fn on_cards_discarded(&mut self, cards: &[Card], targets: &Targets) -> bool {
+        match self.joker {
+            Joker::MailingList => {
+                self.progress += cards.len() as u32;
+                self.counter += (self.progress / MAILING_LIST_DISCARDS) as f64;
+                self.progress %= MAILING_LIST_DISCARDS;
+            }
+            Joker::JqFilter => {
+                let jacks = cards.iter().filter(|c| c.has_rank() && c.rank == 11).count();
+                self.counter += 0.5 * jacks as f64;
+            }
+            Joker::LogRotation => {
+                let suited = cards
+                    .iter()
+                    .filter(|c| c.is_suit(targets.discard_suit))
+                    .count();
+                self.counter += 3.0 * suited as f64;
+            }
+            Joker::EnergyDrink => {
+                self.counter = round(self.counter - 0.01 * cards.len() as f64);
+                return self.counter > 1.0;
+            }
+            _ => {}
+        }
+        true
+    }
+
+    /// The shop was rerolled.
+    pub fn on_reroll(&mut self) {
+        if self.joker == Joker::RefreshSpam {
+            self.counter += 2.0;
+        }
+    }
+
+    /// Cards were added to the deck.
+    pub fn on_cards_added(&mut self, cards: usize) {
+        if self.joker == Joker::PacmanCache {
+            self.counter += 0.25 * cards as f64;
         }
     }
 
@@ -1042,6 +1901,17 @@ impl OwnedJoker {
             Joker::OrphanCleanup if boss => self.counter = 1.0,
             Joker::BetaRelease => return !rng.chance(6),
             Joker::StableRelease => return !rng.chance(1000),
+            Joker::JqFilter => self.counter = 1.0,
+            Joker::HypeCycle | Joker::SwapFile => {
+                self.counter -= if self.joker == Joker::HypeCycle {
+                    4.0
+                } else {
+                    1.0
+                };
+                return self.counter > 0.0;
+            }
+            Joker::Syncthing => self.counter += 1.0,
+            Joker::HockeyStick if boss => self.counter += 2.0,
             _ => {}
         }
         true
@@ -1085,17 +1955,17 @@ mod tests {
 
         let mut cleanup = OwnedJoker::new(Joker::OrphanCleanup, None);
         cleanup.on_card_sold();
-        assert_eq!(cleanup.bonus(None, 0, &[]).unwrap().text, "×1.25 mult");
+        assert_eq!(cleanup.bonus(None, &Board::default()).unwrap().text, "×1.25 mult");
 
         let mut collector = OwnedJoker::new(Joker::ThemeCollector, None);
-        assert_eq!(collector.bonus(None, 0, &[]).unwrap().text, "×1 mult");
+        assert_eq!(collector.bonus(None, &Board::default()).unwrap().text, "×1 mult");
         for _ in 0..3 {
             collector.on_theme_used();
         }
-        assert_eq!(collector.bonus(None, 0, &[]).unwrap().text, "×1.3 mult");
+        assert_eq!(collector.bonus(None, &Board::default()).unwrap().text, "×1.3 mult");
         let memory = OwnedJoker::new(Joker::MuscleMemory, None);
-        assert_eq!(memory.bonus(None, 0, &[]), None);
-        assert_eq!(memory.bonus(Some(4), 0, &[]).unwrap().text, "+4 mult");
+        assert_eq!(memory.bonus(None, &Board::default()), None);
+        assert_eq!(memory.bonus(Some((HandKind::Pair, 4)), &Board::default()).unwrap().text, "+4 mult");
         cleanup.end_of_blind(true, &mut Rng::new(1));
         assert_eq!(cleanup.counter, 1.0);
     }
@@ -1103,13 +1973,45 @@ mod tests {
     #[test]
     fn retriggers_and_held_cards() {
         let king = Card::new(13, Suit::Spades);
-        assert_eq!(Joker::BangBang.retriggers(king, true), 2);
-        assert_eq!(Joker::BangBang.retriggers(king, false), 0);
-        assert_eq!(Joker::WatchMode.retriggers(king, false), 1);
-        assert_eq!(Joker::LowBattery.on_held(king, true), [Effect::Mult(20.0)]);
+        let rng = &mut Rng::new(1);
+        assert_eq!(Joker::BangBang.retriggers(king, true, false), 2);
+        assert_eq!(Joker::BangBang.retriggers(king, false, false), 0);
+        assert_eq!(Joker::WatchMode.retriggers(king, false, false), 1);
+        assert_eq!(Joker::CrunchTime.retriggers(king, false, true), 1);
+        assert_eq!(Joker::CrunchTime.retriggers(king, false, false), 0);
+        let two = Card::new(2, Suit::Clubs);
+        assert_eq!(Joker::BitTwiddling.retriggers(two, false, false), 1);
+        assert_eq!(Joker::BitTwiddling.retriggers(king, false, false), 0);
+        assert_eq!(Joker::LowBattery.on_held(king, true, rng), [Effect::Mult(20.0)]);
         assert_eq!(
-            Joker::BenevolentDictator.on_held(king, false),
+            Joker::BenevolentDictator.on_held(king, false, rng),
             [Effect::XMult(1.5)]
         );
+        let queen = Card::new(12, Suit::Hearts);
+        assert_eq!(Joker::QueueManager.on_held(queen, false, rng), [Effect::Mult(13.0)]);
+    }
+
+    #[test]
+    fn counters_that_run_out() {
+        let mut espresso = OwnedJoker::new(Joker::EspressoShot, None);
+        for _ in 0..9 {
+            assert!(espresso.after_hand());
+        }
+        assert!(!espresso.after_hand());
+        let mut hype = OwnedJoker::new(Joker::HypeCycle, None);
+        let rng = &mut Rng::new(1);
+        assert!((0..4).all(|_| hype.end_of_blind(false, rng)));
+        assert!(!hype.end_of_blind(false, rng));
+        let mut drink = OwnedJoker::new(Joker::EnergyDrink, None);
+        let five = crate::card::cards("2H 3H 4H 5H 6H");
+        assert!((0..19).all(|_| drink.on_cards_discarded(&five, &Targets::default())));
+        assert!(!drink.on_cards_discarded(&five, &Targets::default()));
+        let mut train = OwnedJoker::new(Joker::ReleaseTrain, None);
+        let pair = crate::hand::evaluate(&five[..2]);
+        for _ in 0..5 {
+            train.before_hand(&pair, &five, &five, false);
+            train.after_hand();
+        }
+        assert_eq!(train.bonus(None, &Board::default()).unwrap().text, "×4 next hand");
     }
 }

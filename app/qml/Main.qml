@@ -197,11 +197,16 @@ Window {
   }
 
   // ---- shop --------------------------------------------------------------
+  // Money, plus what Cloud Credits lets you owe.
+  function canPay(price) {
+    return game.money + game.credit >= price
+  }
+
   function canBuy(offer) {
     if (offer.kind !== "joker")
-      return shopping && game.money >= offer.price && game.consumables.length < game.consumable_slots
+      return shopping && canPay(offer.price) && game.consumables.length < game.consumable_slots
     var transparent = offer.edition !== null && offer.edition.id === "transparent"
-    return shopping && game.money >= offer.price && (transparent || game.jokers.length < game.max_jokers)
+    return shopping && canPay(offer.price) && (transparent || game.jokers.length < game.max_jokers)
   }
   function buy(i) {
     if (shopping && i >= 0 && i < game.shop.length) send({ cmd: "buy", offer: i })
@@ -219,7 +224,7 @@ Window {
   }
   // ---- packs -------------------------------------------------------------
   function canMerge(i) {
-    return shopping && i < game.vouchers_for_sale.length && game.money >= game.vouchers_for_sale[i].price
+    return shopping && i < game.vouchers_for_sale.length && canPay(game.vouchers_for_sale[i].price)
   }
   function buyVoucher(i) {
     if (canMerge(i)) {
@@ -235,7 +240,7 @@ Window {
     if (shopping && i >= 0 && i < game.packs.length) send({ cmd: "buy_pack", pack: i })
   }
   function canBuyPack(pack) {
-    return shopping && game.money >= pack.price
+    return shopping && canPay(pack.price)
   }
   // A pack's choice: jokers need a slot, commands that change cards a selection.
   function canPick(choice) {
@@ -282,7 +287,7 @@ Window {
   }
   function reroll() {
     if (!shopping) return
-    if (game.money < game.reroll_cost) { notice = "Not enough money to reroll."; return }
+    if (!canPay(game.reroll_cost)) { notice = "Not enough money to reroll."; return }
     send({ cmd: "reroll" })
   }
 
@@ -868,7 +873,7 @@ Window {
             Button {
               text: "Reroll (R) · " + (root.game ? Labels.money(root.game.reroll_cost) : "")
               bordered: true
-              enabled: root.shopping && root.game.money >= root.game.reroll_cost
+              enabled: root.shopping && root.canPay(root.game.reroll_cost)
               opacity: enabled ? 1 : 0.5
               onClicked: root.reroll()
             }

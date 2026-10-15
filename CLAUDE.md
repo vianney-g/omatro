@@ -97,11 +97,21 @@ Add a variant to the `Joker` enum and to `Joker::ALL` (fixed-size array), then `
 - scoring triggers on `Joker`, which `score.rs` calls in this order: `retriggers` and
   `on_card_scored` per scoring card, `on_held` per card held in hand, `on_hand` once
   (with the joker's `counter`); and `blind_money` at the end of a won blind. Chances
-  take the `Rng` passed in (the game's `score` or `round` stream), never a new one.
+  take the `Rng` passed in (the game's `score` or `round` stream), never a new one:
+  Chaos Monkey doubles them through `Rng::set_luck` (`Game::update_luck`).
+- what jokers see of the game (deck, money, slots, hands and discards left, the hand
+  types played this blind) comes in a `Board`, built by `Game::board()`; `Targets`
+  holds what Rolling Release, Daily Driver, Log Rotation, Bug Bounty and TODO.md aim
+  at, drawn at each blind.
+- rules on cards: `Game::in_play` flags the cards played, discarded or held with
+  Fuzzy Finder (`smeared`) and Identicon (`any_face`), which `is_suit` and `is_face`
+  read; MVP and Fast-Forward go through `hand::Rules`.
 - jokers that grow or change: `OwnedJoker` keeps a `counter` (and `sell_bonus`),
   updated by `before_hand`, `after_hand` (false = used up), `on_discard`,
-  `on_card_sold`, `end_of_blind` (false = broken); `initial_counter` and `current()`
-  (the "Currently +n" line) go with them.
+  `on_cards_discarded` (false = used up), `on_card_sold`, `on_reroll`,
+  `on_cards_added` (call `Game::cards_added` wherever cards join the deck),
+  `end_of_blind` (false = broken); `initial_counter` goes with them. Effects when a
+  blind starts live in `Game::jokers_at_blind_start`.
 - rule changers (hand size, discards, four-card hands) are read by `Game` with
   `count(Joker::…)`; mark them, and anything else Fork must not copy, in `copyable`.
 
@@ -110,8 +120,11 @@ now: add it to `OwnedJoker::bonus()`, which feeds the badge on the joker card (t
 state, and the preview for the selected hand). The player must always see the bonus
 actually applied.
 
-Fork copies through `score::copy_target`; `Game::abilities(joker)` counts a joker's
-ability with the Forks copying it. Then run `make docs`.
+Fork (right neighbour) and Upstream (leftmost joker) copy through `score::copy_target`,
+which follows copies of copies; `Game::abilities(joker)` counts a joker's ability with
+the jokers copying it. Then run `make docs`.
+
+Money is an `i64`: Cloud Credits lets it go down to −$20 (`Game::spend`, `credit`).
 
 ## Card modifiers
 

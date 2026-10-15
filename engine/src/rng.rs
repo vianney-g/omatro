@@ -4,11 +4,23 @@
 //! same game whatever the dependency versions.
 
 #[derive(Debug, Clone)]
-pub struct Rng(u64);
+pub struct Rng {
+    state: u64,
+    /// Chaos Monkey: `chance(n)` succeeds `luck` times in `n`.
+    luck: u64,
+}
 
 impl Rng {
     pub fn new(seed: u64) -> Self {
-        Rng(seed)
+        Rng {
+            state: seed,
+            luck: 1,
+        }
+    }
+
+    /// Chances of `chance` become `luck` in `n` (1 by default).
+    pub fn set_luck(&mut self, luck: u64) {
+        self.luck = luck.max(1);
     }
 
     /// An independent stream of the game seed, one per use (shuffles, shop…),
@@ -18,12 +30,12 @@ impl Rng {
         let hash = name.bytes().fold(0xCBF2_9CE4_8422_2325_u64, |h, b| {
             (h ^ b as u64).wrapping_mul(0x0100_0000_01B3)
         });
-        Rng(Rng(seed ^ hash).next_u64())
+        Rng::new(Rng::new(seed ^ hash).next_u64())
     }
 
     pub fn next_u64(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
+        self.state = self.state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.state;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
         z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
         z ^ (z >> 31)
@@ -34,9 +46,9 @@ impl Rng {
         ((self.next_u64() as u128 * n as u128) >> 64) as u64
     }
 
-    /// True with a 1 in `n` chance.
+    /// True with a 1 in `n` chance (`luck` in `n` with Chaos Monkey).
     pub fn chance(&mut self, n: u64) -> bool {
-        self.below(n) == 0
+        self.below(n) < self.luck
     }
 
     /// Float in `0..1`.
@@ -80,5 +92,12 @@ mod tests {
         for n in 1..50 {
             assert!(rng.below(n) < n);
         }
+    }
+
+    #[test]
+    fn luck_raises_chances() {
+        let mut rng = Rng::new(7);
+        rng.set_luck(4);
+        assert!((0..100).all(|_| rng.chance(4)));
     }
 }

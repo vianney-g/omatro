@@ -1,8 +1,8 @@
 //! Scoring a hand, step by step so the display can animate it.
 
 use crate::card::Card;
-use crate::hand::{HandCounts, HandKind, HandLevels, evaluate_with};
-use crate::joker::{Effect, HandContext, Joker, OwnedJoker};
+use crate::hand::{HandCounts, HandKind, HandLevels, Rules, evaluate_with};
+use crate::joker::{Board, Effect, HandContext, Joker, OwnedJoker};
 use crate::modifier::{Edition, Enhancement, Seal};
 use crate::rng::Rng;
 use serde::Serialize;
@@ -65,10 +65,12 @@ pub struct Table<'a> {
     pub levels: &'a HandLevels,
     /// Hand types played so far, this hand included.
     pub plays: &'a HandCounts,
-    /// Flushes and straights of 4 cards (MVP).
-    pub four_fingers: bool,
-    /// The whole deck (systemd, Blob Storage, Senior Engineer).
-    pub deck: &'a [Card],
+    /// How hands are made (MVP, Fast-Forward).
+    pub rules: Rules,
+    /// Big Bang Release: every played card scores.
+    pub splash: bool,
+    /// What the jokers see of the game: the deck, money, hands left…
+    pub board: &'a Board<'a>,
     /// Ids of the cards a boss keeps from scoring.
     pub debuffed: &'a [u32],
     /// The Thermal Throttle: base chips and mult are halved.
@@ -82,10 +84,21 @@ pub struct Table<'a> {
 }
 
 /// The joker whose ability the one at `index` uses: itself, or for a Fork, the
-/// first joker on its right that is not a Fork (none if there is nothing to copy).
+/// joker on its right, for Upstream, the leftmost joker, following copies of
+/// copies (none if there is nothing to copy, or the copies go round in circles).
 pub fn copy_target(jokers: &[OwnedJoker], index: usize) -> Option<usize> {
-    let target = (index..jokers.len()).find(|&i| jokers[i].joker != Joker::Fork)?;
-    (target == index || jokers[target].joker.copyable()).then_some(target)
+    let mut target = index;
+    for _ in 0..=jokers.len() {
+        target = match jokers[target].joker {
+            Joker::Fork => target + 1,
+            Joker::Upstream => 0,
+            _ => return (target == index || jokers[target].joker.copyable()).then_some(target),
+        };
+        if target >= jokers.len() {
+            return None;
+        }
+    }
+    None
 }
 
 struct Running {
@@ -117,7 +130,11 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
         jokers,
         ..
     } = *table;
-    let evaluated = evaluate_with(played, table.four_fingers);
+    let mut evaluated = evaluate_with(played, table.rules);
+    if table.splash {
+        evaluated.scoring = (0..played.len()).collect();
+    }
+    let board = table.board;
     let (mut base_chips, mut base_mult) = table.levels.values(evaluated.kind);
     if table.halve_base {
         base_chips = (base_chips as f64 / 2.0).round() as u64;
@@ -144,6 +161,10 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
     // (Retry seal, jokers).
     let mut lucky_hits = 0;
     let mut broken = Vec::new();
+    let first_face = evaluated.scoring.iter().copied().find(|&i| {
+        played[i].is_face() && !table.debuffed.contains(&played[i].id)
+    });
+    let final_hand = board.hands_left == 1;
     for (position, &index) in evaluated.scoring.iter().enumerate() {
         let card = played[index];
         let source = Source::Card { index };
@@ -156,7 +177,7 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
             retriggers.push(source);
         }
         for (j, owned) in abilities() {
-            let times = owned.joker.retriggers(card, position == 0) as usize;
+            let times = owned.joker.retriggers(card, position == 0, final_hand) as usize;
             retriggers.extend(std::iter::repeat_n(Source::Joker { index: j }, times));
         }
         for round in 0..=retriggers.len() {
@@ -187,7 +208,11 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
                 run.push(source, Effect::Money(3));
             }
             for (j, owned) in abilities() {
-                for effect in owned.joker.on_card_scored(card, rng) {
+                for effect in
+                    owned
+                        .joker
+                        .on_card_scored(card, first_face == Some(index), board, rng)
+                {
                     run.push(Source::Joker { index: j }, effect);
                 }
             }
@@ -219,7 +244,7 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
             effects.push(Effect::XMult(1.5));
         }
         for (_, owned) in abilities() {
-            effects.extend(owned.joker.on_held(card, Some(index) == lowest));
+            effects.extend(owned.joker.on_held(card, Some(index) == lowest, rng));
         }
         if effects.is_empty() {
             continue;
@@ -242,10 +267,11 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
     // Jokers, left to right, with their editions.
     let context = HandContext {
         played,
+        held,
         evaluated: &evaluated,
         times_played: table.plays.get(evaluated.kind),
-        deck: table.deck,
         lucky_hits,
+        board,
     };
     for (j, owned) in jokers.iter().enumerate() {
         if table.disabled_joker == Some(j) {
@@ -309,7 +335,7 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::card::cards;
+    use crate::card::{Suit, cards};
 
     struct Setup {
         held: Vec<Card>,
@@ -317,6 +343,8 @@ mod tests {
         jokers: Vec<OwnedJoker>,
         levels: HandLevels,
         four_fingers: bool,
+        splash: bool,
+        board: Board<'static>,
     }
 
     fn setup(jokers: &[Joker]) -> Setup {
@@ -326,6 +354,8 @@ mod tests {
             jokers: jokers.iter().map(|&j| OwnedJoker::new(j, None)).collect(),
             levels: HandLevels::default(),
             four_fingers: false,
+            splash: false,
+            board: Board::default(),
         }
     }
 
@@ -336,15 +366,25 @@ mod tests {
 
         fn play_cards(&self, played: Vec<Card>) -> Breakdown {
             let mut plays = HandCounts::default();
-            plays.add(evaluate_with(&played, self.four_fingers).kind);
+            let rules = Rules {
+                four_fingers: self.four_fingers,
+                shortcut: false,
+            };
+            plays.add(evaluate_with(&played, rules).kind);
+            let board = Board {
+                deck: &self.deck,
+                jokers: &self.jokers,
+                ..self.board
+            };
             let table = Table {
                 played: &played,
                 held: &self.held,
                 jokers: &self.jokers,
                 levels: &self.levels,
                 plays: &plays,
-                four_fingers: self.four_fingers,
-                deck: &self.deck,
+                rules,
+                splash: self.splash,
+                board: &board,
                 debuffed: &[],
                 halve_base: false,
                 disabled_joker: None,
@@ -516,8 +556,9 @@ mod tests {
                     jokers: &s.jokers,
                     levels: &s.levels,
                     plays: &HandCounts::default(),
-                    four_fingers: false,
-                    deck: &[],
+                    rules: Rules::default(),
+                    splash: false,
+                    board: &Board::default(),
                     debuffed: &[],
                     halve_base: false,
                     disabled_joker: None,
@@ -548,5 +589,87 @@ mod tests {
         s.four_fingers = true;
         let b = s.play("2H 9H KH 4H 6S");
         assert_eq!((b.hand, b.scoring.len()), (HandKind::Flush, 4));
+    }
+
+    #[test]
+    fn suit_and_rank_jokers() {
+        // Pair of aces: 10 + 11 + 50 + 11 chips, 2 + 7 mult.
+        let b = setup(&[Joker::DeepDive, Joker::MeetupPizza]).play("AS AC");
+        assert_eq!((b.chips, b.mult), (82, 9.0));
+        assert_eq!(setup(&[Joker::GemInstall]).play("AD").money, 1);
+        assert_eq!(setup(&[Joker::EmojiReaction]).play("KH KD").mult, 12.0);
+        let b = setup(&[Joker::Error404]).play("10H 10D");
+        assert_eq!((b.chips, b.mult), (50, 10.0));
+        // Only the first king doubles.
+        assert_eq!(setup(&[Joker::ProfilePicture]).play("KH KD").mult, 4.0);
+        // Both threes score twice: 10 + 4 × 3.
+        assert_eq!(setup(&[Joker::BitTwiddling]).play("3H 3D").chips, 22);
+    }
+
+    #[test]
+    fn every_played_card_scores_with_big_bang_release() {
+        let mut s = setup(&[]);
+        s.splash = true;
+        assert_eq!(s.play("KH 4D KS").chips, 34);
+    }
+
+    #[test]
+    fn upstream_copies_the_leftmost_joker() {
+        assert_eq!(setup(&[Joker::Omakase, Joker::Upstream]).play("KH KD").mult, 12.0);
+        assert_eq!(setup(&[Joker::Upstream]).play("KH KD").mult, 2.0);
+        // Fork copies Upstream, which copies Omakase.
+        let b = setup(&[Joker::Omakase, Joker::Fork, Joker::Upstream]).play("KH KD");
+        assert_eq!(b.mult, 17.0);
+        // Copies that go round in circles copy nothing.
+        let b = setup(&[Joker::Fork, Joker::Upstream, Joker::Omakase]).play("KH KD");
+        assert_eq!(b.mult, 7.0);
+    }
+
+    #[test]
+    fn suit_mixes_and_held_suits() {
+        assert_eq!(setup(&[Joker::SplitBrain]).play("2C 2H").mult, 4.0);
+        assert_eq!(setup(&[Joker::SplitBrain]).play("2C 2C").mult, 2.0);
+        assert_eq!(setup(&[Joker::RainbowPrompt]).play("2C 3H 4S 5D 6C").mult, 12.0);
+        let mut s = setup(&[Joker::PitchBlack]);
+        s.held = cards("KS 2C");
+        assert_eq!(s.play("AS").mult, 3.0);
+        s.held = cards("KS 2H");
+        assert_eq!(s.play("AS").mult, 1.0);
+    }
+
+    #[test]
+    fn jokers_that_read_the_board() {
+        let b = setup(&[Joker::PluginManager, Joker::Omakase]).play("KH KD");
+        assert_eq!(b.mult, 13.0);
+        let mut s = setup(&[Joker::OwnedServers, Joker::Bootstrapped]);
+        s.board.money = 10;
+        assert_eq!((s.play("KH KD").chips, s.play("KH KD").mult), (50, 6.0));
+        let mut s = setup(&[Joker::FridayDeploy, Joker::CrunchTime]);
+        s.board.hands_left = 2;
+        assert_eq!((s.play("KH KD").chips, s.play("KH KD").mult), (30, 2.0));
+        s.board.hands_left = 1;
+        assert_eq!((s.play("KH KD").chips, s.play("KH KD").mult), (50, 6.0));
+        let mut s = setup(&[Joker::EmptyWorkspace, Joker::InboxZero]);
+        s.board.discards_left = 2;
+        assert_eq!((s.play("KH KD").chips, s.play("KH KD").mult), (90, 2.0));
+        s.board.discards_left = 0;
+        assert_eq!((s.play("KH KD").chips, s.play("KH KD").mult), (30, 17.0));
+        let mut s = setup(&[Joker::MinimalWaybar]);
+        s.board.joker_slots = 5;
+        assert_eq!(s.play("KH KD").mult, 10.0);
+        let mut s = setup(&[Joker::WarmStart]);
+        assert_eq!(s.play("KH KD").mult, 2.0);
+        s.board.blind_hands = &[HandKind::Pair];
+        assert_eq!(s.play("KH KD").mult, 6.0);
+    }
+
+    #[test]
+    fn jokers_aim_at_the_blind_targets() {
+        let mut s = setup(&[Joker::RollingRelease, Joker::TodoMd, Joker::DailyDriver]);
+        s.board.targets.suit = Suit::Hearts;
+        s.board.targets.hand = HandKind::Pair;
+        s.board.targets.card = (13, Suit::Diamonds);
+        let b = s.play("KH KD");
+        assert_eq!((b.mult, b.money), (6.0, 4));
     }
 }

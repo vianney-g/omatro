@@ -67,7 +67,7 @@ Item {
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
       }
-      // Fork: what it copies.
+      // Fork, Upstream: what it copies.
       Text {
         width: parent.width
         visible: text !== ""

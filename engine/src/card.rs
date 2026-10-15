@@ -12,6 +12,19 @@ pub enum Suit {
 
 impl Suit {
     pub const ALL: [Suit; 4] = [Suit::Hearts, Suit::Diamonds, Suit::Clubs, Suit::Spades];
+
+    pub fn is_red(self) -> bool {
+        matches!(self, Suit::Hearts | Suit::Diamonds)
+    }
+
+    pub fn symbol(self) -> &'static str {
+        match self {
+            Suit::Hearts => "♥",
+            Suit::Diamonds => "♦",
+            Suit::Clubs => "♣",
+            Suit::Spades => "♠",
+        }
+    }
 }
 
 /// A card. Rank goes from 2 to 14 (11 = jack, 12 = queen, 13 = king, 14 = ace).
@@ -30,6 +43,13 @@ pub struct Card {
     /// Chips gained for good (Incremental Build).
     #[serde(default)]
     pub bonus_chips: u64,
+    /// Fuzzy Finder: suits of the same colour count as each other. Set on the
+    /// cards in play only, never kept.
+    #[serde(skip)]
+    pub smeared: bool,
+    /// Identicon: the card counts as a face card (in play only, like `smeared`).
+    #[serde(skip)]
+    pub any_face: bool,
 }
 
 pub const ACE: u8 = 14;
@@ -45,6 +65,8 @@ impl Card {
             seal: None,
             edition: None,
             bonus_chips: 0,
+            smeared: false,
+            any_face: false,
         }
     }
 
@@ -84,7 +106,10 @@ impl Card {
 
     /// Whether the card counts as this suit: a Symlink counts as every suit.
     pub fn is_suit(self, suit: Suit) -> bool {
-        self.has_rank() && (self.suit == suit || self.is(Enhancement::Symlink))
+        self.has_rank()
+            && (self.suit == suit
+                || self.is(Enhancement::Symlink)
+                || (self.smeared && self.suit.is_red() == suit.is_red()))
     }
 
     /// Chips of the rank alone: 2 to 10, 10 for a face card, 11 for an ace.
@@ -113,7 +138,7 @@ impl Card {
     }
 
     pub fn is_face(self) -> bool {
-        self.has_rank() && (11..=13).contains(&self.rank)
+        self.has_rank() && (self.any_face || (11..=13).contains(&self.rank))
     }
 }
 

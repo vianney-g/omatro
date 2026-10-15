@@ -4,8 +4,8 @@ use crate::blind::{self, BlindKind, WINNING_ANTE};
 use crate::boss::Boss;
 use crate::card::{ACE, Card, Suit, standard_deck};
 use crate::consumable::{CONSUMABLE_SLOTS, Command, Consumable, Oligarchy, Theme};
-use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, evaluate_with};
-use crate::joker::{Bonus, Joker, OwnedJoker, Rarity};
+use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, Rules, evaluate_with};
+use crate::joker::{Board, Bonus, Joker, OwnedJoker, Rarity, SYNCTHING_BLINDS, Targets};
 use crate::modifier::{Edition, Enhancement, Seal};
 use crate::pack::{Pack, PackKind, SHOP_PACKS};
 use crate::rng::Rng;
@@ -21,7 +21,9 @@ pub const HAND_SIZE: usize = 8;
 pub const MAX_PLAY: usize = 5;
 pub const HANDS_PER_BLIND: u32 = 4;
 pub const DISCARDS_PER_BLIND: u32 = 3;
-pub const START_MONEY: u32 = 4;
+pub const START_MONEY: i64 = 4;
+/// How far below $0 Cloud Credits lets you spend.
+pub const CREDIT_LIMIT: i64 = 20;
 pub const MAX_INTEREST: u32 = 5;
 pub const MAX_JOKERS: usize = 5;
 pub const SHOP_OFFERS: usize = 2;
@@ -479,7 +481,9 @@ pub struct State {
     pub unique_themes: u32,
     /// Names of what cards may carry.
     pub modifiers: Modifiers,
-    pub money: u32,
+    pub money: i64,
+    /// How far below $0 you may spend (Cloud Credits).
+    pub credit: i64,
     /// Present in the `won` phase.
     pub reward: Option<Reward>,
     /// Shop offers (empty outside the shop).
@@ -555,6 +559,14 @@ enum Draw {
 pub struct Held {
     pub consumable: Consumable,
     pub transparent: bool,
+    /// Added to the sell value (Semver Inflation).
+    pub sell_bonus: u32,
+}
+
+impl Held {
+    fn sell_value(&self) -> u32 {
+        self.consumable.sell_value() + self.sell_bonus
+    }
 }
 
 impl From<Consumable> for Held {
@@ -562,6 +574,7 @@ impl From<Consumable> for Held {
         Held {
             consumable,
             transparent: false,
+            sell_bonus: 0,
         }
     }
 }
@@ -661,7 +674,7 @@ pub struct Game {
     discards_used: u32,
     phase: Phase,
     victory: bool,
-    money: u32,
+    money: i64,
     reward: Option<Reward>,
     offers: Vec<Offer>,
     reroll_cost: u32,
@@ -717,6 +730,14 @@ pub struct Game {
     run_deck: Option<Deck>,
     /// Beta Release broke: it is gone from the shop, Stable Release shows up.
     beta_broken: bool,
+    /// What Rolling Release, Daily Driver, Log Rotation, Bug Bounty and TODO.md
+    /// aim at this blind.
+    targets: Targets,
+    target_rng: Rng,
+    /// Size of the deck at the start (Bit Rot).
+    starting_deck: usize,
+    /// paru: free rerolls left in this shop.
+    free_rerolls: u32,
 }
 
 impl Game {
@@ -791,8 +812,13 @@ impl Game {
             pending_packs: Vec::new(),
             run_deck: deck,
             beta_broken: false,
+            targets: Targets::default(),
+            target_rng: Rng::stream(seed, "targets"),
+            starting_deck: 0,
+            free_rerolls: 0,
         };
         game.set_up_deck();
+        game.starting_deck = game.deck.len();
         game.roll_boss();
         game.roll_voucher();
         game.roll_blind_tags();
@@ -879,10 +905,10 @@ impl Game {
         use crate::pack::PackSize;
         let pack = |kind, size| Pack { kind, size };
         match tag {
-            Tag::Sponsors2x => self.money += self.money.min(40),
-            Tag::Commits1k => self.money += self.hands_played,
-            Tag::GcDone => self.money += self.unused_discards,
-            Tag::SpeedBlazing => self.money += 5 * self.skips,
+            Tag::Sponsors2x => self.money += self.money.clamp(0, 40),
+            Tag::Commits1k => self.money += self.hands_played as i64,
+            Tag::GcDone => self.money += self.unused_discards as i64,
+            Tag::SpeedBlazing => self.money += 5 * self.skips as i64,
             Tag::Contributors2 => {
                 for _ in 0..2 {
                     if self.has_room(None)
@@ -1083,11 +1109,13 @@ impl Game {
             + u32::from(self.deck_is(Deck::Framework));
         let less =
             self.merged(&[Voucher::GitRevert]) as u32 + u32::from(self.deck_is(Deck::GamingRig));
+        let less = less + self.count(Joker::VerticalMonitor) as u32;
         (HANDS_PER_BLIND + more).saturating_sub(less).max(1)
     }
 
     fn discards_per_blind(&self) -> u32 {
         let more = self.count(Joker::UndoHistory)
+            + 3 * self.count(Joker::Backspace)
             + self.merged(&[Voucher::RmI, Voucher::EmptyTrash])
             + usize::from(self.deck_is(Deck::ThinkPad));
         let less = self.merged(&[Voucher::GitResetHard]);
@@ -1277,8 +1305,16 @@ impl Game {
         } else {
             0
         };
-        (HAND_SIZE + self.count(Joker::Ultrawide) + transparent + displays + self.juggle + studio)
-            .saturating_sub(self.hand_size_penalty + monitor)
+        let swap: usize = self
+            .jokers
+            .iter()
+            .filter(|j| j.joker == Joker::SwapFile)
+            .map(|j| j.counter as usize)
+            .sum();
+        let jokers = self.count(Joker::Ultrawide) + 2 * self.count(Joker::VerticalMonitor) + swap;
+        let smaller = 2 * self.count(Joker::Bloatware) + self.count(Joker::Backspace);
+        (HAND_SIZE + jokers + transparent + displays + self.juggle + studio)
+            .saturating_sub(self.hand_size_penalty + monitor + smaller)
             .max(1)
     }
 
@@ -1316,8 +1352,63 @@ impl Game {
         .saturating_sub(usize::from(self.deck_is(Deck::StudioDisplay)))
     }
 
-    fn four_fingers(&self) -> bool {
-        self.count(Joker::Mvp) > 0
+    /// How hands are made: MVP, Fast-Forward.
+    fn rules(&self) -> Rules {
+        Rules {
+            four_fingers: self.count(Joker::Mvp) > 0,
+            shortcut: self.count(Joker::FastForward) > 0,
+        }
+    }
+
+    /// Copies of cards about to be played, discarded or scored as held, as
+    /// Fuzzy Finder and Identicon see them.
+    fn in_play(&self, cards: &[Card]) -> Vec<Card> {
+        let smeared = self.count(Joker::FuzzyFinder) > 0;
+        let any_face = self.count(Joker::Identicon) > 0;
+        cards
+            .iter()
+            .map(|&c| Card {
+                smeared,
+                any_face,
+                ..c
+            })
+            .collect()
+    }
+
+    /// What the jokers see of the game, for their badges.
+    fn board(&self) -> Board<'_> {
+        Board {
+            deck: &self.deck,
+            draw_pile: self.draw_pile.len(),
+            starting_deck: self.starting_deck,
+            jokers: &self.jokers,
+            joker_slots: self.joker_slots(),
+            money: self.money,
+            hands_left: self.hands_left,
+            discards_left: self.discards_left,
+            unique_themes: self.themes_used.len() as u32,
+            targets: self.targets,
+            blind_hands: &self.blind_hands,
+        }
+    }
+
+    /// Chaos Monkey doubles every chance of the jokers and commands.
+    fn update_luck(&mut self) {
+        let luck = 1u64 << self.count(Joker::ChaosMonkey).min(10);
+        for rng in [
+            &mut self.score_rng,
+            &mut self.round_rng,
+            &mut self.command_rng,
+        ] {
+            rng.set_luck(luck);
+        }
+    }
+
+    /// Cards were added to the deck: Pacman Cache grows.
+    fn cards_added(&mut self, cards: usize) {
+        for joker in &mut self.jokers {
+            joker.on_cards_added(cards);
+        }
     }
 
     /// Waits for the player to choose the current blind; every card is back in
@@ -1337,6 +1428,7 @@ impl Game {
         self.jokers_hidden = false;
         self.vendor_unlocked = false;
         self.boss_disabled = false;
+        self.targets = Targets::draw(&mut self.target_rng, &self.deck);
         self.phase = Phase::BlindSelect;
     }
 
@@ -1369,6 +1461,7 @@ impl Game {
     /// Plays the blind on offer: shuffles the deck and deals a hand.
     pub fn select_blind(&mut self) -> Result<(), GameError> {
         self.selecting()?;
+        self.update_luck();
         self.juggle = 3 * self.take_tags(&[Tag::Resolution4k]).len();
         // Jokers and pull requests merged since the blind was announced count too.
         self.hands_left = self.hands_per_blind();
@@ -1377,6 +1470,7 @@ impl Game {
             let blob = self.new_card().with_enhancement(Enhancement::BinaryBlob);
             self.deck.push(blob);
             self.draw_pile.push(blob);
+            self.cards_added(1);
         }
         self.deck_rng.shuffle(&mut self.draw_pile);
         self.phase = Phase::Playing;
@@ -1389,6 +1483,12 @@ impl Game {
             }
             _ => {}
         }
+        let pushes = self.abilities(Joker::ForcePush) as u32;
+        if pushes > 0 {
+            self.hands_left += 3 * pushes;
+            self.discards_left = 0;
+        }
+        self.jokers_at_blind_start();
         self.draw(Draw::Deal);
         self.pick_disabled_joker();
         for _ in 0..self.abilities(Joker::AliasCollection) {
@@ -1400,10 +1500,51 @@ impl Game {
             let card = self.new_card().with_seal(seal);
             self.deck.push(card);
             self.hand.push(card);
+            self.cards_added(1);
         }
         self.sort_hand();
         self.pick_forced_card();
         Ok(())
+    }
+
+    /// When a blind starts: Transitive Dependencies installs core jokers,
+    /// rm -rf node_modules eats its right neighbour, Distro Hopping wipes a
+    /// random joker (not at a boss).
+    fn jokers_at_blind_start(&mut self) {
+        for _ in 0..2 * self.abilities(Joker::TransitiveDependencies) {
+            if !self.has_room(None) {
+                break;
+            }
+            if let Some(joker) = self.random_joker_of(Rarity::Core) {
+                self.jokers.push(OwnedJoker::new(joker, None));
+            }
+        }
+        let mut i = 0;
+        while i < self.jokers.len() {
+            if self.jokers[i].joker == Joker::RmRfNodeModules && i + 1 < self.jokers.len() {
+                let eaten = self.jokers.remove(i + 1);
+                self.jokers[i].counter += 2.0 * eaten.sell_value() as f64;
+            }
+            i += 1;
+        }
+        if self.blind == BlindKind::Boss {
+            return;
+        }
+        let mut i = 0;
+        while i < self.jokers.len() {
+            if self.jokers[i].joker == Joker::DistroHopping {
+                self.jokers[i].counter += 0.5;
+                let others: Vec<usize> = (0..self.jokers.len()).filter(|&j| j != i).collect();
+                if !others.is_empty() {
+                    let gone = others[self.command_rng.below(others.len() as u64) as usize];
+                    self.jokers.remove(gone);
+                    if gone < i {
+                        i -= 1;
+                    }
+                }
+            }
+            i += 1;
+        }
     }
 
     pub fn skip_blind(&mut self) -> Result<(), GameError> {
@@ -1490,13 +1631,19 @@ impl Game {
             return Err(GameError::NotPlaying);
         }
         let indices = self.with_forced(indices)?;
+        self.update_luck();
         let played = self.take(&indices)?;
         for card in &played {
             self.face_down.remove(&card.id);
         }
+        let played = self.in_play(&played);
         let money_before = self.money;
-        let four_fingers = self.four_fingers();
-        let evaluated = evaluate_with(&played, four_fingers);
+        let rules = self.rules();
+        let splash = self.count(Joker::BigBangRelease) > 0;
+        let mut evaluated = evaluate_with(&played, rules);
+        if splash {
+            evaluated.scoring = (0..played.len()).collect();
+        }
         let mut notes = Vec::new();
         let boss = self.boss_effect();
         let most_played = HandKind::ALL
@@ -1539,7 +1686,7 @@ impl Game {
         self.before_scoring(&evaluated, &mut played);
         let scoring: Vec<Card> = evaluated.scoring.iter().map(|&i| played[i]).collect();
         for joker in &mut self.jokers {
-            joker.before_hand(&evaluated, &scoring);
+            joker.before_hand(&evaluated, &played, &scoring, most_played);
         }
         let debuffed: Vec<u32> = played
             .iter()
@@ -1556,27 +1703,35 @@ impl Game {
         } else {
             Vec::new()
         };
+        let held = self.in_play(&self.hand);
+        let board = Board {
+            blind_hands: &self.blind_hands[..self.blind_hands.len() - 1],
+            ..self.board()
+        };
         let table = Table {
             played: &played,
-            held: &self.hand,
+            held: &held,
             jokers: &self.jokers,
             levels: &self.levels,
             plays: &self.plays,
-            four_fingers,
-            deck: &self.deck,
+            rules,
+            splash,
+            board: &board,
             debuffed: &debuffed,
             halve_base: boss == Some(Boss::ThermalThrottle),
             disabled_joker: self.disabled_joker,
             showcase: &showcase,
             balance: self.deck_is(Deck::HyprlandDwindle),
         };
-        let mut breakdown = score(&table, &mut self.score_rng);
+        let mut rng = self.score_rng.clone();
+        let mut breakdown = score(&table, &mut rng);
+        self.score_rng = rng;
         breakdown.notes = notes;
-        self.money += breakdown.money;
+        self.money += breakdown.money as i64;
         match boss {
             Some(Boss::ThermalThrottle) => triggered = true,
             Some(Boss::PerSeatLicense) => {
-                self.money = self.money.saturating_sub(played.len() as u32);
+                self.money -= played.len() as i64;
                 triggered = true;
             }
             Some(Boss::CloudBill) if most_played => {
@@ -1642,7 +1797,7 @@ impl Game {
     fn end_hand(&mut self, mut breakdown: Breakdown, triggered: bool) -> Breakdown {
         let commanders = self.abilities(Joker::IncidentCommander) as u32;
         if triggered && commanders > 0 {
-            self.money += 8 * commanders;
+            self.money += 8 * commanders as i64;
             breakdown
                 .notes
                 .push(format!("Incident Commander: +${}.", 8 * commanders));
@@ -1652,7 +1807,20 @@ impl Game {
         if self.score >= self.target() {
             self.win_blind();
         } else if self.hands_left == 0 {
-            self.phase = Phase::Lost;
+            let snapshot = self
+                .jokers
+                .iter()
+                .position(|j| j.joker == Joker::BtrfsSnapshot);
+            match snapshot {
+                Some(i) if self.score >= self.target() / 4.0 => {
+                    self.jokers.remove(i);
+                    breakdown
+                        .notes
+                        .push("Btrfs Snapshot rolled the blind back to a win.".into());
+                    self.win_blind();
+                }
+                _ => self.phase = Phase::Lost,
+            }
         } else {
             if self.boss_is(Boss::OomKiller) && !self.hand.is_empty() {
                 let mut ids: Vec<u32> = self.hand.iter().map(|c| c.id).collect();
@@ -1732,13 +1900,29 @@ impl Game {
         evaluated: &Evaluated,
         played: &[Card],
         scoring: &[Card],
-        money: u32,
+        money: i64,
         notes: &mut Vec<String>,
     ) {
         if evaluated.contains(HandKind::StraightFlush) {
             self.create_oligarchy_cards(self.abilities(Joker::SeedRound), "Seed Round", notes);
         }
-        let first = self.hands_left == self.hands_per_blind();
+        let first = self.blind_hands.len() == 1;
+        let quines = self.abilities(Joker::Quine);
+        if first && played.len() == 1 && quines > 0 {
+            for _ in 0..quines {
+                self.next_card_id += 1;
+                let copy = Card {
+                    smeared: false,
+                    any_face: false,
+                    ..played[0].with_id(self.next_card_id - 1)
+                };
+                self.deck.push(copy);
+                self.hand.push(copy);
+            }
+            self.cards_added(quines);
+            self.sort_hand();
+            notes.push(format!("Quine: {} copied.", card_label(&played[0])));
+        }
         let six = matches!(played, [card] if card.has_rank() && card.rank == 6);
         let chmods = self.abilities(Joker::AngelInvestor);
         if first && six && chmods > 0 {
@@ -1791,6 +1975,15 @@ impl Game {
             kept
         });
         self.beta_broken |= broke_beta;
+        let inflation = self.abilities(Joker::SemverInflation) as u32;
+        if inflation > 0 {
+            for joker in &mut self.jokers {
+                joker.sell_bonus += inflation;
+            }
+            for held in &mut self.consumables {
+                held.sell_bonus += inflation;
+            }
+        }
         let syncs = self
             .hand
             .iter()
@@ -1830,7 +2023,11 @@ impl Game {
             .iter()
             .map(|&i| self.hand[i])
             .collect();
-        Ok(Some(evaluate_with(&cards, self.four_fingers())))
+        let mut evaluated = evaluate_with(&self.in_play(&cards), self.rules());
+        if self.count(Joker::BigBangRelease) > 0 {
+            evaluated.scoring = (0..cards.len()).collect();
+        }
+        Ok(Some(evaluated))
     }
 
     pub fn discard(&mut self, indices: &[usize]) -> Result<(), GameError> {
@@ -1841,10 +2038,12 @@ impl Game {
             return Err(GameError::NoDiscardsLeft);
         }
         let indices = self.with_forced(indices)?;
+        self.update_luck();
         let discarded = self.take(&indices)?;
         for card in &discarded {
             self.face_down.remove(&card.id);
         }
+        let discarded = self.in_play(&discarded);
         let histories = discarded
             .iter()
             .filter(|c| c.seal == Some(Seal::ShellHistory))
@@ -1856,16 +2055,31 @@ impl Game {
         if self.discards_used == 0 {
             let reloads = self.abilities(Joker::ConfigReload) as u32;
             if reloads > 0 {
-                let kind = evaluate_with(&discarded, self.four_fingers()).kind;
+                let kind = evaluate_with(&discarded, self.rules()).kind;
                 self.levels.raise(kind, reloads);
             }
+            let sales = self.abilities(Joker::GarageSale) as i64;
+            if sales > 0 && discarded.len() == 1 {
+                self.destroy_cards(&[discarded[0].id]);
+                self.money += 3 * sales;
+            }
+        }
+        let bounties = discarded
+            .iter()
+            .filter(|c| c.has_rank() && c.rank == self.targets.rank)
+            .count()
+            * self.abilities(Joker::BugBounty);
+        self.money += 5 * bounties as i64;
+        if discarded.iter().filter(|c| c.is_face()).count() >= 3 {
+            self.money += 5 * self.abilities(Joker::Headhunter) as i64;
         }
         self.discards_left -= 1;
         self.discards_used += 1;
-        for joker in &mut self.jokers {
+        let targets = self.targets;
+        self.jokers.retain_mut(|joker| {
             joker.on_discard();
-            joker.on_cards_discarded(discarded.len());
-        }
+            joker.on_cards_discarded(&discarded, &targets)
+        });
         self.draw(Draw::AfterDiscard);
         self.pick_forced_card();
         Ok(())
@@ -1890,16 +2104,17 @@ impl Game {
         let interest = if pi {
             0
         } else {
-            (self.money / 5).min(self.max_interest())
+            let compound = 1 + self.count(Joker::CompoundInterest) as u32;
+            ((self.money.max(0) / 5) as u32).min(self.max_interest()) * compound
         };
+        let board = self.board();
         let jokers = (0..self.jokers.len())
             .filter_map(|i| copy_target(&self.jokers, i))
             .map(|t| {
-                self.jokers[t].joker.blind_money(
-                    self.discards_left,
-                    self.discards_used,
-                    self.themes_used.len() as u32,
-                )
+                let owned = &self.jokers[t];
+                owned
+                    .joker
+                    .blind_money(owned.counter, self.discards_used, &board)
             })
             .sum();
         Reward {
@@ -1921,11 +2136,12 @@ impl Game {
         if self.phase != Phase::Won {
             return Err(GameError::NotWon);
         }
-        self.money += self.reward.take().map_or(0, |r| r.total);
+        self.money += self.reward.take().map_or(0, |r| r.total as i64);
         self.victory = false;
         self.phase = Phase::Shop;
         self.hand.clear();
         self.reroll_cost = self.base_reroll_cost();
+        self.free_rerolls = self.count(Joker::Paru) as u32;
         self.roll_offers();
         self.packs = (0..SHOP_PACKS).map(|_| self.roll_pack()).collect();
         self.shop_tags();
@@ -1934,7 +2150,8 @@ impl Game {
 
     /// Whether a joker may show up in the shop.
     fn on_sale(&self, joker: Joker) -> bool {
-        let owned = self.jokers.iter().any(|j| j.joker == joker);
+        let owned =
+            self.count(Joker::Flatpak) == 0 && self.jokers.iter().any(|j| j.joker == joker);
         let offered = self
             .offers
             .iter()
@@ -2103,11 +2320,21 @@ impl Game {
         }
     }
 
+    /// How far below $0 you may spend: $20 with Cloud Credits.
+    fn credit(&self) -> i64 {
+        if self.count(Joker::CloudCredits) > 0 {
+            CREDIT_LIMIT
+        } else {
+            0
+        }
+    }
+
+    /// Pays, down to $0, or −$20 with Cloud Credits.
     fn spend(&mut self, amount: u32) -> Result<(), GameError> {
-        self.money = self
-            .money
-            .checked_sub(amount)
-            .ok_or(GameError::NotEnoughMoney)?;
+        if self.money + self.credit() < amount as i64 {
+            return Err(GameError::NotEnoughMoney);
+        }
+        self.money -= amount as i64;
         Ok(())
     }
 
@@ -2136,6 +2363,7 @@ impl Game {
                 self.spend(self.offer_price(index))?;
                 self.next_card_id += 1;
                 self.deck.push(card.with_id(self.next_card_id - 1));
+                self.cards_added(1);
             }
             Offer::Consumable(consumable) => {
                 if !self.clipboard_room() {
@@ -2163,7 +2391,19 @@ impl Game {
             return Err(GameError::BadSelection(format!("no joker #{index}")));
         }
         let sold = self.jokers.remove(index);
-        self.money += sold.sell_value();
+        self.money += sold.sell_value() as i64;
+        match sold.joker {
+            Joker::StickerPack => self.gain_tag(Tag::Badges2x),
+            Joker::Syncthing if sold.counter >= SYNCTHING_BLINDS && !self.jokers.is_empty() => {
+                let i = self.command_rng.below(self.jokers.len() as u64) as usize;
+                let mut copy = self.jokers[i].clone();
+                if copy.edition == Some(Edition::Transparent) {
+                    copy.edition = None;
+                }
+                self.jokers.push(copy);
+            }
+            _ => {}
+        }
         if self.phase == Phase::Playing {
             self.vendor_unlocked = true;
             if sold.joker == Joker::Rollback && self.blind == BlindKind::Boss {
@@ -2262,6 +2502,7 @@ impl Game {
             .with_enhancement(enhancement);
         self.deck.push(card);
         self.hand.push(card);
+        self.cards_added(1);
     }
 
     /// A random joker of this rarity not owned yet.
@@ -2361,6 +2602,7 @@ impl Game {
                         self.deck.push(copy);
                         self.hand.push(copy);
                     }
+                    self.cards_added(2);
                 }
             }
             Oligarchy::AspiringBillionaire => {
@@ -2544,7 +2786,7 @@ impl Game {
                     self.create(command);
                 }
             }
-            Command::Rsync => self.money += self.money.min(20),
+            Command::Rsync => self.money += self.money.clamp(0, 20),
             Command::HyprctlReload => {
                 let bare: Vec<usize> = (0..self.jokers.len())
                     .filter(|&j| self.jokers[j].edition.is_none())
@@ -2563,7 +2805,7 @@ impl Game {
             }
             Command::DuSh => {
                 let value: u32 = self.jokers.iter().map(OwnedJoker::sell_value).sum();
-                self.money += value.min(50);
+                self.money += value.min(50) as i64;
             }
             Command::YayS => {
                 let mut rng = self.command_rng.clone();
@@ -2580,9 +2822,9 @@ impl Game {
         if self.phase == Phase::Lost {
             return Err(GameError::NotPlaying);
         }
-        let consumable = self.consumable(index)?;
-        self.consumables.remove(index);
-        self.money += consumable.sell_value();
+        self.consumable(index)?;
+        let held = self.consumables.remove(index);
+        self.money += held.sell_value() as i64;
         for joker in &mut self.jokers {
             joker.on_card_sold();
         }
@@ -2593,9 +2835,10 @@ impl Game {
     /// depends on it).
     pub fn bonuses_for(&self, kind: HandKind) -> Vec<Option<Bonus>> {
         let plays = self.plays.get(kind) + 1;
+        let board = self.board();
         self.jokers
             .iter()
-            .map(|j| j.bonus(Some(plays), self.themes_used.len() as u32, &self.deck))
+            .map(|j| j.bonus(Some((kind, plays)), &board))
             .collect()
     }
 
@@ -2756,6 +2999,7 @@ impl Game {
             PackItem::Card(card) => {
                 self.next_card_id += 1;
                 self.deck.push(card.with_id(self.next_card_id - 1));
+                self.cards_added(1);
             }
         }
         let opened = self.opened.as_mut().ok_or(GameError::NotInPack)?;
@@ -2816,8 +3060,15 @@ impl Game {
     /// New offers; each reroll costs $1 more than the previous one.
     pub fn reroll(&mut self) -> Result<(), GameError> {
         self.in_shop()?;
-        self.spend(self.reroll_cost)?;
-        self.reroll_cost += 1;
+        if self.free_rerolls > 0 {
+            self.free_rerolls -= 1;
+        } else {
+            self.spend(self.reroll_cost)?;
+            self.reroll_cost += 1;
+        }
+        for joker in &mut self.jokers {
+            joker.on_reroll();
+        }
         self.roll_offers();
         Ok(())
     }
@@ -2831,6 +3082,7 @@ impl Game {
                 self.consumables.push(Held {
                     consumable: self.consumables[i].consumable,
                     transparent: true,
+                    sell_bonus: 0,
                 });
             }
         }
@@ -2844,7 +3096,7 @@ impl Game {
 
     pub fn cheat(&mut self, cheat: Cheat) -> Result<(), GameError> {
         if let Some(money) = cheat.money {
-            self.money = money;
+            self.money = money as i64;
         }
         for joker in cheat.jokers {
             if !self.has_room(cheat.edition) {
@@ -2974,7 +3226,7 @@ impl Game {
 
     fn joker_info(&self, index: usize) -> JokerInfo {
         let owned = &self.jokers[index];
-        let current = if owned.joker == Joker::Fork {
+        let current = if matches!(owned.joker, Joker::Fork | Joker::Upstream) {
             Some(match copy_target(&self.jokers, index) {
                 Some(t) => format!("Copying {}", self.jokers[t].joker.name()),
                 None => "Nothing to copy".to_string(),
@@ -2985,7 +3237,7 @@ impl Game {
         JokerInfo::new(
             owned,
             current,
-            owned.bonus(None, self.themes_used.len() as u32, &self.deck),
+            owned.bonus(None, &self.board()),
         )
     }
 
@@ -3085,12 +3337,14 @@ impl Game {
             jokers: (0..self.jokers.len()).map(|i| self.joker_info(i)).collect(),
             max_jokers: self.joker_slots(),
             money: self.money,
+            credit: self.credit(),
             reward: self.reward.clone(),
             consumables: self
                 .consumables
                 .iter()
                 .map(|held| ConsumableInfo {
                     transparent: held.transparent,
+                    sell_value: held.sell_value(),
                     ..ConsumableInfo::new(held.consumable, held.consumable.price())
                 })
                 .collect(),
@@ -3131,7 +3385,11 @@ impl Game {
                     }),
                 })
                 .collect(),
-            reroll_cost: self.reroll_cost,
+            reroll_cost: if self.free_rerolls > 0 {
+                0
+            } else {
+                self.reroll_cost
+            },
         }
     }
 }
@@ -3508,12 +3766,12 @@ mod tests {
         let owned = OwnedJoker::new(Joker::Hotwire, None);
         game.buy(0).unwrap();
         assert_eq!(game.jokers, [owned.clone()]);
-        assert_eq!(game.money, 20 - owned.price());
+        assert_eq!(game.money, 20 - owned.price() as i64);
         assert_eq!(game.offers.len(), SHOP_OFFERS - 1);
         assert!(game.buy(5).is_err());
         game.sell(0).unwrap();
         assert!(game.jokers.is_empty());
-        assert_eq!(game.money, 20 - owned.price() + owned.sell_value());
+        assert_eq!(game.money, 20 - owned.price() as i64 + owned.sell_value() as i64);
     }
 
     #[test]
@@ -4176,7 +4434,7 @@ mod tests {
             game.discard(&[0, 1, 2, 3, 4]).unwrap();
         }
         assert_eq!((game.jokers[1].counter, game.jokers[1].progress), (1.0, 15));
-        game.jokers[1].on_cards_discarded(10);
+        game.jokers[1].on_cards_discarded(&cards("2H 2H 2H 2H 2H 2H 2H 2H 2H 2H"), &Targets::default());
         let s = game.state();
         assert_eq!(s.jokers[1].bonus.as_ref().unwrap().text, "×2 mult · 2/23");
     }
@@ -4397,7 +4655,7 @@ mod tests {
         game.buy_voucher(0).unwrap();
         assert_eq!(
             (game.money, game.state().vouchers_for_sale.len()),
-            (50 - VOUCHER_PRICE, 0)
+            (50 - VOUCHER_PRICE as i64, 0)
         );
         assert!(game.buy_voucher(0).is_err());
         for _ in 0..200 {
@@ -4725,5 +4983,138 @@ mod tests {
         assert_eq!(game.reroll(), Err(GameError::NotInShop));
         // Jokers may be sold during a blind (Rollback, The Vendor Lock-in).
         assert_eq!(game.sell(0), Ok(()));
+    }
+
+    #[test]
+    fn jokers_that_bend_hands() {
+        let mut game = playing(1, vec![Joker::FastForward, Joker::FuzzyFinder]);
+        game.hand = cards("2H 4D 6S 8C 10H 3D 3C 3S");
+        assert_eq!(game.preview(&[0, 1, 2, 3, 4]).unwrap().unwrap().kind, HandKind::Straight);
+        game.hand = cards("2H 4D 7D 9D JD 3C 3C 3S");
+        assert_eq!(game.preview(&[0, 1, 2, 3, 4]).unwrap().unwrap().kind, HandKind::Flush);
+        let mut game = playing(1, vec![Joker::Identicon, Joker::EmojiReaction]);
+        game.hand = cards("2H 2D 5S 7C 9H 3D 3C 3S");
+        assert_eq!(game.play(&[0, 1]).unwrap().mult, 12.0);
+    }
+
+    #[test]
+    fn jokers_that_trade_hand_size_hands_and_discards() {
+        let game = Game::new(1, vec![Joker::SwapFile, Joker::Bloatware]);
+        assert_eq!(game.hand_size(), HAND_SIZE + 5 - 2);
+        let game = Game::new(1, vec![Joker::Backspace]);
+        assert_eq!((game.discards_left, game.hand_size()), (DISCARDS_PER_BLIND + 3, HAND_SIZE - 1));
+        let game = Game::new(1, vec![Joker::VerticalMonitor]);
+        assert_eq!((game.hands_left, game.hand_size()), (HANDS_PER_BLIND - 1, HAND_SIZE + 2));
+        let game = playing(1, vec![Joker::ForcePush]);
+        assert_eq!((game.hands_left, game.discards_left), (HANDS_PER_BLIND + 3, 0));
+        let mut swap = OwnedJoker::new(Joker::SwapFile, None);
+        for _ in 0..4 {
+            assert!(swap.end_of_blind(false, &mut Rng::new(1)));
+        }
+        assert!(!swap.end_of_blind(false, &mut Rng::new(1)));
+    }
+
+    #[test]
+    fn cloud_credits_and_paru() {
+        let mut game = shopping(1, vec![Joker::CloudCredits]);
+        game.money = 0;
+        game.spend(15).unwrap();
+        assert_eq!(game.money, -15);
+        assert!(game.spend(10).is_err());
+        let mut game = shopping(1, vec![Joker::Paru, Joker::RefreshSpam]);
+        assert_eq!(game.state().reroll_cost, 0);
+        game.reroll().unwrap();
+        assert_eq!(game.money, 50);
+        game.reroll().unwrap();
+        assert_eq!(game.money, 50 - REROLL_COST as i64);
+        assert_eq!(game.jokers[1].counter, 4.0);
+    }
+
+    #[test]
+    fn selling_sticker_pack_and_syncthing() {
+        let mut game = shopping(1, vec![Joker::StickerPack]);
+        game.sell(0).unwrap();
+        assert_eq!(game.tags, [Tag::Badges2x]);
+        let mut game = shopping(1, vec![Joker::Syncthing, Joker::Omakase]);
+        game.jokers[0].counter = SYNCTHING_BLINDS;
+        game.sell(0).unwrap();
+        assert_eq!(
+            game.jokers.iter().map(|j| j.joker).collect::<Vec<_>>(),
+            [Joker::Omakase, Joker::Omakase]
+        );
+    }
+
+    #[test]
+    fn btrfs_snapshot_saves_a_close_blind() {
+        let mut game = playing(1, vec![Joker::BtrfsSnapshot]);
+        game.hands_left = 1;
+        game.score = game.target() * 0.3;
+        game.play(&[0]).unwrap();
+        assert_eq!((game.phase, game.jokers.len()), (Phase::Won, 0));
+        let mut game = playing(1, vec![Joker::BtrfsSnapshot]);
+        game.hands_left = 1;
+        game.play(&[0]).unwrap();
+        assert_eq!(game.phase, Phase::Lost);
+    }
+
+    #[test]
+    fn jokers_act_when_a_blind_starts() {
+        let game = playing(1, vec![Joker::RmRfNodeModules, Joker::Omakase, Joker::TransitiveDependencies]);
+        assert_eq!(game.jokers.len(), 4);
+        assert_eq!(game.jokers[0].counter, 4.0);
+        assert!(game.jokers[2..].iter().all(|j| j.joker.rarity() == Rarity::Core));
+        let game = playing(1, vec![Joker::DistroHopping, Joker::Omakase]);
+        assert_eq!(game.jokers.len(), 1);
+        assert_eq!(game.jokers[0].counter, 1.5);
+    }
+
+    #[test]
+    fn discard_jokers_pay_and_destroy() {
+        let mut game = playing(1, vec![Joker::Headhunter, Joker::BugBounty, Joker::GarageSale]);
+        game.targets.rank = 13;
+        game.hand = cards("KH QD JS 5C 4H 3D 2C 2S");
+        game.discard(&[0, 1, 2]).unwrap();
+        assert_eq!(game.money, START_MONEY + 5 + 5);
+        let mut game = playing(1, vec![Joker::GarageSale]);
+        let card = game.hand[0];
+        game.discard(&[0]).unwrap();
+        assert_eq!(game.money, START_MONEY + 3);
+        assert!(!game.deck.contains(&card));
+    }
+
+    #[test]
+    fn quine_copies_a_lone_first_card() {
+        let mut game = playing(1, vec![Joker::Quine, Joker::PacmanCache]);
+        let card = game.hand[0];
+        let b = game.play(&[0]).unwrap();
+        assert_eq!(game.deck.len(), 53);
+        assert!(game.deck.iter().filter(|c| c.rank == card.rank && c.suit == card.suit).count() == 2);
+        assert!(b.notes.iter().any(|n| n.starts_with("Quine")));
+        assert_eq!(game.jokers[1].counter, 1.25);
+    }
+
+    #[test]
+    fn jokers_that_pay_or_inflate_at_the_end_of_the_blind() {
+        let game = won_game(9, vec![Joker::NineNines, Joker::HockeyStick]);
+        assert_eq!(game.reward.as_ref().unwrap().jokers, 4 + 1);
+        let game = won_game(9, vec![Joker::SemverInflation, Joker::Omakase]);
+        assert!(game.jokers.iter().all(|j| j.sell_bonus == 1));
+        let mut game = shopping(9, vec![Joker::Flatpak, Joker::Omakase]);
+        assert!(game.on_sale(Joker::Omakase));
+        game.jokers.remove(0);
+        assert!(!game.on_sale(Joker::Omakase));
+    }
+
+    #[test]
+    fn targets_change_with_each_blind() {
+        let mut game = Game::new(3, vec![Joker::TodoMd]);
+        let mut seen = HashSet::new();
+        for _ in 0..12 {
+            seen.insert(game.targets.hand);
+            game.skip_blind().ok();
+            game.await_blind();
+        }
+        assert!(seen.len() > 1);
+        assert!(game.state().jokers[0].bonus.as_ref().unwrap().text.starts_with("$4 for "));
     }
 }

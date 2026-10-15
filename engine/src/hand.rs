@@ -180,35 +180,57 @@ impl Evaluated {
 }
 
 pub fn evaluate(cards: &[Card]) -> Evaluated {
-    evaluate_with(cards, false)
+    evaluate_with(cards, Rules::default())
 }
 
-/// Cards of a straight: a run of `need` consecutive ranks, the ace also
-/// counting low; the highest run wins.
-fn straight_run(cards: &[Card], need: u8) -> Vec<usize> {
+/// Jokers that bend how hands are made.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Rules {
+    /// MVP: flushes and straights need only 4 cards.
+    pub four_fingers: bool,
+    /// Fast-Forward: straights may skip one rank between two cards.
+    pub shortcut: bool,
+}
+
+/// Cards of a straight: a run of `need` ranks, each one or (with `shortcut`)
+/// two below the previous, the ace also counting low; the highest run wins.
+fn straight_run(cards: &[Card], need: u8, shortcut: bool) -> Vec<usize> {
     // Rank 1 stands for the ace played low; Binary Blobs have no rank.
-    let in_run = |card: &Card, low: u8, top: u8| {
-        card.has_rank() && ((low..=top).contains(&card.rank) || (low == 1 && card.rank == ACE))
+    let is_rank = |card: &Card, rank: u8| {
+        card.has_rank() && (card.rank == rank || (rank == 1 && card.rank == ACE))
     };
-    for top in (need..=ACE).rev() {
-        let low = top + 1 - need;
-        let has = |rank: u8| cards.iter().any(|c| in_run(c, rank, rank));
-        if (low..=top).all(has) {
+    let present = |rank: u8| cards.iter().any(|c| is_rank(c, rank));
+    let max_step = if shortcut { 2 } else { 1 };
+    // The ranks of a run of `left` cards going down from `top`.
+    fn run(top: u8, left: u8, max_step: u8, present: &dyn Fn(u8) -> bool) -> Option<Vec<u8>> {
+        if !present(top) {
+            return None;
+        }
+        if left == 1 {
+            return Some(vec![top]);
+        }
+        (1..=max_step).filter(|&s| top > s).find_map(|step| {
+            let mut ranks = run(top - step, left - 1, max_step, present)?;
+            ranks.push(top);
+            Some(ranks)
+        })
+    }
+    for top in (1..=ACE).rev() {
+        if let Some(ranks) = run(top, need, max_step, &present) {
             return (0..cards.len())
-                .filter(|&i| in_run(&cards[i], low, top))
+                .filter(|&i| ranks.iter().any(|&r| is_rank(&cards[i], r)))
                 .collect();
         }
     }
     Vec::new()
 }
 
-/// `four_fingers`: flushes and straights need only 4 cards (the MVP joker).
 /// Binary Blobs take no part in the hand but always score; Symlinks count as
 /// every suit.
-pub fn evaluate_with(cards: &[Card], four_fingers: bool) -> Evaluated {
+pub fn evaluate_with(cards: &[Card], rules: Rules) -> Evaluated {
     assert!((1..=5).contains(&cards.len()), "play 1 to 5 cards");
     let all: Vec<usize> = (0..cards.len()).collect();
-    let need = if four_fingers { 4 } else { 5 };
+    let need = if rules.four_fingers { 4 } else { 5 };
 
     let blobs: Vec<usize> = all
         .iter()
@@ -241,7 +263,7 @@ pub fn evaluate_with(cards: &[Card], four_fingers: bool) -> Evaluated {
         })
         .find(|suited| suited.len() >= need as usize)
         .unwrap_or_default();
-    let straight_cards = straight_run(cards, need);
+    let straight_cards = straight_run(cards, need, rules.shortcut);
     let (flush, straight) = (!flush_cards.is_empty(), !straight_cards.is_empty());
 
     let pairs = sizes.iter().filter(|&&s| s >= 2).count();
@@ -350,8 +372,25 @@ mod tests {
     }
 
     #[test]
+    fn shortcuts_skip_a_rank_in_straights() {
+        let rules = Rules {
+            four_fingers: false,
+            shortcut: true,
+        };
+        let short = |text| evaluate_with(&cards(text), rules);
+        assert_eq!(short("2H 4D 6S 8C 10H").kind, HandKind::Straight);
+        assert_eq!(short("AH 3D 4S 6C 7H").kind, HandKind::Straight);
+        assert_eq!(short("2H 5D 6S 7C 8H").kind, HandKind::HighCard);
+        assert_eq!(evaluate(&cards("2H 4D 6S 8C 10H")).kind, HandKind::HighCard);
+    }
+
+    #[test]
     fn four_fingers_make_short_flushes_and_straights() {
-        let four = |text| evaluate_with(&cards(text), true);
+        let rules = Rules {
+            four_fingers: true,
+            shortcut: false,
+        };
+        let four = |text| evaluate_with(&cards(text), rules);
         let flush = four("2H 9H KH 4H 6S");
         assert_eq!(
             (flush.kind, flush.scoring.clone()),

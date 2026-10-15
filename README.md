@@ -138,7 +138,7 @@ Responses:
   the shop), `tags` (badges won, waiting), `boss_reroll_cost` (when Change Request allows it now), `modifiers` (names and effects of every enhancement, seal and
   edition), `consumables` (`kind` = `theme` / `command` / `oligarchy`, `id`, `name`,
   `description`, `quip`, `price`, `sell_value`, `min_cards` / `max_cards` to select,
-  `needs_hand` when it works on the cards in hand, `transparent` when it takes no slot), `consumable_slots`, `unique_themes`, `money`,
+  `needs_hand` when it works on the cards in hand, `transparent` when it takes no slot), `consumable_slots`, `unique_themes`, `money` (below $0 with Cloud Credits, down to `-credit`),
   `reward` in the `won` phase (with `cards` for Enterprise cards held, `discards` for
   the Raspberry Pi's unused discards, and `notes` such
   as "Beta Release broke."), `shop` offers

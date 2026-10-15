@@ -22,7 +22,7 @@ function number(n) {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
 }
 
-function money(n) { return "$" + n }
+function money(n) { return n < 0 ? "−$" + (-n) : "$" + n }
 
 // "1 card", "2 cards", "1–3 cards".
 function range(min, max) {
