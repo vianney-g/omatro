@@ -10,6 +10,7 @@ use crate::modifier::{Edition, Enhancement, Seal};
 use crate::pack::{Pack, PackKind, SHOP_PACKS};
 use crate::rng::Rng;
 use crate::score::{Breakdown, Table, copy_target, score};
+use crate::voucher::{VOUCHER_PRICE, Voucher};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
@@ -176,6 +177,7 @@ impl ConsumableInfo {
 pub enum OfferInfo {
     Joker(JokerInfo),
     Consumable(ConsumableInfo),
+    Card(CardOffer),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -187,6 +189,37 @@ pub enum BlindStatus {
     Current,
     Defeated,
     Skipped,
+}
+
+/// A pull request, merged or for sale.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct VoucherInfo {
+    pub id: Voucher,
+    pub name: &'static str,
+    pub description: &'static str,
+    pub quip: &'static str,
+    pub price: u32,
+}
+
+impl From<Voucher> for VoucherInfo {
+    fn from(voucher: Voucher) -> Self {
+        VoucherInfo {
+            id: voucher,
+            name: voucher.name(),
+            description: voucher.description(),
+            quip: voucher.quip(),
+            price: VOUCHER_PRICE,
+        }
+    }
+}
+
+/// A playing card for sale in the shop.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CardOffer {
+    /// Always "card".
+    pub kind: &'static str,
+    pub card: Card,
+    pub price: u32,
 }
 
 /// The boss of the ante.
@@ -369,6 +402,11 @@ pub struct State {
     pub jokers_hidden: bool,
     /// The Windows Update: the joker that does nothing this hand.
     pub disabled_joker: Option<usize>,
+    /// Pull requests merged, and the one for sale this ante (in the shop).
+    pub vouchers: Vec<VoucherInfo>,
+    pub voucher: Option<VoucherInfo>,
+    /// Change Request: what rerolling the boss costs, when allowed now.
+    pub boss_reroll_cost: Option<u32>,
     pub hand_size: usize,
     /// Cards left to draw during a blind, the whole deck otherwise; sorted by
     /// suit, then descending rank.
@@ -434,6 +472,9 @@ pub struct Cheat {
     /// Sets this ante's boss to the next one in the list.
     #[serde(default)]
     pub next_boss: bool,
+    /// Merges pull requests.
+    #[serde(default)]
+    pub vouchers: Vec<Voucher>,
     /// Opens a random pack (in the shop).
     #[serde(default)]
     pub random_pack: bool,
@@ -514,6 +555,8 @@ enum Offer {
         edition: Option<Edition>,
     },
     Consumable(Consumable),
+    /// A playing card for the deck (Card Marketplace); it gets its id once bought.
+    Card(Card),
 }
 
 pub struct Game {
@@ -587,6 +630,12 @@ pub struct Game {
     jokers_hidden: bool,
     /// The Vendor Lock-in: a joker was sold, cards score again.
     vendor_unlocked: bool,
+    /// Pull requests merged, and the one for sale this ante.
+    vouchers: Vec<Voucher>,
+    voucher_offer: Option<Voucher>,
+    voucher_rng: Rng,
+    /// Change Request: the boss was rerolled this ante.
+    boss_rerolled: bool,
     /// Beta Release broke: it is gone from the shop, Stable Release shows up.
     beta_broken: bool,
 }
@@ -643,11 +692,150 @@ impl Game {
             disabled_joker: None,
             jokers_hidden: false,
             vendor_unlocked: false,
+            vouchers: Vec::new(),
+            voucher_offer: None,
+            voucher_rng: Rng::stream(seed, "vouchers"),
+            boss_rerolled: false,
             beta_broken: false,
         };
         game.roll_boss();
+        game.roll_voucher();
         game.await_blind();
         game
+    }
+
+    pub fn has(&self, voucher: Voucher) -> bool {
+        self.vouchers.contains(&voucher)
+    }
+
+    /// Of these pull requests, how many were merged.
+    fn merged(&self, vouchers: &[Voucher]) -> usize {
+        vouchers.iter().filter(|&&v| self.has(v)).count()
+    }
+
+    /// The pull request for sale this ante: one not merged yet, a follow-up
+    /// only once its first part was.
+    fn roll_voucher(&mut self) {
+        let pool: Vec<Voucher> = Voucher::ALL
+            .into_iter()
+            .filter(|&v| !self.has(v) && v.follows().is_none_or(|first| self.has(first)))
+            .collect();
+        self.voucher_offer = pool
+            .get(self.voucher_rng.below(pool.len().max(1) as u64) as usize)
+            .copied();
+    }
+
+    /// Merges a pull request, with its immediate effects.
+    fn merge(&mut self, voucher: Voucher) {
+        self.vouchers.push(voucher);
+        if matches!(voucher, Voucher::GitRevert | Voucher::GitResetHard) {
+            self.ante = self.ante.saturating_sub(1).max(1);
+        }
+        if self.phase == Phase::Shop {
+            self.reroll_cost = self.reroll_cost.saturating_sub(match voucher {
+                Voucher::MirrorList | Voucher::FastestMirror => 2,
+                _ => 0,
+            });
+        }
+    }
+
+    /// Shop prices after Early Bird (25% off) or Lifetime Deal (50% off).
+    fn discounted(&self, price: u32) -> u32 {
+        let factor = if self.has(Voucher::LifetimeDeal) {
+            0.5
+        } else if self.has(Voucher::EarlyBird) {
+            0.75
+        } else {
+            1.0
+        };
+        if price == 0 {
+            0
+        } else {
+            ((price as f64 * factor).round() as u32).max(1)
+        }
+    }
+
+    /// Edition odds, raised by Compositor Tweaks (×2) and Eye Candy (×4).
+    fn edition_factor(&self) -> f64 {
+        if self.has(Voucher::EyeCandy) {
+            4.0
+        } else if self.has(Voucher::CompositorTweaks) {
+            2.0
+        } else {
+            1.0
+        }
+    }
+
+    fn roll_edition(&self, rng: &mut Rng) -> Option<Edition> {
+        let roll = rng.unit();
+        let mut odds = 0.0;
+        let factor = self.edition_factor();
+        Edition::ALL.into_iter().rev().find(|e| {
+            odds += e.odds() * factor;
+            roll < odds
+        })
+    }
+
+    fn hands_per_blind(&self) -> u32 {
+        let more = self.merged(&[Voucher::Overtime, Voucher::CrunchTime]) as u32;
+        let less = self.merged(&[Voucher::GitRevert]) as u32;
+        (HANDS_PER_BLIND + more).saturating_sub(less).max(1)
+    }
+
+    fn discards_per_blind(&self) -> u32 {
+        let more =
+            self.count(Joker::UndoHistory) + self.merged(&[Voucher::RmI, Voucher::EmptyTrash]);
+        let less = self.merged(&[Voucher::GitResetHard]);
+        (DISCARDS_PER_BLIND + more as u32).saturating_sub(less as u32)
+    }
+
+    fn max_interest(&self) -> u32 {
+        if self.has(Voucher::IndexFund) {
+            20
+        } else if self.has(Voucher::HighYieldSavings) {
+            10
+        } else {
+            MAX_INTEREST
+        }
+    }
+
+    fn consumable_slots(&self) -> usize {
+        CONSUMABLE_SLOTS + self.merged(&[Voucher::ClipboardManager])
+    }
+
+    fn base_reroll_cost(&self) -> u32 {
+        REROLL_COST
+            .saturating_sub(2 * self.merged(&[Voucher::MirrorList, Voucher::FastestMirror]) as u32)
+    }
+
+    /// The price of rerolling the boss, when Change Request allows it now.
+    fn boss_reroll_cost(&self) -> Option<u32> {
+        let allowed = self.phase == Phase::BlindSelect
+            && self.has(Voucher::ChangeRequest)
+            && (self.has(Voucher::EmergencyChange) || !self.boss_rerolled);
+        allowed.then_some(VOUCHER_PRICE)
+    }
+
+    pub fn buy_voucher(&mut self) -> Result<(), GameError> {
+        self.in_shop()?;
+        let voucher = self
+            .voucher_offer
+            .ok_or_else(|| GameError::BadSelection("no pull request for sale".into()))?;
+        self.spend(VOUCHER_PRICE)?;
+        self.voucher_offer = None;
+        self.merge(voucher);
+        Ok(())
+    }
+
+    /// Change Request: draws another boss for this ante.
+    pub fn reroll_boss(&mut self) -> Result<(), GameError> {
+        let cost = self
+            .boss_reroll_cost()
+            .ok_or_else(|| GameError::BadSelection("no boss reroll available".into()))?;
+        self.spend(cost)?;
+        self.roll_boss();
+        self.boss_rerolled = true;
+        Ok(())
     }
 
     fn target(&self) -> f64 {
@@ -770,7 +958,8 @@ impl Game {
             .filter(|c| c.edition == Some(Edition::Transparent))
             .count();
         let monitor = usize::from(self.boss_is(Boss::Monitor43));
-        (HAND_SIZE + self.count(Joker::Ultrawide) + transparent)
+        let displays = self.merged(&[Voucher::Hidpi, Voucher::Display4k]);
+        (HAND_SIZE + self.count(Joker::Ultrawide) + transparent + displays)
             .saturating_sub(self.hand_size_penalty + monitor)
             .max(1)
     }
@@ -802,7 +991,7 @@ impl Game {
             .iter()
             .filter(|j| j.edition == Some(Edition::Transparent))
             .count();
-        MAX_JOKERS + transparent
+        MAX_JOKERS + transparent + self.merged(&[Voucher::FeatureFlag])
     }
 
     fn four_fingers(&self) -> bool {
@@ -815,8 +1004,8 @@ impl Game {
         self.draw_pile = self.deck.clone();
         self.hand.clear();
         self.score = 0.0;
-        self.hands_left = HANDS_PER_BLIND;
-        self.discards_left = DISCARDS_PER_BLIND + self.count(Joker::UndoHistory) as u32;
+        self.hands_left = self.hands_per_blind();
+        self.discards_left = self.discards_per_blind();
         self.discards_used = 0;
         self.blind_hands.clear();
         self.face_down.clear();
@@ -838,6 +1027,8 @@ impl Game {
                 self.skipped.clear();
                 self.played_this_ante.clear();
                 self.roll_boss();
+                self.roll_voucher();
+                self.boss_rerolled = false;
             }
         }
         self.await_blind();
@@ -854,8 +1045,9 @@ impl Game {
     /// Plays the blind on offer: shuffles the deck and deals a hand.
     pub fn select_blind(&mut self) -> Result<(), GameError> {
         self.selecting()?;
-        // Jokers bought since the blind was announced count too.
-        self.discards_left = DISCARDS_PER_BLIND + self.count(Joker::UndoHistory) as u32;
+        // Jokers and pull requests merged since the blind was announced count too.
+        self.hands_left = self.hands_per_blind();
+        self.discards_left = self.discards_per_blind();
         for _ in 0..self.abilities(Joker::ClosedSource) {
             let blob = self.new_card().with_enhancement(Enhancement::BinaryBlob);
             self.deck.push(blob);
@@ -1024,6 +1216,14 @@ impl Game {
             .map(|c| c.id)
             .collect();
         triggered |= played.iter().any(|c| debuffed.contains(&c.id));
+        let showcase: Vec<usize> = if self.has(Voucher::ThemeShowcase) {
+            let theme = Consumable::Theme(Theme::ALL[evaluated.kind as usize]);
+            (0..self.consumables.len())
+                .filter(|&i| self.consumables[i].consumable == theme)
+                .collect()
+        } else {
+            Vec::new()
+        };
         let table = Table {
             played: &played,
             held: &self.hand,
@@ -1035,6 +1235,7 @@ impl Game {
             debuffed: &debuffed,
             halve_base: boss == Some(Boss::ThermalThrottle),
             disabled_joker: self.disabled_joker,
+            showcase: &showcase,
         };
         let mut breakdown = score(&table, &mut self.score_rng);
         breakdown.notes = notes;
@@ -1204,7 +1405,7 @@ impl Game {
         if evaluated.contains(HandKind::StraightFlush) {
             self.create_oligarchy_cards(self.abilities(Joker::SeedRound), "Seed Round", notes);
         }
-        let first = self.hands_left == HANDS_PER_BLIND;
+        let first = self.hands_left == self.hands_per_blind();
         let six = matches!(played, [card] if card.has_rank() && card.rank == 6);
         let chmods = self.abilities(Joker::AngelInvestor);
         if first && six && chmods > 0 {
@@ -1335,7 +1536,7 @@ impl Game {
             kind => kind.reward(),
         };
         let hands = self.hands_left;
-        let interest = (self.money / 5).min(MAX_INTEREST);
+        let interest = (self.money / 5).min(self.max_interest());
         let jokers = (0..self.jokers.len())
             .filter_map(|i| copy_target(&self.jokers, i))
             .map(|t| {
@@ -1367,7 +1568,7 @@ impl Game {
         self.victory = false;
         self.phase = Phase::Shop;
         self.hand.clear();
-        self.reroll_cost = REROLL_COST;
+        self.reroll_cost = self.base_reroll_cost();
         self.roll_offers();
         self.packs = (0..SHOP_PACKS).map(|_| self.roll_pack()).collect();
         Ok(())
@@ -1393,15 +1594,35 @@ impl Game {
     fn roll_offers(&mut self) {
         self.offers.clear();
         let mut rng = self.shop_rng.clone();
-        for _ in 0..SHOP_OFFERS {
-            let roll = rng.below(28);
-            let offer = if roll < 20 {
-                self.roll_joker(&mut rng)
-            } else if roll < 24 {
-                self.roll_theme(&mut rng)
+        let factor = |base: Voucher, more: Voucher| {
+            if self.has(more) {
+                4.0
+            } else if self.has(base) {
+                2.0
             } else {
+                1.0
+            }
+        };
+        let theme = 4.0 * factor(Voucher::ThemeGallery, Voucher::ThemeMarketplace);
+        let command = 4.0 * factor(Voucher::ShellAliases, Voucher::ShellPlugins);
+        let card = if self.has(Voucher::CardMarketplace) {
+            4.0
+        } else {
+            0.0
+        };
+        let slots =
+            SHOP_OFFERS + self.merged(&[Voucher::MoreWorkspaces, Voucher::EvenMoreWorkspaces]);
+        for _ in 0..slots {
+            let roll = rng.unit() * (20.0 + theme + command + card);
+            let offer = if roll < 20.0 {
+                self.roll_joker(&mut rng)
+            } else if roll < 20.0 + theme {
+                self.roll_theme(&mut rng)
+            } else if roll < 20.0 + theme + command {
                 let command = Command::ALL[rng.below(Command::ALL.len() as u64) as usize];
                 Some(Offer::Consumable(Consumable::Command(command)))
+            } else {
+                Some(Offer::Card(self.shop_card(&mut rng)))
             };
             match offer {
                 Some(offer) => self.offers.push(offer),
@@ -1455,19 +1676,37 @@ impl Game {
             return None;
         }
         let joker = pool[rng.below(pool.len() as u64) as usize];
-        let roll = rng.unit();
-        let mut odds = 0.0;
-        let edition = Edition::ALL.into_iter().rev().find(|e| {
-            odds += e.odds();
-            roll < odds
-        });
+        let edition = self.roll_edition(rng);
         Some(Offer::Joker { joker, edition })
+    }
+
+    /// A playing card for the shop (Card Marketplace); with Premium Cards, it
+    /// may come with modifiers.
+    fn shop_card(&self, rng: &mut Rng) -> Card {
+        let mut card = Card::new(2 + rng.below(13) as u8, Suit::ALL[rng.below(4) as usize]);
+        if self.has(Voucher::PremiumCards) {
+            if rng.unit() < 0.4 {
+                card.enhancement = Some(Enhancement::ALL[rng.below(8) as usize]);
+            }
+            if rng.unit() < 0.2 {
+                card.seal = Some(Seal::ALL[rng.below(Seal::ALL.len() as u64) as usize]);
+            }
+            card.edition = self.roll_edition(rng);
+        }
+        card
+    }
+
+    /// A playing card costs $1, plus $1 per modifier.
+    fn card_price(card: &Card) -> u32 {
+        1 + u32::from(card.enhancement.is_some())
+            + u32::from(card.seal.is_some())
+            + u32::from(card.edition.is_some())
     }
 
     fn consumable_price(&self, consumable: Consumable) -> u32 {
         match consumable {
             Consumable::Theme(_) if self.count(Joker::FreeAsInBeer) > 0 => 0,
-            _ => consumable.price(),
+            _ => self.discounted(consumable.price()),
         }
     }
 
@@ -1505,8 +1744,13 @@ impl Game {
                     return Err(GameError::JokerSlotsFull);
                 }
                 let owned = OwnedJoker::new(joker, edition);
-                self.spend(owned.price())?;
+                self.spend(self.discounted(owned.price()))?;
                 self.jokers.push(owned);
+            }
+            Offer::Card(card) => {
+                self.spend(self.discounted(Self::card_price(&card)))?;
+                self.next_card_id += 1;
+                self.deck.push(card.with_id(self.next_card_id - 1));
             }
             Offer::Consumable(consumable) => {
                 if !self.clipboard_room() {
@@ -1573,7 +1817,7 @@ impl Game {
 
     /// Whether the clipboard has a free slot (Transparent consumables take none).
     fn clipboard_room(&self) -> bool {
-        self.consumables.iter().filter(|h| !h.transparent).count() < CONSUMABLE_SLOTS
+        self.consumables.iter().filter(|h| !h.transparent).count() < self.consumable_slots()
     }
 
     /// Adds a consumable to the clipboard if there is room.
@@ -1987,7 +2231,7 @@ impl Game {
         if pack.kind == PackKind::Base16 && self.count(Joker::FreeAsInBeer) > 0 {
             0
         } else {
-            pack.price()
+            self.discounted(pack.price())
         }
     }
 
@@ -2006,7 +2250,7 @@ impl Game {
     /// A playing card for a base-devel pack: 40% enhanced, 20% sealed, and
     /// sometimes an edition.
     fn pack_card(&mut self) -> Card {
-        let rng = &mut self.pack_rng;
+        let mut rng = self.pack_rng.clone();
         let mut card = Card::new(2 + rng.below(13) as u8, Suit::ALL[rng.below(4) as usize]);
         if rng.unit() < 0.4 {
             card.enhancement = Some(Enhancement::ALL[rng.below(8) as usize]);
@@ -2014,12 +2258,8 @@ impl Game {
         if rng.unit() < 0.2 {
             card.seal = Some(Seal::ALL[rng.below(Seal::ALL.len() as u64) as usize]);
         }
-        let roll = rng.unit();
-        let mut odds = 0.0;
-        card.edition = Edition::ALL.into_iter().rev().find(|e| {
-            odds += e.odds();
-            roll < odds
-        });
+        card.edition = self.roll_edition(&mut rng);
+        self.pack_rng = rng;
         card
     }
 
@@ -2027,12 +2267,28 @@ impl Game {
     /// hand from the deck for its commands.
     fn open_pack(&mut self, pack: Pack) {
         let mut items: Vec<PackItem> = Vec::new();
+        // Theme Preview: the theme of the most played hand comes first.
+        if pack.kind == PackKind::Base16 && self.has(Voucher::ThemePreview) {
+            let most = HandKind::ALL
+                .into_iter()
+                .filter(|&k| self.plays.get(k) > 0)
+                .max_by_key(|&k| self.plays.get(k));
+            if let Some(kind) = most {
+                items.push(PackItem::Consumable(Consumable::Theme(
+                    Theme::ALL[kind as usize],
+                )));
+            }
+        }
         for _ in 0..pack.shown() * 10 {
             if items.len() == pack.shown() {
                 break;
             }
             let mut rng = self.pack_rng.clone();
             let item = match pack.kind {
+                // Insider Access: 1 in 5 cards is an oligarchy card.
+                PackKind::Coreutils if self.has(Voucher::InsiderAccess) && rng.chance(5) => Some(
+                    PackItem::Consumable(Consumable::Oligarchy(roll_oligarchy(&mut rng))),
+                ),
                 PackKind::Coreutils => Some(PackItem::Consumable(Consumable::Command(
                     Command::ALL[rng.below(Command::ALL.len() as u64) as usize],
                 ))),
@@ -2249,6 +2505,11 @@ impl Game {
         if let Some(boss) = cheat.boss {
             self.boss = boss;
         }
+        for voucher in cheat.vouchers {
+            if !self.has(voucher) {
+                self.merge(voucher);
+            }
+        }
         if cheat.next_boss {
             let i = Boss::ALL.iter().position(|&b| b == self.boss).unwrap_or(0);
             self.boss = Boss::ALL[(i + 1) % Boss::ALL.len()];
@@ -2377,6 +2638,16 @@ impl Game {
             boss_active: self.boss_effect().is_some(),
             jokers_hidden: self.jokers_hidden,
             disabled_joker: self.disabled_joker,
+            vouchers: self
+                .vouchers
+                .iter()
+                .map(|&v| VoucherInfo::from(v))
+                .collect(),
+            voucher: self
+                .voucher_offer
+                .filter(|_| self.phase == Phase::Shop)
+                .map(VoucherInfo::from),
+            boss_reroll_cost: self.boss_reroll_cost(),
             hand_size: self.hand_size(),
             remaining: {
                 let mut cards = match self.phase {
@@ -2415,7 +2686,7 @@ impl Game {
                     ..ConsumableInfo::new(held.consumable, held.consumable.price())
                 })
                 .collect(),
-            consumable_slots: CONSUMABLE_SLOTS,
+            consumable_slots: self.consumable_slots(),
             unique_themes: self.themes_used.len() as u32,
             modifiers: Modifiers::catalog(),
             packs: self
@@ -2434,14 +2705,21 @@ impl Game {
                 .offers
                 .iter()
                 .map(|&o| match o {
-                    Offer::Joker { joker, edition } => OfferInfo::Joker(JokerInfo::new(
-                        &OwnedJoker::new(joker, edition),
-                        None,
-                        None,
-                    )),
+                    Offer::Joker { joker, edition } => {
+                        let owned = OwnedJoker::new(joker, edition);
+                        OfferInfo::Joker(JokerInfo {
+                            price: self.discounted(owned.price()),
+                            ..JokerInfo::new(&owned, None, None)
+                        })
+                    }
                     Offer::Consumable(c) => {
                         OfferInfo::Consumable(ConsumableInfo::new(c, self.consumable_price(c)))
                     }
+                    Offer::Card(card) => OfferInfo::Card(CardOffer {
+                        kind: "card",
+                        card,
+                        price: self.discounted(Self::card_price(&card)),
+                    }),
                 })
                 .collect(),
             reroll_cost: self.reroll_cost,
@@ -2985,7 +3263,7 @@ mod tests {
     fn offered_joker(offer: &Offer) -> Option<Joker> {
         match *offer {
             Offer::Joker { joker, .. } => Some(joker),
-            Offer::Consumable(_) => None,
+            Offer::Consumable(_) | Offer::Card(_) => None,
         }
     }
 
@@ -3690,6 +3968,142 @@ mod tests {
         assert!(!game.state().boss_active);
         game.hand = cards("KH KS 9S 7C 5H 4D 3S 2C");
         assert_eq!(game.play(&[0, 1]).unwrap().total, 60.0);
+    }
+
+    fn merge(game: &mut Game, vouchers: &[Voucher]) {
+        game.cheat(Cheat {
+            vouchers: vouchers.to_vec(),
+            ..Cheat::default()
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn one_pull_request_per_ante_and_follow_ups_wait() {
+        let mut game = shopping(110, vec![]);
+        let offer = game.state().voucher.unwrap();
+        assert!(offer.id.follows().is_none());
+        game.buy_voucher().unwrap();
+        assert_eq!(
+            (game.money, game.state().voucher),
+            (50 - VOUCHER_PRICE, None)
+        );
+        assert!(game.buy_voucher().is_err());
+        for _ in 0..200 {
+            game.roll_voucher();
+            let v = game.voucher_offer.unwrap();
+            assert!(v.follows().is_none_or(|first| game.has(first)));
+            assert!(!game.has(v));
+        }
+    }
+
+    #[test]
+    fn pull_requests_change_the_rules() {
+        let mut game = Game::new(111, vec![]);
+        merge(
+            &mut game,
+            &[
+                Voucher::Overtime,
+                Voucher::RmI,
+                Voucher::Hidpi,
+                Voucher::ClipboardManager,
+                Voucher::LoremIpsum,
+                Voucher::FeatureFlag,
+                Voucher::HighYieldSavings,
+            ],
+        );
+        game.select_blind().unwrap();
+        let s = game.state();
+        assert_eq!((s.hands_left, s.discards_left, s.hand_size), (5, 4, 9));
+        assert_eq!((s.consumable_slots, s.max_jokers), (3, 6));
+        game.money = 100;
+        assert_eq!(game.reward().interest, 10);
+    }
+
+    #[test]
+    fn discounts_and_rerolls() {
+        let mut game = shopping(112, vec![]);
+        merge(&mut game, &[Voucher::EarlyBird, Voucher::MirrorList]);
+        game.offers = vec![Offer::Joker {
+            joker: Joker::Fork,
+            edition: None,
+        }];
+        assert_eq!(game.reroll_cost, REROLL_COST - 2);
+        let s = game.state();
+        let OfferInfo::Joker(fork) = &s.shop[0] else {
+            panic!()
+        };
+        assert_eq!(fork.price, 8);
+        game.buy(0).unwrap();
+        assert_eq!(game.money, 42);
+        merge(&mut game, &[Voucher::LifetimeDeal]);
+        assert_eq!(game.discounted(10), 5);
+    }
+
+    #[test]
+    fn more_workspaces_and_card_marketplace() {
+        let mut game = shopping(113, vec![]);
+        merge(
+            &mut game,
+            &[
+                Voucher::MoreWorkspaces,
+                Voucher::CardMarketplace,
+                Voucher::PremiumCards,
+            ],
+        );
+        game.reroll().unwrap();
+        assert_eq!(game.offers.len(), SHOP_OFFERS + 1);
+        let mut cards = 0;
+        for _ in 0..200 {
+            game.roll_offers();
+            cards += game
+                .offers
+                .iter()
+                .filter(|o| matches!(o, Offer::Card(_)))
+                .count();
+        }
+        assert!(cards > 0);
+        game.offers = vec![Offer::Card(
+            Card::new(5, Suit::Hearts).with_seal(Seal::Retry),
+        )];
+        game.buy(0).unwrap();
+        assert_eq!(game.deck.len(), 53);
+    }
+
+    #[test]
+    fn git_revert_goes_back_an_ante() {
+        let mut game = Game::new(114, vec![]);
+        game.ante = 3;
+        merge(&mut game, &[Voucher::GitRevert]);
+        assert_eq!(
+            (game.ante, game.hands_per_blind()),
+            (2, HANDS_PER_BLIND - 1)
+        );
+    }
+
+    #[test]
+    fn change_request_rerolls_the_boss() {
+        let mut game = Game::new(115, vec![]);
+        game.money = 50;
+        assert!(game.reroll_boss().is_err());
+        merge(&mut game, &[Voucher::ChangeRequest]);
+        let before = game.boss;
+        game.reroll_boss().unwrap();
+        assert_ne!(game.boss, before);
+        assert_eq!(game.money, 40);
+        assert!(game.reroll_boss().is_err());
+        merge(&mut game, &[Voucher::EmergencyChange]);
+        game.reroll_boss().unwrap();
+    }
+
+    #[test]
+    fn theme_showcase_multiplies_matching_hands() {
+        let mut game = playing(116, vec![]);
+        merge(&mut game, &[Voucher::ThemePreview, Voucher::ThemeShowcase]);
+        game.consumables = vec![Consumable::Theme(Theme::RosePine).into()];
+        game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
+        // Pair: (10 + 20) × 2 × 1.5
+        assert_eq!(game.play(&[0, 1]).unwrap().total, 90.0);
     }
 
     #[test]

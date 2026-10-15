@@ -161,6 +161,23 @@ Rectangle {
               }
             }
           }
+
+          Text {
+            topPadding: Style.spacing.lg
+            text: "git log --merges"
+            color: Color.accent
+            font.family: Style.font.family
+            font.pixelSize: Style.font.heading
+            font.bold: true
+          }
+          Label {
+            width: Style.space(280)
+            wrapMode: Text.WordWrap
+            text: root.game && root.game.vouchers.length
+              ? root.game.vouchers.map(function(v) { return v.name + ": " + v.description }).join("\n")
+              : "No pull request merged yet."
+            color: root.game && root.game.vouchers.length ? Color.foreground : Color.muted
+          }
         }
       }
     }

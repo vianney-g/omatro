@@ -16,6 +16,8 @@ pub enum Source {
     Held { index: usize },
     /// A joker (index into the joker row).
     Joker { index: usize },
+    /// A consumable in the clipboard (index into it): Theme Showcase.
+    Clipboard { index: usize },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -71,6 +73,8 @@ pub struct Table<'a> {
     pub halve_base: bool,
     /// The Windows Update: this joker does nothing this hand.
     pub disabled_joker: Option<usize>,
+    /// Theme Showcase: clipboard indices of the themes of the hand type played.
+    pub showcase: &'a [usize],
 }
 
 /// The joker whose ability the one at `index` uses: itself, or for a Fork, the
@@ -262,6 +266,11 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
         }
     }
 
+    // Theme Showcase: ×1.5 per theme of this hand type in the clipboard.
+    for &index in table.showcase {
+        run.push(Source::Clipboard { index }, Effect::XMult(1.5));
+    }
+
     Breakdown {
         cards: played.to_vec(),
         hand: evaluated.kind,
@@ -322,6 +331,7 @@ mod tests {
                 debuffed: &[],
                 halve_base: false,
                 disabled_joker: None,
+                showcase: &[],
             };
             score(&table, &mut Rng::new(7))
         }
@@ -493,6 +503,7 @@ mod tests {
                     debuffed: &[],
                     halve_base: false,
                     disabled_joker: None,
+                    showcase: &[],
                 };
                 !score(&table, &mut Rng::new(seed)).broken.is_empty()
             })

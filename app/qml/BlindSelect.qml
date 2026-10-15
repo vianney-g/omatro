@@ -8,8 +8,11 @@ Row {
   id: root
 
   property var blinds: []
+  // Change Request: the price of rerolling the boss (-1 when not allowed).
+  property int bossRerollCost: -1
   signal play()
   signal skip()
+  signal rerollBoss()
 
   spacing: Style.spacing.huge
 
@@ -120,6 +123,12 @@ Row {
               visible: modelData.kind !== "boss"
               text: "Skip (S)"
               onClicked: root.skip()
+            }
+            Button {
+              anchors.horizontalCenter: parent.horizontalCenter
+              visible: modelData.kind === "boss" && root.bossRerollCost >= 0
+              text: "Reroll (B) · $" + root.bossRerollCost
+              onClicked: root.rerollBoss()
             }
           }
         }

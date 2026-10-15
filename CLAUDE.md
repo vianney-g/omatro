@@ -132,6 +132,15 @@ cards, The Rate Limiter), `play` (refused hands score nothing, money effects, Th
 Killer), `select_blind` (discards, hands, The Kernel Panic), `with_forced` (The Clippy).
 Report a boss that struck through `triggered`, for Incident Commander.
 
+## Pull requests
+
+`voucher.rs` lists the pull requests (vouchers), in pairs (`follows()`). `Game::vouchers`
+holds the merged ones, `voucher_offer` the one for sale this ante (`roll_voucher`, at
+each new ante), `merge` applies the immediate effects (ante, reroll cost). Rules read
+them through `has` / `merged`: `hands_per_blind`, `discards_per_blind`, `hand_size`,
+`joker_slots`, `consumable_slots`, `max_interest`, `discounted` (shop prices),
+`edition_factor`, the shop weights in `roll_offers`, `boss_reroll_cost`.
+
 ## Packs
 
 `pack.rs` defines the packs (kind × size, their names, prices and shop odds). The shop

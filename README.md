@@ -32,8 +32,9 @@ make test
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, N for a new game, I for
 fastfetch (run info: hand levels, cards left), Ctrl+Q to quit. Before a blind: Enter to
 play it, S to skip it. Ctrl+1 and Ctrl+2 apply the consumables of the clipboard. In the
-shop: 1 and 2 to buy, 3 and 4 to buy a pack, R to reroll, Enter for the next blind; the
-buttons under each joker sell it or move it left and right. In an open pack: Install
+shop: 1 to 6 to buy the cards then the packs, in order, M to merge the pull request, R
+to reroll, Enter for the next blind; the buttons under each joker sell it or move it
+left and right. Before a boss, B rerolls it (with Change Request). In an open pack: Install
 takes a card, Ctrl+C (or Escape) skips.
 
 ## How a game goes
@@ -67,7 +68,9 @@ a command ($3, 1 chance in 7 each) or a joker you don't own yet, of a rarity dra
 resold at half price; reroll for $5, then $1 more each time). Jokers trigger left to
 right, so their order matters. The shop also sells 2 packs ([docs/packs.md](docs/packs.md)),
 opened on the spot: coreutils (commands), base16 (themes), base-devel (cards) and
-jokers-git (jokers) and oligarchy (oligarchy cards), in normal, `-full` and `-meta` sizes. You start with $4 and no
+jokers-git (jokers) and oligarchy (oligarchy cards), in normal, `-full` and `-meta` sizes.
+Each ante, the shop also offers a pull request ([docs/vouchers.md](docs/vouchers.md)),
+a permanent upgrade for $10: more slots, discounts, hands, discards, interest… You start with $4 and no
 jokers.
 
 ## Engine alone
@@ -104,11 +107,13 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"buy_pack","pack":0}` | Buys a pack of the shop and opens it |
 | `{"cmd":"pick","choice":0,"cards":[1]}` | Takes a card of the open pack (`cards`: the drawn hand's cards a command changes) |
 | `{"cmd":"skip_pack"}` | Leaves the open pack |
+| `{"cmd":"buy_voucher"}` | Merges the pull request for sale (in the shop) |
+| `{"cmd":"reroll_boss"}` | Draws another boss for the ante (Change Request, before the blind) |
 | `{"cmd":"use_consumable","index":0,"cards":[1,3]}` | Uses a consumable of the clipboard (any time but after a loss); `cards`: the hand cards a command changes |
 | `{"cmd":"sell_consumable","index":0}` | Sells a consumable of the clipboard |
 | `{"cmd":"reroll"}` | Rerolls the shop offers |
 | `{"cmd":"next_blind"}` | Leaves the shop for the choice of the next blind |
-| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true,"random_command":true,"random_pack":true,"random_oligarchy":true,"boss":"burnout","next_boss":true}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
+| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true,"random_command":true,"random_pack":true,"random_oligarchy":true,"boss":"burnout","next_boss":true,"vouchers":["overtime"]}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
 
 Responses:
 
@@ -122,13 +127,14 @@ Responses:
   `pack` / `lost`, `victory` (the winning ante's boss was just beaten), hand, `hand_size`,
   jokers (`id`, `name`, `description`, `quip`, `rarity`, `edition`, `price`,
   `sell_value`, `bonus` for what a growing joker gives now, `current` for what a Fork
-  copies), `max_jokers`, `jokers_hidden`, `disabled_joker`, `modifiers` (names and effects of every enhancement, seal and
+  copies), `max_jokers`, `jokers_hidden`, `disabled_joker`, `vouchers` merged, the `voucher` for sale
+  (in the shop), `boss_reroll_cost` (when Change Request allows it now), `modifiers` (names and effects of every enhancement, seal and
   edition), `consumables` (`kind` = `theme` / `command` / `oligarchy`, `id`, `name`,
   `description`, `quip`, `price`, `sell_value`, `min_cards` / `max_cards` to select,
   `needs_hand` when it works on the cards in hand, `transparent` when it takes no slot), `consumable_slots`, `unique_themes`, `money`,
   `reward` in the `won` phase (with `cards` for Enterprise cards held, and `notes` such
   as "Beta Release broke."), `shop` offers
-  (jokers or consumables, told apart by `kind`), `packs` for sale, and `opened`: the
+  (jokers, consumables or `{"kind":"card","card":…,"price":n}`, told apart by `kind`), `packs` for sale, and `opened`: the
   pack being opened (`name`, `description`, `picks_left`, `with_hand`, and its
   `choices`: consumables, jokers or `{"kind":"card","card":…}`) and `reroll_cost` in the shop. Scores and
   targets are floats; an infinite target (from ante 39) is `null`.

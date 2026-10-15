@@ -7,6 +7,7 @@ use crate::hand::HandKind;
 use crate::joker::{Edition, Joker};
 use crate::modifier::{Enhancement, Seal};
 use crate::pack::{Pack, PackKind, PackSize};
+use crate::voucher::{VOUCHER_PRICE, Voucher};
 
 /// Snake-case id of a value, as in the protocol.
 fn id(value: impl serde::Serialize) -> String {
@@ -291,9 +292,32 @@ fn bosses() -> String {
     doc
 }
 
+fn vouchers() -> String {
+    let mut doc = header(
+        "Pull requests",
+        &format!(
+            "Pull requests (vouchers, in the original) are permanent upgrades. The shop\n\
+             sells one per ante, for ${VOUCHER_PRICE}; a new one comes after each boss. Each first\n\
+             pull request has a follow-up, sold once it was merged."
+        ),
+    );
+    doc += "| Id | Pull request | Effect | Follows | Quip |\n|---|---|---|---|---|\n";
+    for voucher in Voucher::ALL {
+        doc += &format!(
+            "| `{}` | {} | {} | {} | *{}* |\n",
+            id(voucher),
+            voucher.name(),
+            voucher.description(),
+            voucher.follows().map_or("", Voucher::name),
+            cell(voucher.quip())
+        );
+    }
+    doc
+}
+
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 9] = [
+    let docs: [(&str, fn() -> String); 10] = [
         ("jokers.md", jokers),
         ("editions.md", editions),
         ("hands.md", hands),
@@ -302,6 +326,7 @@ fn docs_are_up_to_date() {
         ("packs.md", packs),
         ("oligarchy.md", oligarchy),
         ("bosses.md", bosses),
+        ("vouchers.md", vouchers),
         ("modifiers.md", modifiers),
     ];
     for (file, render) in docs {
