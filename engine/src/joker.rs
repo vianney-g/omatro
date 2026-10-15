@@ -155,6 +155,7 @@ pub enum Joker {
     AngelInvestor,
     IncidentCommander,
     Rollback,
+    SkipIntro,
 }
 
 /// What a joker sees of the hand being scored.
@@ -190,7 +191,7 @@ fn is_even(card: Card) -> bool {
 }
 
 impl Joker {
-    pub const ALL: [Joker; 85] = [
+    pub const ALL: [Joker; 86] = [
         Joker::Dotfiles,
         Joker::Omakase,
         Joker::RubyGem,
@@ -276,6 +277,7 @@ impl Joker {
         Joker::AngelInvestor,
         Joker::IncidentCommander,
         Joker::Rollback,
+        Joker::SkipIntro,
     ];
 
     pub fn name(self) -> &'static str {
@@ -365,6 +367,7 @@ impl Joker {
             Joker::AngelInvestor => "Angel Investor",
             Joker::IncidentCommander => "Incident Commander",
             Joker::Rollback => "Rollback",
+            Joker::SkipIntro => "Skip Intro",
         }
     }
 
@@ -465,6 +468,7 @@ impl Joker {
             }
             Joker::IncidentCommander => "+$8 each time a boss blind's effect triggers",
             Joker::Rollback => "Sell it to disable the current boss blind's effect",
+            Joker::SkipIntro => "Gains ×0.25 mult per blind skipped",
         }
     }
 
@@ -557,6 +561,7 @@ impl Joker {
             Joker::AngelInvestor => "Sacrifices a six. Expects a unicorn.",
             Joker::IncidentCommander => "Paged at 3 a.m. Billed at 9.",
             Joker::Rollback => "git revert HEAD. Everyone relax.",
+            Joker::SkipIntro => "Netflix taught us well.",
         }
     }
 
@@ -570,7 +575,8 @@ impl Joker {
             Joker::SeedRound
             | Joker::AngelInvestor
             | Joker::IncidentCommander
-            | Joker::Rollback => Rarity::Extra,
+            | Joker::Rollback
+            | Joker::SkipIntro => Rarity::Extra,
             Joker::SuperKey
             | Joker::NoBuild
             | Joker::Heartbleed
@@ -686,6 +692,7 @@ impl Joker {
             Joker::SeedRound | Joker::AngelInvestor => 6,
             Joker::IncidentCommander => 7,
             Joker::Rollback => 5,
+            Joker::SkipIntro => 6,
             Joker::Dhh
             | Joker::ThePrimeagen
             | Joker::MailingList
@@ -720,7 +727,8 @@ impl Joker {
             | Joker::FlakyCi
             | Joker::RmaDepartment
             | Joker::ThePrimeagen
-            | Joker::MailingList => 1.0,
+            | Joker::MailingList
+            | Joker::SkipIntro => 1.0,
             _ => 0.0,
         }
     }
@@ -816,6 +824,7 @@ impl Joker {
             | Joker::RmaDepartment
             | Joker::ThePrimeagen
             | Joker::MailingList
+            | Joker::SkipIntro
                 if counter > 1.0 =>
             {
                 Effect::XMult(counter)
@@ -918,7 +927,8 @@ impl OwnedJoker {
             Joker::GarbageCollector
             | Joker::FlakyCi
             | Joker::RmaDepartment
-            | Joker::ThePrimeagen => ("x_mult", format!("×{c} mult")),
+            | Joker::ThePrimeagen
+            | Joker::SkipIntro => ("x_mult", format!("×{c} mult")),
             Joker::MailingList => (
                 "x_mult",
                 format!("×{c} mult · {}/{MAILING_LIST_DISCARDS}", self.progress),
@@ -989,6 +999,12 @@ impl OwnedJoker {
             self.progress += cards as u32;
             self.counter += (self.progress / MAILING_LIST_DISCARDS) as f64;
             self.progress %= MAILING_LIST_DISCARDS;
+        }
+    }
+
+    pub fn on_blind_skipped(&mut self) {
+        if self.joker == Joker::SkipIntro {
+            self.counter += 0.25;
         }
     }
 

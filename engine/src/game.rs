@@ -10,6 +10,7 @@ use crate::modifier::{Edition, Enhancement, Seal};
 use crate::pack::{Pack, PackKind, SHOP_PACKS};
 use crate::rng::Rng;
 use crate::score::{Breakdown, Table, copy_target, score};
+use crate::tag::Tag;
 use crate::voucher::{VOUCHER_PRICE, Voucher};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -242,6 +243,32 @@ pub struct BlindInfo {
     pub target: f64,
     pub reward: u32,
     pub status: BlindStatus,
+    /// The badge skipping it gives (small and big blinds).
+    pub tag: Option<TagInfo>,
+}
+
+/// A badge: "label: value", like a README badge.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TagInfo {
+    pub id: Tag,
+    pub label: &'static str,
+    pub value: &'static str,
+    pub name: String,
+    pub description: &'static str,
+    pub quip: &'static str,
+}
+
+impl From<Tag> for TagInfo {
+    fn from(tag: Tag) -> Self {
+        TagInfo {
+            id: tag,
+            label: tag.label(),
+            value: tag.value(),
+            name: tag.name(),
+            description: tag.description(),
+            quip: tag.quip(),
+        }
+    }
 }
 
 /// A hand type's level and how often it was played, for the run info panel.
@@ -267,6 +294,8 @@ pub struct Reward {
     pub jokers: u32,
     /// Enterprise cards held in hand.
     pub cards: u32,
+    /// funding: series A.
+    pub badges: u32,
     pub total: u32,
     /// What happened to the jokers ("Beta Release broke.").
     pub notes: Vec<String>,
@@ -404,7 +433,9 @@ pub struct State {
     pub disabled_joker: Option<usize>,
     /// Pull requests merged, and the one for sale this ante (in the shop).
     pub vouchers: Vec<VoucherInfo>,
-    pub voucher: Option<VoucherInfo>,
+    pub vouchers_for_sale: Vec<VoucherInfo>,
+    /// Badges won and waiting for their moment.
+    pub tags: Vec<TagInfo>,
     /// Change Request: what rerolling the boss costs, when allowed now.
     pub boss_reroll_cost: Option<u32>,
     pub hand_size: usize,
@@ -475,6 +506,9 @@ pub struct Cheat {
     /// Merges pull requests.
     #[serde(default)]
     pub vouchers: Vec<Voucher>,
+    /// Wins badges.
+    #[serde(default)]
+    pub tags: Vec<Tag>,
     /// Opens a random pack (in the shop).
     #[serde(default)]
     pub random_pack: bool,
@@ -545,6 +579,8 @@ struct OpenedPack {
     pack: Pack,
     items: Vec<PackItem>,
     picks_left: usize,
+    /// The shop, or the blind choice for a pack won by a badge.
+    return_to: Phase,
 }
 
 /// Something for sale.
@@ -632,10 +668,26 @@ pub struct Game {
     vendor_unlocked: bool,
     /// Pull requests merged, and the one for sale this ante.
     vouchers: Vec<Voucher>,
-    voucher_offer: Option<Voucher>,
+    voucher_offers: Vec<Voucher>,
     voucher_rng: Rng,
     /// Change Request: the boss was rerolled this ante.
     boss_rerolled: bool,
+    /// The badges the small and big blinds give if skipped, and the badges won
+    /// but not used yet.
+    blind_tags: [Tag; 2],
+    tags: Vec<Tag>,
+    tag_rng: Rng,
+    /// For the money badges: blinds skipped, hands played, discards left unused.
+    skips: u32,
+    hands_played: u32,
+    unused_discards: u32,
+    /// resolution: 4k: extra hand size for this blind.
+    juggle: usize,
+    /// Offers given for free (badges), aligned with `offers`; free packs.
+    free_offers: Vec<bool>,
+    free_packs: bool,
+    /// Packs won by badges, opened one after the other.
+    pending_packs: Vec<Pack>,
     /// Beta Release broke: it is gone from the shop, Stable Release shows up.
     beta_broken: bool,
 }
@@ -693,15 +745,174 @@ impl Game {
             jokers_hidden: false,
             vendor_unlocked: false,
             vouchers: Vec::new(),
-            voucher_offer: None,
+            voucher_offers: Vec::new(),
             voucher_rng: Rng::stream(seed, "vouchers"),
             boss_rerolled: false,
+            blind_tags: [Tag::Stars100, Tag::Stars100],
+            tags: Vec::new(),
+            tag_rng: Rng::stream(seed, "tags"),
+            skips: 0,
+            hands_played: 0,
+            unused_discards: 0,
+            juggle: 0,
+            free_offers: Vec::new(),
+            free_packs: false,
+            pending_packs: Vec::new(),
             beta_broken: false,
         };
         game.roll_boss();
         game.roll_voucher();
+        game.roll_blind_tags();
         game.await_blind();
         game
+    }
+
+    /// The badges the small and big blinds of this ante give if skipped.
+    fn roll_blind_tags(&mut self) {
+        let pool: Vec<Tag> = Tag::ALL
+            .into_iter()
+            .filter(|t| t.min_ante() <= self.ante)
+            .collect();
+        for i in 0..2 {
+            self.blind_tags[i] = pool[self.tag_rng.below(pool.len() as u64) as usize];
+        }
+    }
+
+    /// Wins a badge: badges: 2x waits to copy the next one; the others act
+    /// right away or wait for the next shop, blind or boss.
+    fn gain_tag(&mut self, tag: Tag) {
+        if tag == Tag::Badges2x {
+            self.tags.push(tag);
+            return;
+        }
+        let doubles = self.tags.iter().filter(|&&t| t == Tag::Badges2x).count();
+        self.tags.retain(|&t| t != Tag::Badges2x);
+        for _ in 0..=doubles {
+            self.apply_tag(tag);
+        }
+    }
+
+    fn apply_tag(&mut self, tag: Tag) {
+        use crate::pack::PackSize;
+        let pack = |kind, size| Pack { kind, size };
+        match tag {
+            Tag::Sponsors2x => self.money += self.money.min(40),
+            Tag::Commits1k => self.money += self.hands_played,
+            Tag::GcDone => self.money += self.unused_discards,
+            Tag::SpeedBlazing => self.money += 5 * self.skips,
+            Tag::Contributors2 => {
+                for _ in 0..2 {
+                    if self.has_room(None)
+                        && let Some(joker) = self.random_joker_of(Rarity::Core)
+                    {
+                        self.jokers.push(OwnedJoker::new(joker, None));
+                    }
+                }
+            }
+            Tag::Version3 => {
+                let known: Vec<HandKind> = HandKind::ALL
+                    .into_iter()
+                    .filter(|&k| !k.secret() || self.plays.get(k) > 0)
+                    .collect();
+                let kind = known[self.tag_rng.below(known.len() as u64) as usize];
+                self.levels.raise(kind, 3);
+            }
+            Tag::Wontfix => self.roll_boss(),
+            Tag::BuildPassing => self.open_free_pack(pack(PackKind::BaseDevel, PackSize::Meta)),
+            Tag::DocsLatest => self.open_free_pack(pack(PackKind::Coreutils, PackSize::Meta)),
+            Tag::ThemeDark => self.open_free_pack(pack(PackKind::Base16, PackSize::Meta)),
+            Tag::FunYes => self.open_free_pack(pack(PackKind::JokersGit, PackSize::Meta)),
+            Tag::FundingOligarchy => {
+                self.open_free_pack(pack(PackKind::Oligarchy, PackSize::Normal))
+            }
+            // The others wait: next shop, next blind, next boss.
+            _ => self.tags.push(tag),
+        }
+    }
+
+    /// Opens a pack won by a badge, or queues it while another is open.
+    fn open_free_pack(&mut self, pack: Pack) {
+        if self.opened.is_some() {
+            self.pending_packs.push(pack);
+        } else {
+            self.open_pack(pack);
+        }
+    }
+
+    /// Takes the waiting badges this moment uses.
+    fn take_tags(&mut self, wanted: &[Tag]) -> Vec<Tag> {
+        let (used, kept) = self.tags.iter().partition(|t| wanted.contains(t));
+        self.tags = kept;
+        used
+    }
+
+    /// The shop opens: the badges waiting for it act.
+    fn shop_tags(&mut self) {
+        let used = self.take_tags(&[
+            Tag::Stars100,
+            Tag::Stars10k,
+            Tag::Opacity0,
+            Tag::BlurOn,
+            Tag::ShadowOn,
+            Tag::AnimationsOn,
+            Tag::PrsWelcome,
+            Tag::PriceFree,
+            Tag::CacheHit,
+        ]);
+        for tag in used {
+            match tag {
+                Tag::Stars100 | Tag::Stars10k => {
+                    let rarity = if tag == Tag::Stars100 {
+                        Rarity::Extra
+                    } else {
+                        Rarity::Aur
+                    };
+                    if let Some(joker) = self.random_joker_of(rarity) {
+                        self.offers.push(Offer::Joker {
+                            joker,
+                            edition: None,
+                        });
+                        self.free_offers.push(true);
+                    }
+                }
+                Tag::Opacity0 | Tag::BlurOn | Tag::ShadowOn | Tag::AnimationsOn => {
+                    let edition = match tag {
+                        Tag::Opacity0 => Edition::Transparent,
+                        Tag::BlurOn => Edition::Blur,
+                        Tag::ShadowOn => Edition::Shadow,
+                        _ => Edition::Animated,
+                    };
+                    let plain = self
+                        .offers
+                        .iter()
+                        .position(|o| matches!(o, Offer::Joker { edition: None, .. }));
+                    match plain {
+                        Some(i) => {
+                            if let Offer::Joker { edition: e, .. } = &mut self.offers[i] {
+                                *e = Some(edition);
+                            }
+                            self.free_offers[i] = true;
+                        }
+                        None => {
+                            if let Some(joker) = self.random_joker_of(Rarity::Core) {
+                                self.offers.push(Offer::Joker {
+                                    joker,
+                                    edition: Some(edition),
+                                });
+                                self.free_offers.push(true);
+                            }
+                        }
+                    }
+                }
+                Tag::PrsWelcome => self.add_voucher_offer(),
+                Tag::PriceFree => {
+                    self.free_offers.iter_mut().for_each(|f| *f = true);
+                    self.free_packs = true;
+                }
+                Tag::CacheHit => self.reroll_cost = 0,
+                _ => {}
+            }
+        }
     }
 
     pub fn has(&self, voucher: Voucher) -> bool {
@@ -716,13 +927,21 @@ impl Game {
     /// The pull request for sale this ante: one not merged yet, a follow-up
     /// only once its first part was.
     fn roll_voucher(&mut self) {
+        self.voucher_offers.clear();
+        self.add_voucher_offer();
+    }
+
+    /// One more pull request for sale (PRs: welcome), not already offered.
+    fn add_voucher_offer(&mut self) {
         let pool: Vec<Voucher> = Voucher::ALL
             .into_iter()
             .filter(|&v| !self.has(v) && v.follows().is_none_or(|first| self.has(first)))
+            .filter(|v| !self.voucher_offers.contains(v))
             .collect();
-        self.voucher_offer = pool
-            .get(self.voucher_rng.below(pool.len().max(1) as u64) as usize)
-            .copied();
+        if let Some(&voucher) = pool.get(self.voucher_rng.below(pool.len().max(1) as u64) as usize)
+        {
+            self.voucher_offers.push(voucher);
+        }
     }
 
     /// Merges a pull request, with its immediate effects.
@@ -816,13 +1035,14 @@ impl Game {
         allowed.then_some(VOUCHER_PRICE)
     }
 
-    pub fn buy_voucher(&mut self) -> Result<(), GameError> {
+    pub fn buy_voucher(&mut self, index: usize) -> Result<(), GameError> {
         self.in_shop()?;
-        let voucher = self
-            .voucher_offer
+        let voucher = *self
+            .voucher_offers
+            .get(index)
             .ok_or_else(|| GameError::BadSelection("no pull request for sale".into()))?;
         self.spend(VOUCHER_PRICE)?;
-        self.voucher_offer = None;
+        self.voucher_offers.remove(index);
         self.merge(voucher);
         Ok(())
     }
@@ -959,7 +1179,7 @@ impl Game {
             .count();
         let monitor = usize::from(self.boss_is(Boss::Monitor43));
         let displays = self.merged(&[Voucher::Hidpi, Voucher::Display4k]);
-        (HAND_SIZE + self.count(Joker::Ultrawide) + transparent + displays)
+        (HAND_SIZE + self.count(Joker::Ultrawide) + transparent + displays + self.juggle)
             .saturating_sub(self.hand_size_penalty + monitor)
             .max(1)
     }
@@ -1008,6 +1228,7 @@ impl Game {
         self.discards_left = self.discards_per_blind();
         self.discards_used = 0;
         self.blind_hands.clear();
+        self.juggle = 0;
         self.face_down.clear();
         self.forced = None;
         self.disabled_joker = None;
@@ -1028,6 +1249,7 @@ impl Game {
                 self.played_this_ante.clear();
                 self.roll_boss();
                 self.roll_voucher();
+                self.roll_blind_tags();
                 self.boss_rerolled = false;
             }
         }
@@ -1045,6 +1267,7 @@ impl Game {
     /// Plays the blind on offer: shuffles the deck and deals a hand.
     pub fn select_blind(&mut self) -> Result<(), GameError> {
         self.selecting()?;
+        self.juggle = 3 * self.take_tags(&[Tag::Resolution4k]).len();
         // Jokers and pull requests merged since the blind was announced count too.
         self.hands_left = self.hands_per_blind();
         self.discards_left = self.discards_per_blind();
@@ -1086,8 +1309,14 @@ impl Game {
         if !self.blind.skippable() {
             return Err(GameError::CannotSkipBoss);
         }
+        let tag = self.blind_tags[if self.blind == BlindKind::Small { 0 } else { 1 }];
         self.skipped.push(self.blind);
+        self.skips += 1;
+        for joker in &mut self.jokers {
+            joker.on_blind_skipped();
+        }
         self.advance();
+        self.gain_tag(tag);
         Ok(())
     }
 
@@ -1181,6 +1410,7 @@ impl Game {
             _ => false,
         };
         self.plays.add(evaluated.kind);
+        self.hands_played += 1;
         self.blind_hands.push(evaluated.kind);
         if refused {
             let breakdown = self.refused_hand(played, &evaluated, boss);
@@ -1430,7 +1660,18 @@ impl Game {
 
     fn win_blind(&mut self) {
         self.phase = Phase::Won;
+        self.unused_discards += self.discards_left;
         let mut reward = self.reward();
+        if self.blind == BlindKind::Boss {
+            let funded = 25 * self.take_tags(&[Tag::SeriesA]).len() as u32;
+            if funded > 0 {
+                reward.badges = funded;
+                reward.total += funded;
+                reward
+                    .notes
+                    .push(format!("funding: series A paid ${funded}."));
+            }
+        }
         let boss = self.blind == BlindKind::Boss;
         let rng = &mut self.round_rng;
         let mut broke_beta = false;
@@ -1553,6 +1794,7 @@ impl Game {
             interest,
             jokers,
             cards,
+            badges: 0,
             total: blind + hands + interest + jokers + cards,
             notes: Vec::new(),
         }
@@ -1571,6 +1813,7 @@ impl Game {
         self.reroll_cost = self.base_reroll_cost();
         self.roll_offers();
         self.packs = (0..SHOP_PACKS).map(|_| self.roll_pack()).collect();
+        self.shop_tags();
         Ok(())
     }
 
@@ -1593,6 +1836,7 @@ impl Game {
     /// command (4).
     fn roll_offers(&mut self) {
         self.offers.clear();
+        self.free_offers.clear();
         let mut rng = self.shop_rng.clone();
         let factor = |base: Voucher, more: Voucher| {
             if self.has(more) {
@@ -1625,7 +1869,10 @@ impl Game {
                 Some(Offer::Card(self.shop_card(&mut rng)))
             };
             match offer {
-                Some(offer) => self.offers.push(offer),
+                Some(offer) => {
+                    self.offers.push(offer);
+                    self.free_offers.push(false);
+                }
                 None => break,
             }
         }
@@ -1703,6 +1950,20 @@ impl Game {
             + u32::from(card.edition.is_some())
     }
 
+    /// What a shop offer costs: free when a badge says so.
+    fn offer_price(&self, index: usize) -> u32 {
+        if self.free_offers.get(index).copied().unwrap_or(false) {
+            return 0;
+        }
+        match self.offers[index] {
+            Offer::Joker { joker, edition } => {
+                self.discounted(OwnedJoker::new(joker, edition).price())
+            }
+            Offer::Consumable(c) => self.consumable_price(c),
+            Offer::Card(card) => self.discounted(Self::card_price(&card)),
+        }
+    }
+
     fn consumable_price(&self, consumable: Consumable) -> u32 {
         match consumable {
             Consumable::Theme(_) if self.count(Joker::FreeAsInBeer) > 0 => 0,
@@ -1744,11 +2005,11 @@ impl Game {
                     return Err(GameError::JokerSlotsFull);
                 }
                 let owned = OwnedJoker::new(joker, edition);
-                self.spend(self.discounted(owned.price()))?;
+                self.spend(self.offer_price(index))?;
                 self.jokers.push(owned);
             }
             Offer::Card(card) => {
-                self.spend(self.discounted(Self::card_price(&card)))?;
+                self.spend(self.offer_price(index))?;
                 self.next_card_id += 1;
                 self.deck.push(card.with_id(self.next_card_id - 1));
             }
@@ -1756,11 +2017,12 @@ impl Game {
                 if !self.clipboard_room() {
                     return Err(GameError::ClipboardFull);
                 }
-                self.spend(self.consumable_price(consumable))?;
+                self.spend(self.offer_price(index))?;
                 self.consumables.push(consumable.into());
             }
         }
         self.offers.remove(index);
+        self.free_offers.remove(index);
         Ok(())
     }
 
@@ -2228,7 +2490,8 @@ impl Game {
     }
 
     fn pack_price(&self, pack: Pack) -> u32 {
-        if pack.kind == PackKind::Base16 && self.count(Joker::FreeAsInBeer) > 0 {
+        if self.free_packs || (pack.kind == PackKind::Base16 && self.count(Joker::FreeAsInBeer) > 0)
+        {
             0
         } else {
             self.discounted(pack.price())
@@ -2340,6 +2603,7 @@ impl Game {
             pack,
             picks_left: pack.picks().min(items.len()),
             items,
+            return_to: self.phase,
         });
         self.phase = Phase::Pack;
     }
@@ -2392,9 +2656,13 @@ impl Game {
     }
 
     fn close_pack(&mut self) {
-        self.opened = None;
+        let return_to = self.opened.take().map_or(Phase::Shop, |o| o.return_to);
         self.hand.clear();
-        self.phase = Phase::Shop;
+        self.phase = return_to;
+        if !self.pending_packs.is_empty() {
+            let pack = self.pending_packs.remove(0);
+            self.open_pack(pack);
+        }
     }
 
     fn opened_info(&self) -> Option<OpenedInfo> {
@@ -2443,6 +2711,8 @@ impl Game {
             }
         }
         self.offers.clear();
+        self.free_offers.clear();
+        self.free_packs = false;
         self.packs.clear();
         self.advance();
         Ok(())
@@ -2504,6 +2774,9 @@ impl Game {
         }
         if let Some(boss) = cheat.boss {
             self.boss = boss;
+        }
+        for tag in cheat.tags {
+            self.gain_tag(tag);
         }
         for voucher in cheat.vouchers {
             if !self.has(voucher) {
@@ -2610,6 +2883,11 @@ impl Game {
                         target: self.target_of(kind),
                         reward: boss.map_or(kind.reward(), Boss::reward),
                         status: self.blind_status(kind),
+                        tag: match kind {
+                            BlindKind::Small => Some(self.blind_tags[0].into()),
+                            BlindKind::Big => Some(self.blind_tags[1].into()),
+                            BlindKind::Boss => None,
+                        },
                     }
                 })
                 .collect(),
@@ -2643,11 +2921,16 @@ impl Game {
                 .iter()
                 .map(|&v| VoucherInfo::from(v))
                 .collect(),
-            voucher: self
-                .voucher_offer
-                .filter(|_| self.phase == Phase::Shop)
-                .map(VoucherInfo::from),
+            vouchers_for_sale: if self.phase == Phase::Shop {
+                self.voucher_offers
+                    .iter()
+                    .map(|&v| VoucherInfo::from(v))
+                    .collect()
+            } else {
+                Vec::new()
+            },
             boss_reroll_cost: self.boss_reroll_cost(),
+            tags: self.tags.iter().map(|&t| t.into()).collect(),
             hand_size: self.hand_size(),
             remaining: {
                 let mut cards = match self.phase {
@@ -2704,21 +2987,22 @@ impl Game {
             shop: self
                 .offers
                 .iter()
-                .map(|&o| match o {
+                .enumerate()
+                .map(|(i, &o)| match o {
                     Offer::Joker { joker, edition } => {
                         let owned = OwnedJoker::new(joker, edition);
                         OfferInfo::Joker(JokerInfo {
-                            price: self.discounted(owned.price()),
+                            price: self.offer_price(i),
                             ..JokerInfo::new(&owned, None, None)
                         })
                     }
                     Offer::Consumable(c) => {
-                        OfferInfo::Consumable(ConsumableInfo::new(c, self.consumable_price(c)))
+                        OfferInfo::Consumable(ConsumableInfo::new(c, self.offer_price(i)))
                     }
                     Offer::Card(card) => OfferInfo::Card(CardOffer {
                         kind: "card",
                         card,
-                        price: self.discounted(Self::card_price(&card)),
+                        price: self.offer_price(i),
                     }),
                 })
                 .collect(),
@@ -2986,6 +3270,7 @@ mod tests {
                 interest: 0,
                 jokers: 3,
                 cards: 0,
+                badges: 0,
                 total: 9,
                 notes: vec![],
             })
@@ -3981,17 +4266,17 @@ mod tests {
     #[test]
     fn one_pull_request_per_ante_and_follow_ups_wait() {
         let mut game = shopping(110, vec![]);
-        let offer = game.state().voucher.unwrap();
+        let offer = game.state().vouchers_for_sale[0].clone();
         assert!(offer.id.follows().is_none());
-        game.buy_voucher().unwrap();
+        game.buy_voucher(0).unwrap();
         assert_eq!(
-            (game.money, game.state().voucher),
-            (50 - VOUCHER_PRICE, None)
+            (game.money, game.state().vouchers_for_sale.len()),
+            (50 - VOUCHER_PRICE, 0)
         );
-        assert!(game.buy_voucher().is_err());
+        assert!(game.buy_voucher(0).is_err());
         for _ in 0..200 {
             game.roll_voucher();
-            let v = game.voucher_offer.unwrap();
+            let v = game.voucher_offers[0];
             assert!(v.follows().is_none_or(|first| game.has(first)));
             assert!(!game.has(v));
         }
@@ -4104,6 +4389,108 @@ mod tests {
         game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
         // Pair: (10 + 20) × 2 × 1.5
         assert_eq!(game.play(&[0, 1]).unwrap().total, 90.0);
+    }
+
+    #[test]
+    fn skipping_gives_the_blind_badge() {
+        let mut game = Game::new(120, vec![Joker::SkipIntro]);
+        let tag = game.blind_tags[0];
+        let shown = game.state().blinds[0].tag.clone().unwrap();
+        assert_eq!(shown.id, tag);
+        game.blind_tags[0] = Tag::Sponsors2x;
+        game.money = 10;
+        game.skip_blind().unwrap();
+        assert_eq!(
+            (game.money, game.skips, game.jokers[0].counter),
+            (20, 1, 1.25)
+        );
+    }
+
+    #[test]
+    fn badges_wait_for_their_moment() {
+        let mut game = Game::new(121, vec![]);
+        game.cheat(Cheat {
+            tags: vec![
+                Tag::Resolution4k,
+                Tag::Stars10k,
+                Tag::PriceFree,
+                Tag::SeriesA,
+            ],
+            ..Cheat::default()
+        })
+        .unwrap();
+        assert_eq!(game.state().tags.len(), 4);
+        game.select_blind().unwrap();
+        assert_eq!(game.hand.len(), HAND_SIZE + 3);
+        win(&mut game);
+        game.cash_out().unwrap();
+        // The extra AUR joker is offered, and everything is free.
+        let s = game.state();
+        assert_eq!(s.shop.len(), SHOP_OFFERS + 1);
+        assert!(s.packs.iter().all(|p| p.price == 0));
+        assert!(game.free_offers.iter().all(|&f| f));
+        assert_eq!(
+            game.state().tags.iter().map(|t| t.id).collect::<Vec<_>>(),
+            [Tag::SeriesA]
+        );
+        game.next_blind().unwrap();
+        assert!(game.packs.is_empty() && !game.free_packs);
+    }
+
+    #[test]
+    fn series_a_pays_after_the_boss() {
+        let mut game = boss_game(122, Boss::Clippy, vec![Joker::Kill9]);
+        game.gain_tag(Tag::SeriesA);
+        win(&mut game);
+        let reward = game.state().reward.unwrap();
+        assert_eq!(reward.badges, 25);
+    }
+
+    #[test]
+    fn badges_2x_doubles_the_next_badge() {
+        let mut game = Game::new(123, vec![]);
+        game.money = 0;
+        game.gain_tag(Tag::Badges2x);
+        game.skips = 2;
+        game.gain_tag(Tag::SpeedBlazing);
+        assert_eq!(game.money, 20);
+        assert!(game.tags.is_empty());
+    }
+
+    #[test]
+    fn pack_badges_open_a_free_pack_then_come_back() {
+        let mut game = Game::new(124, vec![]);
+        game.blind_tags[0] = Tag::BuildPassing;
+        game.ante = 2;
+        game.skip_blind().unwrap();
+        let s = game.state();
+        assert_eq!(
+            (s.phase, s.opened.unwrap().name),
+            (Phase::Pack, "base-devel-meta".to_string())
+        );
+        game.skip_pack().unwrap();
+        assert_eq!(game.phase, Phase::BlindSelect);
+    }
+
+    #[test]
+    fn edition_badges_decorate_a_shop_joker() {
+        let mut game = won_game(125, vec![]);
+        game.gain_tag(Tag::BlurOn);
+        game.cash_out().unwrap();
+        let free = game
+            .offers
+            .iter()
+            .zip(&game.free_offers)
+            .find(|(_, free)| **free)
+            .map(|(o, _)| *o)
+            .unwrap();
+        assert!(matches!(
+            free,
+            Offer::Joker {
+                edition: Some(Edition::Blur),
+                ..
+            }
+        ));
     }
 
     #[test]

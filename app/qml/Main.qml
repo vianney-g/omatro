@@ -195,13 +195,13 @@ Window {
     return selected.length >= c.min_cards && selected.length <= c.max_cards
   }
   // ---- packs -------------------------------------------------------------
-  function canMerge() {
-    return shopping && game.voucher !== null && game.money >= game.voucher.price
+  function canMerge(i) {
+    return shopping && i < game.vouchers_for_sale.length && game.money >= game.vouchers_for_sale[i].price
   }
-  function buyVoucher() {
-    if (canMerge()) {
-      var name = game.voucher.name
-      send({ cmd: "buy_voucher" })
+  function buyVoucher(i) {
+    if (canMerge(i)) {
+      var name = game.vouchers_for_sale[i].name
+      send({ cmd: "buy_voucher", index: i })
       notice = "Merged " + name + "."
     }
   }
@@ -369,7 +369,7 @@ Window {
       }
       else if (k === Qt.Key_R) root.reroll()
       else if (k === Qt.Key_S) root.skipBlind()
-      else if (k === Qt.Key_M) root.buyVoucher()
+      else if (k === Qt.Key_M) root.buyVoucher(0)
       else if (k === Qt.Key_B) root.rerollBoss()
       else if (k === Qt.Key_F5) root.cheat({ win: true })
       else if (k === Qt.Key_F6) root.cheat({ money: root.game.money + 100 })
@@ -548,6 +548,22 @@ Window {
 
         Caption { text: root.game ? "Deck: " + root.game.remaining.length + " / " + root.game.deck_size : "" }
 
+        // Badges won, waiting for their moment.
+        Column {
+          Layout.fillWidth: true
+          visible: root.game !== null && root.game.tags.length > 0
+          spacing: Style.spacing.sm
+          Caption { text: "Badges" }
+          Flow {
+            width: parent.width
+            spacing: Style.spacing.sm
+            Repeater {
+              model: root.game ? root.game.tags : []
+              BadgeView { tag: modelData }
+            }
+          }
+        }
+
         // Clipboard: consumables waiting to be used (Ctrl+1, Ctrl+2).
         Column {
           Layout.fillWidth: true
@@ -704,7 +720,7 @@ Window {
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.space(24)
             readonly property int count: root.game ? root.game.shop.length + root.game.packs.length
-              + (root.game.voucher !== null ? 1 : 0) : 1
+              + root.game.vouchers_for_sale.length : 1
             readonly property real itemWidth: Math.min(Style.space(120),
               (playArea.width - (count - 1) * spacing) / Math.max(1, count))
             Repeater {
@@ -765,23 +781,25 @@ Window {
                 }
               }
             }
-            // The pull request of the ante (key M).
-            Column {
-              visible: root.game !== null && root.game.voucher !== null
-              width: shopRow.itemWidth
-              spacing: Style.spacing.md
-              VoucherView {
+            // The pull requests of the ante (key M merges the first).
+            Repeater {
+              model: root.game ? root.game.vouchers_for_sale : []
+              Column {
                 width: shopRow.itemWidth
-                voucher: parent.visible ? root.game.voucher : null
-                opacity: root.canMerge() ? 1 : 0.5
-              }
-              Button {
-                anchors.horizontalCenter: parent.horizontalCenter
-                compact: true
-                text: "Merge · " + (parent.visible ? Labels.money(root.game.voucher.price) : "")
-                enabled: root.canMerge()
-                opacity: enabled ? 1 : 0.5
-                onClicked: root.buyVoucher()
+                spacing: Style.spacing.md
+                VoucherView {
+                  width: shopRow.itemWidth
+                  voucher: modelData
+                  opacity: root.canMerge(index) ? 1 : 0.5
+                }
+                Button {
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  compact: true
+                  text: "Merge · " + Labels.money(modelData.price)
+                  enabled: root.canMerge(index)
+                  opacity: enabled ? 1 : 0.5
+                  onClicked: root.buyVoucher(index)
+                }
               }
             }
           }
@@ -1050,6 +1068,7 @@ Window {
                 var lines = [["Blind", r.blind], ["Hands left", r.hands], ["Interest", r.interest]]
                 if (r.jokers > 0) lines.push(["Jokers", r.jokers])
                 if (r.cards > 0) lines.push(["Enterprise cards", r.cards])
+                if (r.badges > 0) lines.push(["Badges", r.badges])
                 lines.push(["Total", r.total])
                 var cells = []
                 for (var i = 0; i < lines.length; i++)

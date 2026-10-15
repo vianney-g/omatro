@@ -42,7 +42,9 @@ takes a card, Ctrl+C (or Escape) skips.
 The game is played in antes of three blinds: the small blind, the big blind and the
 boss blind. Each blind requires reaching a score within 4 hands and 3 discards: the
 ante's base score (300, 800, 2,000, 5,000, 11,000, 20,000, 35,000, 50,000) × 1, 1.5 or
-2. Before the small and big blinds, you may skip them. Each ante's boss
+2. Before the small and big blinds, you may skip them, for the badge each one shows
+([docs/tags.md](docs/tags.md)): money, free jokers or packs, editions, levels… Some act
+right away, others wait for the next shop, blind or boss. Each ante's boss
 ([docs/bosses.md](docs/bosses.md)) has an effect, announced before the blind: cards that
 don't score, cards dealt face down, hands it refuses, a bigger target… Beating the
 boss blind of ante 8 wins the game; you may then go on in endless mode, where targets
@@ -107,19 +109,19 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"buy_pack","pack":0}` | Buys a pack of the shop and opens it |
 | `{"cmd":"pick","choice":0,"cards":[1]}` | Takes a card of the open pack (`cards`: the drawn hand's cards a command changes) |
 | `{"cmd":"skip_pack"}` | Leaves the open pack |
-| `{"cmd":"buy_voucher"}` | Merges the pull request for sale (in the shop) |
+| `{"cmd":"buy_voucher","index":0}` | Merges a pull request for sale (in the shop) |
 | `{"cmd":"reroll_boss"}` | Draws another boss for the ante (Change Request, before the blind) |
 | `{"cmd":"use_consumable","index":0,"cards":[1,3]}` | Uses a consumable of the clipboard (any time but after a loss); `cards`: the hand cards a command changes |
 | `{"cmd":"sell_consumable","index":0}` | Sells a consumable of the clipboard |
 | `{"cmd":"reroll"}` | Rerolls the shop offers |
 | `{"cmd":"next_blind"}` | Leaves the shop for the choice of the next blind |
-| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true,"random_command":true,"random_pack":true,"random_oligarchy":true,"boss":"burnout","next_boss":true,"vouchers":["overtime"]}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
+| `{"cmd":"debug","money":50,"jokers":["hotwire"],"edition":"blur","ante":8,"blind":"boss","win":true,"level_up":["pair"],"random_joker":true,"random_theme":true,"enhance_hand":true,"random_command":true,"random_pack":true,"random_oligarchy":true,"boss":"burnout","next_boss":true,"vouchers":["overtime"],"tags":["build_passing"]}` | Testing shortcuts, all fields optional; only with `OMATRO_DEBUG=1` |
 
 Responses:
 
 - `{"event":"state","state":{…}}`: game state: `ante`, `blind` (`small` / `big` /
   `boss`), the ante's three `blinds` (name, the boss's `description`, target, reward,
-  `status`), the ante's `boss` and `boss_active`, `target`, `score`,
+  `status`, and the `tag` skipping it gives), the ante's `boss` and `boss_active`, `target`, `score`,
   hands and discards left (in the `pack` phase, the hand is the one a coreutils pack
   drew; `face_down`, `debuffed` and `forced` follow the hand's cards), `remaining` (cards left to draw, or the whole deck between
   blinds), `deck_size`, `hands` (each hand type's `level`, `chips`, `mult` and `played`
@@ -127,8 +129,8 @@ Responses:
   `pack` / `lost`, `victory` (the winning ante's boss was just beaten), hand, `hand_size`,
   jokers (`id`, `name`, `description`, `quip`, `rarity`, `edition`, `price`,
   `sell_value`, `bonus` for what a growing joker gives now, `current` for what a Fork
-  copies), `max_jokers`, `jokers_hidden`, `disabled_joker`, `vouchers` merged, the `voucher` for sale
-  (in the shop), `boss_reroll_cost` (when Change Request allows it now), `modifiers` (names and effects of every enhancement, seal and
+  copies), `max_jokers`, `jokers_hidden`, `disabled_joker`, `vouchers` merged, `vouchers_for_sale` (in
+  the shop), `tags` (badges won, waiting), `boss_reroll_cost` (when Change Request allows it now), `modifiers` (names and effects of every enhancement, seal and
   edition), `consumables` (`kind` = `theme` / `command` / `oligarchy`, `id`, `name`,
   `description`, `quip`, `price`, `sell_value`, `min_cards` / `max_cards` to select,
   `needs_hand` when it works on the cards in hand, `transparent` when it takes no slot), `consumable_slots`, `unique_themes`, `money`,

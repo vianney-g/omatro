@@ -101,13 +101,22 @@ Row {
           width: parent.width
           height: Style.space(84)
 
-          Text {
+          Column {
             anchors.centerIn: parent
             visible: !panel.next
+            spacing: Style.spacing.md
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
             text: Labels.blindStatus(modelData.status)
             color: Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.subtitle
+          }
+          BadgeView {
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: modelData.tag !== null && modelData.status === "upcoming"
+            tag: modelData.tag
+          }
           }
           Column {
             anchors.centerIn: parent
@@ -123,6 +132,12 @@ Row {
               visible: modelData.kind !== "boss"
               text: "Skip (S)"
               onClicked: root.skip()
+            }
+            // What skipping gives.
+            BadgeView {
+              anchors.horizontalCenter: parent.horizontalCenter
+              visible: modelData.tag !== null
+              tag: modelData.tag
             }
             Button {
               anchors.horizontalCenter: parent.horizontalCenter

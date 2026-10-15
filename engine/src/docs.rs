@@ -7,6 +7,7 @@ use crate::hand::HandKind;
 use crate::joker::{Edition, Joker};
 use crate::modifier::{Enhancement, Seal};
 use crate::pack::{Pack, PackKind, PackSize};
+use crate::tag::Tag;
 use crate::voucher::{VOUCHER_PRICE, Voucher};
 
 /// Snake-case id of a value, as in the protocol.
@@ -315,9 +316,30 @@ fn vouchers() -> String {
     doc
 }
 
+fn tags() -> String {
+    let mut doc = header(
+        "Badges",
+        "Badges (tags, in the original) are README badges won by skipping a small or big\n\
+         blind; each of them shows the badge it gives. Some act right away, others wait\n\
+         for the next shop, blind or boss. badges: 2x copies the next badge won.",
+    );
+    doc += "| Id | Badge | Effect | From ante | Quip |\n|---|---|---|---|---|\n";
+    for tag in Tag::ALL {
+        doc += &format!(
+            "| `{}` | `{}` | {} | {} | *{}* |\n",
+            id(tag),
+            tag.name(),
+            tag.description(),
+            tag.min_ante(),
+            cell(tag.quip())
+        );
+    }
+    doc
+}
+
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 10] = [
+    let docs: [(&str, fn() -> String); 11] = [
         ("jokers.md", jokers),
         ("editions.md", editions),
         ("hands.md", hands),
@@ -327,6 +349,7 @@ fn docs_are_up_to_date() {
         ("oligarchy.md", oligarchy),
         ("bosses.md", bosses),
         ("vouchers.md", vouchers),
+        ("tags.md", tags),
         ("modifiers.md", modifiers),
     ];
     for (file, render) in docs {

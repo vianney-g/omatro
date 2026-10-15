@@ -135,11 +135,21 @@ Report a boss that struck through `triggered`, for Incident Commander.
 ## Pull requests
 
 `voucher.rs` lists the pull requests (vouchers), in pairs (`follows()`). `Game::vouchers`
-holds the merged ones, `voucher_offer` the one for sale this ante (`roll_voucher`, at
-each new ante), `merge` applies the immediate effects (ante, reroll cost). Rules read
+holds the merged ones, `voucher_offers` those for sale this ante (`roll_voucher`, at
+each new ante; PRs: welcome adds one), `merge` applies the immediate effects (ante, reroll cost). Rules read
 them through `has` / `merged`: `hands_per_blind`, `discards_per_blind`, `hand_size`,
 `joker_slots`, `consumable_slots`, `max_interest`, `discounted` (shop prices),
 `edition_factor`, the shop weights in `roll_offers`, `boss_reroll_cost`.
+
+## Badges
+
+`tag.rs` lists the badges (tags). `Game::blind_tags` holds what the small and big blinds
+give (`roll_blind_tags`, at each new ante); `skip_blind` calls `gain_tag`, where
+`badges: 2x` copies the next one. `apply_tag` acts right away (money, jokers, levels,
+boss reroll, free packs through `open_free_pack`, which come back to the phase they
+were opened from) or keeps the badge in `Game::tags` until its moment: `shop_tags` at
+cash-out (free offers in `free_offers`, `free_packs`), `select_blind` (`juggle`),
+`win_blind` (funding). Take waiting badges with `take_tags`.
 
 ## Packs
 

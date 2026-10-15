@@ -75,6 +75,7 @@ Fork copies the joker on its right.
 | `alias_collection` | Alias Collection | extra | $6 | Creates a command when a blind starts (if there is room) | *alias ll='ls -la'. And 400 more.* |
 | `seed_round` | Seed Round | extra | $6 | Creates an oligarchy card if the hand is a Straight Flush | *Straight to the top. Then raise again.* |
 | `angel_investor` | Angel Investor | extra | $6 | If the first hand of a blind is a single 6, destroys it and creates an oligarchy card | *Sacrifices a six. Expects a unicorn.* |
+| `skip_intro` | Skip Intro | extra | $6 | Gains ×0.25 mult per blind skipped | *Netflix taught us well.* |
 | `no_build` | No Build | extra | $7 | ×2 mult if the played hand has 3 cards or fewer | *Webpack? Never heard of her.* |
 | `heartbleed` | Heartbleed | extra | $7 | 1 in 2 chance of ×1.5 mult for each scoring heart | *Your heart leaks, 64 KB at a time.* |
 | `mvp` | MVP | extra | $7 | Flushes and Straights can be made with 4 cards | *Minimum viable flush.* |

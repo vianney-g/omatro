@@ -54,7 +54,10 @@ pub enum Command {
         cards: Vec<usize>,
     },
     SkipPack,
-    BuyVoucher,
+    BuyVoucher {
+        #[serde(default)]
+        index: usize,
+    },
     RerollBoss,
     MoveJoker {
         from: usize,
@@ -191,7 +194,7 @@ impl Session {
                 game.pick(choice, &cards).map_err(|e| e.to_string())?
             }
             Command::SkipPack => game.skip_pack().map_err(|e| e.to_string())?,
-            Command::BuyVoucher => game.buy_voucher().map_err(|e| e.to_string())?,
+            Command::BuyVoucher { index } => game.buy_voucher(index).map_err(|e| e.to_string())?,
             Command::RerollBoss => game.reroll_boss().map_err(|e| e.to_string())?,
             Command::MoveJoker { from, to } => {
                 game.move_joker(from, to).map_err(|e| e.to_string())?
