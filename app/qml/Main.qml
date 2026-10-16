@@ -23,8 +23,9 @@ Window {
   // shrinks together (a tiled window can be smaller than the minimum size).
   // Width: margins, left column and the 8 cards of the hand (1032).
   readonly property real designWidth: 1040 * Style.themeScale
-  // Height: the shop, with the joker row and the offers (both 230 high).
-  readonly property real designHeight: 830 * Style.themeScale
+  // Height: the shop, with the joker row (230 high), the offers (230) and,
+  // under them, the pull requests and packs (150).
+  readonly property real designHeight: 920 * Style.themeScale
   Binding {
     target: Style
     property: "fit"
@@ -152,6 +153,23 @@ Window {
     selected = s
     notice = ""
     if (playing) send({ cmd: "preview", cards: s })
+  }
+
+  // Moves or sorts the hand; the selection follows its cards.
+  function rearrange(command) {
+    if (!selecting) return
+    var ids = selected.map(function(i) { return hand[i].id })
+    send(command)
+    selected = ids.map(function(id) { return hand.findIndex(function(c) { return c.id === id }) })
+      .filter(function(i) { return i >= 0 })
+    if (playing && selected.length > 0) send({ cmd: "preview", cards: selected })
+  }
+  function moveCard(from, to) {
+    to = Math.max(0, Math.min(hand.length - 1, to))
+    if (from !== to) rearrange({ cmd: "move_card", from: from, to: to })
+  }
+  function sortHand(by) {
+    rearrange({ cmd: "sort_hand", by: by })
   }
 
   function showPreview(r) {
@@ -357,6 +375,28 @@ Window {
     border.color: Style.normalBorderColor
   }
 
+  // A zone of the shop: a frame with its title, its items side by side.
+  component ShopZone: Rectangle {
+    property string title
+    default property alias items: zoneRow.data
+    width: zoneRow.implicitWidth + 2 * Style.spacing.xxl
+    height: zoneTitle.implicitHeight + zoneRow.implicitHeight + 2 * Style.spacing.xxl + Style.spacing.md
+    radius: Style.cornerRadius
+    color: Style.normalFill
+    border.width: Style.normalBorderWidth
+    border.color: Style.normalBorderColor
+    Caption {
+      id: zoneTitle
+      anchors { left: parent.left; top: parent.top; margins: Style.spacing.xxl }
+      text: parent.title
+    }
+    Row {
+      id: zoneRow
+      anchors { left: parent.left; top: zoneTitle.bottom; leftMargin: Style.spacing.xxl; topMargin: Style.spacing.md }
+      spacing: Style.space(16)
+    }
+  }
+
   component Caption: Text {
     color: Color.muted
     font.family: Style.font.family
@@ -407,6 +447,12 @@ Window {
         else if (root.inPack && !root.packHand) root.pickChoice(i)
         else root.toggleCard(i)
       }
+      else if ((k === Qt.Key_Left || k === Qt.Key_Right) && (event.modifiers & Qt.ShiftModifier)) {
+        if (root.selected.length === 1)
+          root.moveCard(root.selected[0], root.selected[0] + (k === Qt.Key_Left ? -1 : 1))
+      }
+      else if (k === Qt.Key_Tab || k === Qt.Key_Backtab)
+        root.sortHand(root.game && root.game.sort_by === "rank" ? "suit" : "rank")
       else if (k === Qt.Key_R) root.reroll()
       else if (k === Qt.Key_S) root.skipBlind()
       else if (k === Qt.Key_M) root.buyVoucher(0)
@@ -673,7 +719,7 @@ Window {
             : root.choosing
             ? "Enter: play the blind · S: skip it\n" + (root.game.boss_reroll_cost !== null ? "B: reroll the boss · " : "")
               + "N: new game\nI: fastfetch · Ctrl+Q: quit"
-            : "1-9, 0: choose · Enter: play\nD: discard · N: new game\nI: fastfetch · Ctrl+Q: quit"
+            : "1-9, 0: choose · Enter: play\nD: discard · Tab: sort\nShift+←/→: move a card\nN: new game · I: fastfetch\nCtrl+Q: quit"
         }
       }
 
@@ -742,119 +788,175 @@ Window {
           }
         }
 
-        // Shop, between two blinds.
+        // Shop, between two blinds, in zones as at a counter: the buttons and,
+        // under them, the pull requests; the offers and, under them, the
+        // packs. Keys follow the order: offers, then packs.
         ColumnLayout {
+          id: shop
           Layout.fillWidth: true
           Layout.fillHeight: true
           visible: root.game !== null && root.game.phase === "shop"
-          spacing: Style.spacing.huge
+          spacing: Style.spacing.xxl
+          readonly property real gap: Style.space(16)
+          readonly property real zonePadding: 2 * Style.spacing.xxl
+          readonly property real buttonsWidth: Style.space(160)
+          // Items get narrower when a column has more of them (More
+          // Workspaces, PRs: welcome).
+          readonly property int vouchers: root.game ? root.game.vouchers_for_sale.length : 0
+          readonly property int wide: root.game ? Math.max(1, root.game.shop.length, root.game.packs.length) : 1
+          readonly property real itemWidth: {
+            var room = playArea.width - zonePadding - Style.spacing.huge - (wide - 1) * gap
+            var fit = vouchers > 1
+              ? (room - zonePadding - (vouchers - 1) * gap) / (wide + vouchers)
+              : (room - buttonsWidth) / wide
+            return Math.min(Style.space(120), fit)
+          }
+          // Offers are as tall as the tallest of them, so their buttons line up.
+          readonly property real offerHeight: root.game && root.game.shop.some(function(o) { return o.kind === "joker" })
+            ? Style.space(230) : Style.space(150)
 
           Item { Layout.fillHeight: true }
 
-          Text {
+          Grid {
             Layout.alignment: Qt.AlignHCenter
-            text: "Shop"
-            color: Color.accent
-            font.family: Style.font.family
-            font.pixelSize: Style.font.displayLarge
-            font.bold: true
-          }
+            columns: 2
+            columnSpacing: Style.spacing.huge
+            rowSpacing: Style.spacing.huge
 
-          // Offers, packs and the pull request; narrower when there are more
-          // (More Workspaces). Keys follow the order: offers, then packs.
-          Row {
-            id: shopRow
-            Layout.alignment: Qt.AlignHCenter
-            spacing: Style.space(24)
-            readonly property int count: root.game ? root.game.shop.length + root.game.packs.length
-              + root.game.vouchers_for_sale.length : 1
-            readonly property real itemWidth: Math.min(Style.space(120),
-              (playArea.width - (count - 1) * spacing) / Math.max(1, count))
-            Repeater {
-              model: root.game ? root.game.shop : []
+            // Next blind and reroll, centred on the offers.
+            Item {
+              width: Math.max(shop.buttonsWidth, pullRequests.visible ? pullRequests.width : 0)
+              height: offersZone.height
               Column {
-                width: shopRow.itemWidth
-                spacing: Style.spacing.md
-                JokerView {
-                  visible: modelData.kind === "joker"
-                  width: shopRow.itemWidth
-                  joker: visible ? modelData : null
-                  opacity: root.canBuy(modelData) ? 1 : 0.5
-                }
-                ConsumableView {
-                  visible: modelData.kind !== "joker" && modelData.kind !== "card"
-                  width: shopRow.itemWidth
-                  item: visible ? modelData : null
-                  opacity: root.canBuy(modelData) ? 1 : 0.5
-                }
-                CardView {
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  visible: modelData.kind === "card"
-                  width: Math.min(shopRow.itemWidth, Style.space(84))
-                  card: visible ? modelData.card : null
-                  modifiers: root.game ? root.game.modifiers : null
-                  interactive: false
-                  opacity: root.canBuy(modelData) ? 1 : 0.5
-                }
+                anchors.centerIn: parent
+                spacing: Style.spacing.lg
                 Button {
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  compact: true
-                  text: (index + 1) + " · " + Labels.money(modelData.price)
+                  width: shop.buttonsWidth
+                  text: "Next blind (Enter)"
                   bordered: true
-                  enabled: root.canBuy(modelData)
-                  opacity: enabled ? 1 : 0.5
-                  onClicked: root.buy(index)
-                }
-              }
-            }
-            // Packs, opened on the spot.
-            Repeater {
-              model: root.game ? root.game.packs : []
-              Column {
-                width: shopRow.itemWidth
-                spacing: Style.spacing.md
-                PackView {
-                  width: shopRow.itemWidth
-                  pack: modelData
-                  opacity: root.canBuyPack(modelData) ? 1 : 0.5
+                  enabled: root.shopping
+                  onClicked: root.confirm()
                 }
                 Button {
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  compact: true
-                  text: (root.game.shop.length + index + 1) + " · " + Labels.money(modelData.price)
-                  enabled: root.canBuyPack(modelData)
+                  width: shop.buttonsWidth
+                  text: "Reroll (R) · " + (root.game ? Labels.money(root.game.reroll_cost) : "")
+                  bordered: true
+                  enabled: root.shopping && root.canPay(root.game.reroll_cost)
                   opacity: enabled ? 1 : 0.5
-                  onClicked: root.buyPack(index)
+                  onClicked: root.reroll()
                 }
               }
             }
-            // The pull requests of the ante (key M merges the first).
-            Repeater {
-              model: root.game ? root.game.vouchers_for_sale : []
-              Column {
-                width: shopRow.itemWidth
-                spacing: Style.spacing.md
-                VoucherView {
-                  width: shopRow.itemWidth
-                  voucher: modelData
-                  opacity: root.canMerge(index) ? 1 : 0.5
-                }
-                Button {
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  compact: true
-                  text: "Merge · " + Labels.money(modelData.price)
-                  enabled: root.canMerge(index)
-                  opacity: enabled ? 1 : 0.5
-                  onClicked: root.buyVoucher(index)
-                }
-              }
-            }
-          }
 
-          Caption {
-            Layout.alignment: Qt.AlignHCenter
-            visible: root.game !== null && root.game.shop.length === 0
-            text: "Sold out: reroll for new offers."
+            ShopZone {
+              id: offersZone
+              title: "Offers"
+                Repeater {
+                  model: root.game ? root.game.shop : []
+                  Column {
+                    width: shop.itemWidth
+                    spacing: Style.spacing.md
+                    Item {
+                    width: shop.itemWidth
+                    height: shop.offerHeight
+                    JokerView {
+                      visible: modelData.kind === "joker"
+                      width: shop.itemWidth
+                      joker: visible ? modelData : null
+                      opacity: root.canBuy(modelData) ? 1 : 0.5
+                    }
+                    ConsumableView {
+                      visible: modelData.kind !== "joker" && modelData.kind !== "card"
+                      width: shop.itemWidth
+                      item: visible ? modelData : null
+                      opacity: root.canBuy(modelData) ? 1 : 0.5
+                    }
+                    CardView {
+                      anchors.horizontalCenter: parent.horizontalCenter
+                      visible: modelData.kind === "card"
+                      width: Math.min(shop.itemWidth, Style.space(84))
+                      card: visible ? modelData.card : null
+                      modifiers: root.game ? root.game.modifiers : null
+                      interactive: false
+                      opacity: root.canBuy(modelData) ? 1 : 0.5
+                    }
+                    }
+                    Button {
+                      anchors.horizontalCenter: parent.horizontalCenter
+                      compact: true
+                      text: (index + 1) + " · " + Labels.money(modelData.price)
+                      bordered: true
+                      enabled: root.canBuy(modelData)
+                      opacity: enabled ? 1 : 0.5
+                      onClicked: root.buy(index)
+                    }
+                  }
+                }
+                Caption {
+                  visible: root.game !== null && root.game.shop.length === 0
+                  width: shop.itemWidth * 2
+                  height: shop.offerHeight
+                  verticalAlignment: Text.AlignVCenter
+                  horizontalAlignment: Text.AlignHCenter
+                  wrapMode: Text.WordWrap
+                  text: "Sold out: reroll for new offers."
+                }
+            }
+
+            // The pull requests of the ante (key M merges the first).
+            ShopZone {
+              id: pullRequests
+              title: "Pull request"
+              visible: shop.vouchers > 0
+                Repeater {
+                  model: root.game ? root.game.vouchers_for_sale : []
+                  Column {
+                    width: shop.itemWidth
+                    spacing: Style.spacing.md
+                    VoucherView {
+                      width: shop.itemWidth
+                      voucher: modelData
+                      opacity: root.canMerge(index) ? 1 : 0.5
+                    }
+                    Button {
+                      anchors.horizontalCenter: parent.horizontalCenter
+                      compact: true
+                      text: "M · " + Labels.money(modelData.price)
+                      bordered: true
+                      enabled: root.canMerge(index)
+                      opacity: enabled ? 1 : 0.5
+                      onClicked: root.buyVoucher(index)
+                    }
+                  }
+                }
+            }
+
+            // Packs, opened on the spot.
+            ShopZone {
+              title: "Packages"
+              visible: root.game !== null && root.game.packs.length > 0
+                Repeater {
+                  model: root.game ? root.game.packs : []
+                  Column {
+                    width: shop.itemWidth
+                    spacing: Style.spacing.md
+                    PackView {
+                      width: shop.itemWidth
+                      pack: modelData
+                      opacity: root.canBuyPack(modelData) ? 1 : 0.5
+                    }
+                    Button {
+                      anchors.horizontalCenter: parent.horizontalCenter
+                      compact: true
+                      text: (root.game.shop.length + index + 1) + " · " + Labels.money(modelData.price)
+                      bordered: true
+                      enabled: root.canBuyPack(modelData)
+                      opacity: enabled ? 1 : 0.5
+                      onClicked: root.buyPack(index)
+                    }
+                  }
+                }
+            }
           }
 
           Text {
@@ -866,24 +968,6 @@ Window {
           }
 
           Item { Layout.fillHeight: true }
-
-          Row {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: Style.spacing.xxl
-            Button {
-              text: "Reroll (R) · " + (root.game ? Labels.money(root.game.reroll_cost) : "")
-              bordered: true
-              enabled: root.shopping && root.canPay(root.game.reroll_cost)
-              opacity: enabled ? 1 : 0.5
-              onClicked: root.reroll()
-            }
-            Button {
-              text: "Next blind (Enter)"
-              bordered: true
-              enabled: root.shopping
-              onClicked: root.confirm()
-            }
-          }
         }
 
         // Choice of the next blind.
@@ -1011,6 +1095,22 @@ Window {
               forced: modelData.id === root.forcedId
               shortcut: index < 9 ? String(index + 1) : index === 9 ? "0" : ""
               onClicked: root.toggleCard(index)
+              // Dragged sideways, the card moves in the hand.
+              property real dragX: 0
+              z: dragger.active ? 10 : 0
+              transform: Translate { x: dragger.active ? dragger.activeTranslation.x : 0 }
+              DragHandler {
+                id: dragger
+                target: null
+                enabled: root.selecting
+                yAxis.enabled: false
+                cursorShape: Qt.ClosedHandCursor
+                onActiveTranslationChanged: if (active) parent.dragX = activeTranslation.x
+                onActiveChanged: if (!active) {
+                  root.moveCard(index, index + Math.round(parent.dragX / (handRow.cardWidth + handRow.spacing)))
+                  parent.dragX = 0
+                }
+              }
             }
           }
         }
@@ -1033,6 +1133,26 @@ Window {
             enabled: root.playing && root.selected.length > 0 && root.game.discards_left > 0
             opacity: enabled ? 1 : 0.5
             onClicked: root.discard()
+          }
+          // Sort the hand (Tab switches); drag a card to move it.
+          Row {
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.spacing.md
+            Caption {
+              anchors.verticalCenter: parent.verticalCenter
+              text: "Sort (Tab)"
+            }
+            Repeater {
+              model: [["rank", "Rank"], ["suit", "Suit"]]
+              Button {
+                compact: true
+                text: modelData[1]
+                bordered: root.game !== null && root.game.sort_by === modelData[0]
+                enabled: root.selecting
+                opacity: enabled ? 1 : 0.5
+                onClicked: root.sortHand(modelData[0])
+              }
+            }
           }
         }
       }

@@ -1,7 +1,7 @@
 //! Protocol between the engine and the display: one JSON command per line
 //! in, one JSON response per line out.
 
-use crate::game::{Cheat, DeckInfo, Game, State};
+use crate::game::{Cheat, DeckInfo, Game, SortBy, State};
 use crate::hand::HandKind;
 use crate::joker::{Bonus, Joker};
 use crate::run_deck::Deck;
@@ -67,6 +67,15 @@ pub enum Command {
     MoveJoker {
         from: usize,
         to: usize,
+    },
+    /// Moves a card of the hand.
+    MoveCard {
+        from: usize,
+        to: usize,
+    },
+    /// Sorts the hand, and new hands from now on.
+    SortHand {
+        by: SortBy,
     },
     Reroll,
     NextBlind,
@@ -217,6 +226,10 @@ impl Session {
             Command::MoveJoker { from, to } => {
                 game.move_joker(from, to).map_err(|e| e.to_string())?
             }
+            Command::MoveCard { from, to } => {
+                game.move_card(from, to).map_err(|e| e.to_string())?
+            }
+            Command::SortHand { by } => game.sort_hand_by(by),
             Command::Reroll => game.reroll().map_err(|e| e.to_string())?,
             Command::NextBlind => game.next_blind().map_err(|e| e.to_string())?,
             Command::Debug(cheat) => game.cheat(cheat).map_err(|e| e.to_string())?,

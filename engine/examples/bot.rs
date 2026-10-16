@@ -244,6 +244,15 @@ impl Bot {
         if self.chaos && self.rng.chance(6) {
             self.send(json!({"cmd": "debug", "enhance_hand": true}));
         }
+        if self.rng.chance(8) {
+            let by = if self.rng.chance(2) { "rank" } else { "suit" };
+            self.send(json!({"cmd": "sort_hand", "by": by}));
+        }
+        if self.rng.chance(8) && self.len("hand") > 1 {
+            let n = self.len("hand") as u64;
+            let (from, to) = (self.rng.below(n), self.rng.below(n));
+            self.send(json!({"cmd": "move_card", "from": from, "to": to}));
+        }
         self.use_consumables();
         if self.phase() != "playing" {
             return;

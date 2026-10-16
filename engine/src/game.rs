@@ -449,6 +449,8 @@ pub struct State {
     pub debuffed: Vec<bool>,
     /// The Clippy: the hand card always selected.
     pub forced: Option<usize>,
+    /// How new hands are sorted (the player may rearrange them).
+    pub sort_by: SortBy,
     /// The boss of the ante, and whether its effect applies now.
     pub boss: BossInfo,
     pub boss_active: bool,
@@ -552,6 +554,15 @@ enum Draw {
     Deal,
     AfterHand,
     AfterDiscard,
+}
+
+/// How the hand is sorted: by rank, or by suit then rank.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SortBy {
+    #[default]
+    Rank,
+    Suit,
 }
 
 /// A consumable in the clipboard; a Transparent one takes no slot (Copy-on-Write).
@@ -738,6 +749,10 @@ pub struct Game {
     starting_deck: usize,
     /// paru: free rerolls left in this shop.
     free_rerolls: u32,
+    /// How the hand is sorted, and whether the player rearranged it since
+    /// (then it keeps its order, and drawn cards go to the right).
+    sort_by: SortBy,
+    arranged: bool,
 }
 
 impl Game {
@@ -816,6 +831,8 @@ impl Game {
             target_rng: Rng::stream(seed, "targets"),
             starting_deck: 0,
             free_rerolls: 0,
+            sort_by: SortBy::Rank,
+            arranged: false,
         };
         game.set_up_deck();
         game.starting_deck = game.deck.len();
@@ -1489,6 +1506,7 @@ impl Game {
             self.discards_left = 0;
         }
         self.jokers_at_blind_start();
+        self.arranged = false;
         self.draw(Draw::Deal);
         self.pick_disabled_joker();
         for _ in 0..self.abilities(Joker::AliasCollection) {
@@ -1589,10 +1607,50 @@ impl Game {
         self.sort_hand();
     }
 
-    /// Hand sorted as at the table: descending rank, then suit; Binary Blobs last.
+    /// Hand sorted as the player chose: descending rank then suit, or suit
+    /// then descending rank; Binary Blobs last. A hand the player rearranged
+    /// keeps its order.
     fn sort_hand(&mut self) {
-        self.hand
-            .sort_by_key(|c| (!c.has_rank(), std::cmp::Reverse(c.rank), c.suit as u8));
+        if self.arranged {
+            return;
+        }
+        // Suits alternate colours: spades, hearts, clubs, diamonds.
+        let suit = |s: Suit| match s {
+            Suit::Spades => 0,
+            Suit::Hearts => 1,
+            Suit::Clubs => 2,
+            Suit::Diamonds => 3,
+        };
+        match self.sort_by {
+            SortBy::Rank => self
+                .hand
+                .sort_by_key(|c| (!c.has_rank(), std::cmp::Reverse(c.rank), suit(c.suit))),
+            SortBy::Suit => self
+                .hand
+                .sort_by_key(|c| (!c.has_rank(), suit(c.suit), std::cmp::Reverse(c.rank))),
+        }
+    }
+
+    /// Sorts the hand again, and new hands from now on.
+    pub fn sort_hand_by(&mut self, by: SortBy) {
+        self.sort_by = by;
+        self.arranged = false;
+        self.sort_hand();
+    }
+
+    /// Moves a card of the hand (order matters: cp -f copies the right card
+    /// onto the left one); the hand then keeps the player's order.
+    pub fn move_card(&mut self, from: usize, to: usize) -> Result<(), GameError> {
+        if self.hand.is_empty() || !matches!(self.phase, Phase::Playing | Phase::Pack) {
+            return Err(GameError::NotPlaying);
+        }
+        if from >= self.hand.len() || to >= self.hand.len() {
+            return Err(GameError::BadSelection(format!("no card #{}", from.max(to))));
+        }
+        let card = self.hand.remove(from);
+        self.hand.insert(to, card);
+        self.arranged = true;
+        Ok(())
     }
 
     /// Checks a selection of the hand (the blind's, or an open coreutils
@@ -3308,6 +3366,7 @@ impl Game {
             forced: self
                 .forced
                 .and_then(|id| self.hand.iter().position(|c| c.id == id)),
+            sort_by: self.sort_by,
             boss: BossInfo {
                 id: self.boss,
                 name: self.boss.name(),
@@ -5055,6 +5114,33 @@ mod tests {
         game.hand.truncate(3);
         game.use_consumable(0, &[]).unwrap();
         assert_eq!(game.hand.len(), HAND_SIZE);
+    }
+
+    #[test]
+    fn the_hand_sorts_and_keeps_the_players_order() {
+        let mut game = playing(1, vec![]);
+        game.hand = cards("2H KS 9H AD 5C");
+        game.sort_hand_by(SortBy::Suit);
+        let order = |g: &Game| g.hand.iter().map(|c| (c.rank, c.suit)).collect::<Vec<_>>();
+        let expected = cards("KS 9H 2H 5C AD");
+        assert_eq!(order(&game), expected.iter().map(|c| (c.rank, c.suit)).collect::<Vec<_>>());
+        game.sort_hand_by(SortBy::Rank);
+        let ranks = |g: &Game| g.hand.iter().map(|c| c.rank).collect::<Vec<_>>();
+        assert_eq!(ranks(&game), [14, 13, 9, 5, 2]);
+        game.move_card(4, 0).unwrap();
+        assert_eq!(ranks(&game), [2, 14, 13, 9, 5]);
+        // Drawn cards go to the right of a rearranged hand.
+        game.discard(&[1]).unwrap();
+        assert_eq!(ranks(&game)[..4], [2, 13, 9, 5]);
+        assert!(game.move_card(0, 99).is_err());
+        // cp -f copies the right card onto the left one.
+        let mut game = with_command(1, Command::CpF, vec![]);
+        let last = game.hand.len() - 1;
+        game.move_card(last, 0).unwrap();
+        let (low, high) = (game.hand[0], game.hand[1]);
+        assert!(low.rank < high.rank);
+        game.use_consumable(0, &[0, 1]).unwrap();
+        assert_eq!(game.hand.iter().filter(|c| c.rank == high.rank && c.suit == high.suit).count(), 2);
     }
 
     #[test]

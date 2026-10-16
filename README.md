@@ -33,7 +33,8 @@ A new game starts by picking a deck, the machine you play on
 ([docs/decks.md](docs/decks.md)): more hands or discards, money, slots, a deck without
 face cards, starting pull requests… The last one picked is remembered.
 
-Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, N for a new game, I for
+Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, Tab to sort the hand
+by rank or suit, Shift+←/→ to move the selected card (or drag it), N for a new game, I for
 fastfetch (run info: hand levels, cards left), Ctrl+Q to quit. Before a blind: Enter to
 play it, S to skip it. Ctrl+1 and Ctrl+2 apply the consumables of the clipboard. In the
 shop: 1 to 6 to buy the cards then the packs, in order, M to merge the pull request, R
@@ -111,6 +112,8 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"buy","offer":0}` | Buys a shop offer |
 | `{"cmd":"sell","joker":0}` | Sells a joker (in the shop, before or during a blind) |
 | `{"cmd":"move_joker","from":0,"to":2}` | Moves a joker within the row |
+| `{"cmd":"move_card","from":7,"to":0}` | Moves a card of the hand (the hand then keeps this order) |
+| `{"cmd":"sort_hand","by":"suit"}` | Sorts the hand by `rank` or `suit`, and new hands from now on |
 | `{"cmd":"buy_pack","pack":0}` | Buys a pack of the shop and opens it |
 | `{"cmd":"pick","choice":0,"cards":[1]}` | Takes a card of the open pack (`cards`: the drawn hand's cards a command changes) |
 | `{"cmd":"skip_pack"}` | Leaves the open pack |
@@ -129,7 +132,7 @@ Responses:
   `status`, and the `tag` skipping it gives), the ante's `boss` and `boss_active`, `target`, `score`,
   hands and discards left (in the `pack` phase, the hand is the one a coreutils pack
   drew; `face_down`, `debuffed` and `forced` follow the hand's cards), `remaining` (cards left to draw, or the whole deck between
-  blinds), `deck_size`, `hands` (each hand type's `level`, `chips`, `mult` and `played`
+  blinds), `deck_size`, `sort_by` (`rank` or `suit`), `hands` (each hand type's `level`, `chips`, `mult` and `played`
   count; secret hands only once played), `phase` = `blind_select` / `playing` / `won` / `shop` /
   `pack` / `lost`, `victory` (the winning ante's boss was just beaten), hand, `hand_size`,
   jokers (`id`, `name`, `description`, `quip`, `rarity`, `edition`, `price`,
