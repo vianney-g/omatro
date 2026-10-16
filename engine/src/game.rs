@@ -3227,8 +3227,10 @@ impl Game {
             }
         }
         if cheat.random_pack {
+            // Every kind and size alike, rare ones included, to test them all.
             self.in_shop()?;
-            let pack = self.roll_pack();
+            let all = Pack::odds();
+            let pack = all[self.pack_rng.below(all.len() as u64) as usize].0;
             self.open_pack(pack);
         }
         if let Some(boss) = cheat.boss {

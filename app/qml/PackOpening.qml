@@ -1,5 +1,6 @@
 import QtQuick
 import omatro
+import "Labels.js" as Labels
 
 // An open pack: pick its cards (Install), or leave (Ctrl+C). For a coreutils
 // pack, commands that change cards apply to the cards selected in the hand
@@ -48,8 +49,18 @@ Column {
           joker: visible ? modelData : null
         }
         ConsumableView {
-          visible: modelData.kind === "theme" || modelData.kind === "command"
+          visible: modelData.kind !== "joker" && modelData.kind !== "card"
           item: visible ? modelData : null
+        }
+        // Commands and oligarchy cards that work on cards: how many to select.
+        Text {
+          width: parent.width
+          visible: modelData.max_cards > 0
+          horizontalAlignment: Text.AlignHCenter
+          text: visible ? "select " + Labels.range(modelData.min_cards, modelData.max_cards) : ""
+          color: Color.muted
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
         }
         CardView {
           anchors.horizontalCenter: parent.horizontalCenter

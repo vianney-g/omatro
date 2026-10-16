@@ -308,7 +308,7 @@ Window {
       return
     }
     send({ cmd: "use_consumable", index: i, cards: c.max_cards > 0 ? selected : [] })
-    notice = (c.kind === "command" ? "Ran " : "Applied ") + c.name + "."
+    notice = (c.kind === "theme" ? "Applied " : "Ran ") + c.name + "."
   }
   function sellConsumable(i) {
     if (!busy) send({ cmd: "sell_consumable", index: i })
