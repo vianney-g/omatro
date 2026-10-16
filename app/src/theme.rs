@@ -13,6 +13,8 @@ pub struct Palette {
     /// The theme's red (`red`, else `color1`).
     pub urgent: String,
     pub muted: String,
+    /// The theme's yellow (`yellow`, else `color3`), for fire and sparks.
+    pub warm: String,
 }
 
 impl Default for Palette {
@@ -24,6 +26,7 @@ impl Default for Palette {
             accent: "#cacccc".into(),
             urgent: "#a55555".into(),
             muted: "#707880".into(),
+            warm: "#c8a050".into(),
         }
     }
 }
@@ -59,6 +62,7 @@ impl Palette {
                 "color7" => c7 = hex,
                 "color8" => c8 = hex,
                 "red" | "color1" => p.urgent = value.to_string(),
+                "yellow" | "color3" => p.warm = value.to_string(),
                 _ => {}
             }
         }
@@ -184,6 +188,7 @@ mod tests {
                 accent: "#e8952e".into(),
                 urgent: "#d1512f".into(),
                 muted: "#8a6f52".into(),
+                warm: Palette::default().warm,
             }
         );
     }

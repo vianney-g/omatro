@@ -30,6 +30,7 @@ pub mod qobject {
         #[qproperty(QColor, accent)]
         #[qproperty(QColor, urgent)]
         #[qproperty(QColor, muted)]
+        #[qproperty(QColor, warm)]
         #[qproperty(i32, font_base_size, cxx_name = "fontBaseSize")]
         #[qproperty(i32, corner_radius, cxx_name = "cornerRadius")]
         type OmarchyTheme = super::ThemeRust;
@@ -75,6 +76,7 @@ pub struct ThemeRust {
     accent: QColor,
     urgent: QColor,
     muted: QColor,
+    warm: QColor,
     font_base_size: i32,
     corner_radius: i32,
     fingerprint: Vec<(PathBuf, Option<SystemTime>)>,
@@ -88,6 +90,7 @@ impl Default for ThemeRust {
             accent: QColor::default(),
             urgent: QColor::default(),
             muted: QColor::default(),
+            warm: QColor::default(),
             font_base_size: 12,
             corner_radius: 0,
             fingerprint: Vec::new(),
@@ -122,6 +125,7 @@ impl qobject::OmarchyTheme {
         self.as_mut().set_accent(color(&palette.accent));
         self.as_mut().set_urgent(color(&palette.urgent));
         self.as_mut().set_muted(color(&palette.muted));
+        self.as_mut().set_warm(color(&palette.warm));
         self.as_mut().set_font_base_size(font_base_size);
         self.as_mut().set_corner_radius(corner_radius);
     }

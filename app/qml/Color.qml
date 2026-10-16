@@ -9,4 +9,6 @@ QtObject {
   readonly property color accent: OmarchyTheme.accent
   readonly property color urgent: OmarchyTheme.urgent
   readonly property color muted: OmarchyTheme.muted
+  // The theme's yellow: fire and sparks.
+  readonly property color warm: OmarchyTheme.warm
 }

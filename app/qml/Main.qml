@@ -80,7 +80,16 @@ Window {
   property real shownScore: 0
   property string notice: ""
   property bool infoOpen: false   // fastfetch panel
-  Behavior on shownScore { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+  Behavior on shownScore { NumberAnimation { duration: 900; easing.type: Easing.OutCubic } }
+  // Flames on the blind score while a single hand beats the blind: 1 at the
+  // target, 2 at 1.5×, 3 at 3×; they die down a moment after the hand.
+  property int fireHeat: 0
+  function heatFor(total) {
+    var target = game ? game.target : null
+    if (target === null || target <= 0) return 0
+    return total >= 3 * target ? 3 : total >= 1.5 * target ? 2 : total >= target ? 1 : 0
+  }
+  Timer { id: fireOut; interval: 1800; onTriggered: root.fireHeat = 0 }
 
   readonly property bool busy: scoring !== null
   readonly property bool playing: game !== null && game.phase === "playing" && !busy
@@ -325,6 +334,8 @@ Window {
     showTotal = false
     liveChips = r.score.base_chips
     liveMult = r.score.base_mult
+    fireOut.stop()
+    fireHeat = 0
     stepTimer.interval = 600
     stepTimer.start()
   }
@@ -337,6 +348,13 @@ Window {
       var step = steps[stepIndex]
       liveChips = step.chips
       liveMult = step.mult
+      // The counters react: chips and mult pulse with sparks, ×mult shakes.
+      var e = step.effect
+      if (Labels.isChips(e)) { chipsCounter.pulse(); sparks.burst(chipsCounter, "chips") }
+      else if (e.mult !== undefined) { multCounter.pulse(); sparks.burst(multCounter, "mult") }
+      else if (e.x_mult !== undefined) { multCounter.pulse(); multCounter.shake(); sparks.burst(multCounter, "warm") }
+      else if (e === "balance") { chipsCounter.pulse(); multCounter.pulse() }
+      fireHeat = Math.max(fireHeat, heatFor(step.chips * step.mult))
       var color = step.effect === "debuffed" ? Color.muted
         : step.effect === "again" ? Color.foreground
         : Labels.isChips(step.effect) || Labels.isMoney(step.effect) ? Color.accent : Color.urgent
@@ -348,6 +366,7 @@ Window {
       if (view) view.flash(Labels.effect(step.effect), color)
     } else if (stepIndex === steps.length) {
       showTotal = true
+      fireHeat = Math.max(fireHeat, heatFor(scoring.total))
       stepTimer.interval = 900
     } else {
       stepTimer.stop()
@@ -358,6 +377,7 @@ Window {
       pendingState = null
       showTotal = false
       applyState(s)
+      fireOut.restart()
     }
   }
 
@@ -394,6 +414,43 @@ Window {
       id: zoneRow
       anchors { left: parent.left; top: zoneTitle.bottom; leftMargin: Style.spacing.xxl; topMargin: Style.spacing.md }
       spacing: Style.space(16)
+    }
+  }
+
+  // Chips or mult while scoring: the number pulses when it grows, the box
+  // shakes on a ×mult.
+  component Counter: Rectangle {
+    id: counter
+    property color tint
+    property string value
+    width: Style.space(90); height: Style.space(44)
+    radius: Style.cornerRadius
+    color: Util.alpha(tint, 0.18)
+    border.width: Style.normalBorderWidth
+    border.color: tint
+    transform: Translate { id: shift }
+    Text {
+      id: counterText
+      anchors.centerIn: parent
+      text: counter.value
+      color: counter.tint
+      font.family: Style.font.family
+      font.pixelSize: Style.font.heading
+      font.bold: true
+    }
+    function pulse() { pulseAnimation.restart() }
+    function shake() { shakeAnimation.restart() }
+    SequentialAnimation {
+      id: pulseAnimation
+      NumberAnimation { target: counterText; property: "scale"; to: 1.35; duration: 80; easing.type: Easing.OutQuad }
+      NumberAnimation { target: counterText; property: "scale"; to: 1; duration: 260; easing.type: Easing.OutBack }
+    }
+    SequentialAnimation {
+      id: shakeAnimation
+      NumberAnimation { target: shift; property: "x"; to: -Style.space(7); duration: 40 }
+      NumberAnimation { target: shift; property: "x"; to: Style.space(7); duration: 60 }
+      NumberAnimation { target: shift; property: "x"; to: -Style.space(4); duration: 50 }
+      NumberAnimation { target: shift; property: "x"; to: 0; duration: 60 }
     }
   }
 
@@ -556,10 +613,18 @@ Window {
           }
         }
 
-        // Recognized hand and chips × mult (preview, then animated scoring).
+        // Recognized hand and chips × mult (preview, then animated scoring),
+        // on fire when a single hand beats the blind.
         Box {
           Layout.fillWidth: true
           implicitHeight: calcCol.implicitHeight + 2 * Style.spacing.xxl
+          border.color: root.fireHeat > 0 ? Color.warm : Style.normalBorderColor
+          Behavior on border.color { ColorAnimation { duration: 300 } }
+          // Behind the hand name and the counters.
+          ScoreFire {
+            anchors { fill: parent; margins: Style.normalBorderWidth }
+            heat: root.fireHeat
+          }
           Column {
             id: calcCol
             anchors { fill: parent; margins: Style.spacing.xxl }
@@ -573,20 +638,10 @@ Window {
             }
             Row {
               spacing: Style.spacing.md
-              Rectangle {
-                width: Style.space(90); height: Style.space(44)
-                radius: Style.cornerRadius
-                color: Util.alpha(Color.accent, 0.18)
-                border.width: Style.normalBorderWidth
-                border.color: Color.accent
-                Text {
-                  anchors.centerIn: parent
-                  text: Labels.number(root.liveChips)
-                  color: Color.accent
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.heading
-                  font.bold: true
-                }
+              Counter {
+                id: chipsCounter
+                tint: Color.accent
+                value: Labels.number(root.liveChips)
               }
               Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -595,20 +650,10 @@ Window {
                 font.family: Style.font.family
                 font.pixelSize: Style.font.heading
               }
-              Rectangle {
-                width: Style.space(90); height: Style.space(44)
-                radius: Style.cornerRadius
-                color: Util.alpha(Color.urgent, 0.18)
-                border.width: Style.normalBorderWidth
-                border.color: Color.urgent
-                Text {
-                  anchors.centerIn: parent
-                  text: Labels.mult(root.liveMult)
-                  color: Color.urgent
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.heading
-                  font.bold: true
-                }
+              Counter {
+                id: multCounter
+                tint: Color.urgent
+                value: Labels.mult(root.liveMult)
               }
             }
           }
@@ -1051,6 +1096,13 @@ Window {
           Text {
             anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom }
             visible: root.showTotal
+            // Pops in.
+            onVisibleChanged: if (visible) totalPop.restart()
+            NumberAnimation on scale {
+              id: totalPop
+              running: false
+              from: 1.6; to: 1; duration: 350; easing.type: Easing.OutBack
+            }
             text: root.scoring ? "= " + Labels.number(root.scoring.total) : ""
             color: Color.foreground
             font.family: Style.font.family
@@ -1271,6 +1323,12 @@ Window {
           }
         }
       }
+    }
+
+    // Sparks of the scoring steps, over the game but under the panels.
+    Sparks {
+      id: sparks
+      anchors.fill: parent
     }
 
     // ---- fastfetch: run info over everything
