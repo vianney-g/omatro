@@ -1,5 +1,6 @@
 import QtQuick
 import omatro
+import "Labels.js" as Labels
 
 // A badge, like a README badge: grey label, coloured value; hovering it tells
 // what it does.
@@ -49,6 +50,8 @@ Item {
     id: mouse
     anchors.fill: pill
     hoverEnabled: true
+    onContainsMouseChanged: containsMouse && root.tag
+      ? Hints.show(root, root.tag.description, root.tag.name) : Hints.hide(root)
   }
 
   Rectangle {
@@ -65,7 +68,8 @@ Item {
       id: tip
       anchors { fill: parent; margins: Style.space(6) }
       wrapMode: Text.WordWrap
-      text: root.tag ? root.tag.description + "\n" + root.tag.quip : ""
+      textFormat: Text.StyledText
+      text: root.tag ? Labels.highlight(root.tag.description, Hints.terms, root.tag.name) + "<br>" + root.tag.quip : ""
       color: Color.foreground
       font.family: Style.font.family
       font.pixelSize: Style.font.caption

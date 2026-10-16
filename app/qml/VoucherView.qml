@@ -1,11 +1,17 @@
 import QtQuick
 import omatro
+import "Labels.js" as Labels
 
 // A pull request (voucher) for sale: name, what it changes for good, quip.
 Rectangle {
   id: root
 
   property var voucher: null
+  // Hovered, its terms are explained beside it (Glossary).
+  HoverHandler {
+    onHoveredChanged: hovered ? Hints.show(root, root.voucher ? root.voucher.description : "", root.voucher ? root.voucher.name : "") : Hints.hide(root)
+  }
+
 
   width: Style.space(120)
   height: Style.space(150)
@@ -41,7 +47,8 @@ Rectangle {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
-      text: root.voucher ? root.voucher.description : ""
+      textFormat: Text.StyledText
+      text: root.voucher ? Labels.highlight(root.voucher.description, Hints.terms, root.voucher.name) : ""
       color: Color.foreground
       font.family: Style.font.family
       font.pixelSize: Style.font.caption

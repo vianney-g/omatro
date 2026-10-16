@@ -67,6 +67,12 @@ A Cargo workspace with two crates:
   via `qrc_resources`). Displayed names come from the engine (`name()` of jokers,
   blinds, hands, sent in the state); `Labels.js` only formats ranks, suits, effects
   and numbers. `FastFetch.qml` is the run info panel (I key).
+- Glossary: the engine's `glossary` command lists every named term (`glossary.rs`:
+  modifiers, badges, pull requests, consumables, jokers, packages; hand types only
+  block matches) and its test forbids two things sharing a name. Card views
+  underline the terms of their text (`Labels.highlight`) and, hovered, call
+  `Hints.show`; `Glossary.qml` explains them beside the card. A new view with a
+  description does both.
 - Sizing: every size goes through `Style.space()` / `Style.fontPx()`, i.e. theme scale ×
   `Style.fit`. `Main.qml` sets `fit` so the whole UI shrinks together when the window is
   smaller than `designWidth` × `designHeight` (tiled Hyprland windows ignore the minimum
@@ -97,7 +103,11 @@ Lua: `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'`,
 geometry comes from `hyprctl clients -j`; `'hl.dsp.cursor.move({ x = …, y = … })'`
 moves the pointer, to check hover tooltips. F11 gives the cards in hand random
 modifiers, F12 adds a random command, F2 a random oligarchy card, F3 opens a random pack (in
-the shop), F4 switches this ante's boss to the next one. Check that stderr has no QML warnings.
+the shop), F4 switches this ante's boss to the next one. Check that the app logs no QML
+warnings: when stderr is not a terminal, Qt writes them to the journal, so read
+`journalctl --user _PID=<pid> -o cat` (a QML error can keep the window from showing
+at all). A simulated pointer only reaches the window when it enters it: move it out
+before each hover.
 
 ## Adding a joker
 

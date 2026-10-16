@@ -86,7 +86,7 @@ Fork copies the joker on its right.
 | `rollback` | Rollback | extra | $5 | Sell it to disable the current boss blind's effect | *git revert HEAD. Everyone relax.* |
 | `identicon` | Identicon | extra | $5 | Every card counts as a face card | *Every card gets a face. Even the twos.* |
 | `release_train` | Release Train | extra | $5 | ×4 mult every 6 hands played | *Leaves every six hands. Packed.* |
-| `crunch_time` | Crunch Time | extra | $5 | Retriggers every scoring card of the last hand of a blind | *Final hand. Everything runs twice.* |
+| `last_commit` | Last Commit | extra | $5 | Retriggers every scoring card of the last hand of a blind | *Final hand. Everything runs twice.* |
 | `compound_interest` | Compound Interest | extra | $5 | +$1 of interest per $5 you have (same cap) | *Einstein's favorite. Allegedly.* |
 | `refresh_spam` | Refresh Spam | extra | $5 | Gains +2 mult per shop reroll | *F5 until something changes.* |
 | `flatpak` | Flatpak | extra | $5 | Jokers you own can show up in the shop again | *The same app, installed three times.* |

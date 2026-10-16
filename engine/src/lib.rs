@@ -7,6 +7,7 @@ pub mod consumable;
 #[cfg(test)]
 mod docs;
 pub mod game;
+pub mod glossary;
 pub mod hand;
 pub mod joker;
 pub mod modifier;

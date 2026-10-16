@@ -1,5 +1,6 @@
 import QtQuick
 import omatro
+import "Labels.js" as Labels
 
 // A consumable (theme, command or oligarchy card): kind, name, effect and quip.
 // Oligarchy cards stand out in the urgent colour; a Transparent one takes no slot.
@@ -7,6 +8,11 @@ Rectangle {
   id: root
 
   property var item: null
+  // Hovered, its terms are explained beside it (Glossary).
+  HoverHandler {
+    onHoveredChanged: hovered ? Hints.show(root, root.item ? root.item.description : "", root.item ? root.item.name : "") : Hints.hide(root)
+  }
+
 
   width: Style.space(120)
   height: Style.space(150)
@@ -50,7 +56,8 @@ Rectangle {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
-      text: root.item ? root.item.description : ""
+      textFormat: Text.StyledText
+      text: root.item ? Labels.highlight(root.item.description, Hints.terms, root.item.name) : ""
       color: Color.accent
       font.family: Style.font.family
       font.pixelSize: Style.font.caption

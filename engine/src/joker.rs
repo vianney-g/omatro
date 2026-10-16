@@ -188,7 +188,7 @@ pub enum Joker {
     EmptyWorkspace,
     InboxZero,
     ReleaseTrain,
-    CrunchTime,
+    LastCommit,
     FridayDeploy,
     WarmStart,
     GridLayout,
@@ -545,7 +545,7 @@ impl Joker {
         Joker::EmptyWorkspace,
         Joker::InboxZero,
         Joker::ReleaseTrain,
-        Joker::CrunchTime,
+        Joker::LastCommit,
         Joker::FridayDeploy,
         Joker::WarmStart,
         Joker::GridLayout,
@@ -703,7 +703,7 @@ impl Joker {
             Joker::EmptyWorkspace => "Empty Workspace",
             Joker::InboxZero => "Inbox Zero",
             Joker::ReleaseTrain => "Release Train",
-            Joker::CrunchTime => "Crunch Time",
+            Joker::LastCommit => "Last Commit",
             Joker::FridayDeploy => "Friday Deploy",
             Joker::WarmStart => "Warm Start",
             Joker::GridLayout => "Grid Layout",
@@ -872,7 +872,7 @@ impl Joker {
             Joker::EmptyWorkspace => "+30 chips per discard left",
             Joker::InboxZero => "+15 mult when no discard is left",
             Joker::ReleaseTrain => "×4 mult every 6 hands played",
-            Joker::CrunchTime => "Retriggers every scoring card of the last hand of a blind",
+            Joker::LastCommit => "Retriggers every scoring card of the last hand of a blind",
             Joker::FridayDeploy => "×3 mult on the last hand of a blind",
             Joker::WarmStart => "×3 mult if the hand type was already played this blind",
             Joker::GridLayout => "Gains +4 chips per hand of exactly 4 cards",
@@ -1033,7 +1033,7 @@ impl Joker {
             Joker::EmptyWorkspace => "Workspaces 6 through 10, still empty.",
             Joker::InboxZero => "Everything discarded. Finally at peace.",
             Joker::ReleaseTrain => "Leaves every six hands. Packed.",
-            Joker::CrunchTime => "Final hand. Everything runs twice.",
+            Joker::LastCommit => "Final hand. Everything runs twice.",
             Joker::FridayDeploy => "Last hand, no rollback, maximum mult.",
             Joker::WarmStart => "Seen it this blind. Faster now.",
             Joker::GridLayout => "Four windows, not a pixel wasted.",
@@ -1131,7 +1131,7 @@ impl Joker {
             | Joker::LogRotation
             | Joker::GarageSale
             | Joker::ReleaseTrain
-            | Joker::CrunchTime
+            | Joker::LastCommit
             | Joker::FridayDeploy
             | Joker::WarmStart
             | Joker::DotfilesBak
@@ -1274,7 +1274,7 @@ impl Joker {
             | Joker::EmptyWorkspace
             | Joker::InboxZero
             | Joker::ReleaseTrain
-            | Joker::CrunchTime
+            | Joker::LastCommit
             | Joker::HypeCycle
             | Joker::FreeRam
             | Joker::CompoundInterest
@@ -1443,7 +1443,7 @@ impl Joker {
             Joker::BangBang if first => 2,
             Joker::WatchMode if card.is_face() => 1,
             Joker::BitTwiddling if card.has_rank() && (2..=5).contains(&card.rank) => 1,
-            Joker::CrunchTime if final_hand => 1,
+            Joker::LastCommit if final_hand => 1,
             Joker::EspressoShot => 1,
             _ => 0,
         }
@@ -1712,8 +1712,8 @@ impl OwnedJoker {
                 n => ("progress", to_go(n - 1)),
             },
             Joker::FridayDeploy if board.hands_left == 1 => ("x_mult", "×3 mult".to_string()),
-            Joker::CrunchTime if board.hands_left == 1 => ("progress", "Retriggers".to_string()),
-            Joker::FridayDeploy | Joker::CrunchTime => {
+            Joker::LastCommit if board.hands_left == 1 => ("progress", "Retriggers".to_string()),
+            Joker::FridayDeploy | Joker::LastCommit => {
                 ("progress", to_go(board.hands_left.saturating_sub(1)))
             }
             Joker::WarmStart if selected.is_some_and(|(k, _)| board.blind_hands.contains(&k)) => {
@@ -1977,8 +1977,8 @@ mod tests {
         assert_eq!(Joker::BangBang.retriggers(king, true, false), 2);
         assert_eq!(Joker::BangBang.retriggers(king, false, false), 0);
         assert_eq!(Joker::WatchMode.retriggers(king, false, false), 1);
-        assert_eq!(Joker::CrunchTime.retriggers(king, false, true), 1);
-        assert_eq!(Joker::CrunchTime.retriggers(king, false, false), 0);
+        assert_eq!(Joker::LastCommit.retriggers(king, false, true), 1);
+        assert_eq!(Joker::LastCommit.retriggers(king, false, false), 0);
         let two = Card::new(2, Suit::Clubs);
         assert_eq!(Joker::BitTwiddling.retriggers(two, false, false), 1);
         assert_eq!(Joker::BitTwiddling.retriggers(king, false, false), 0);

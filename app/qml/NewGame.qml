@@ -1,5 +1,6 @@
 import QtQuick
 import omatro
+import "Labels.js" as Labels
 
 // The new game screen: pick the machine to play on (arrows, Enter), or go back
 // to the game in progress (Escape).
@@ -69,7 +70,8 @@ Rectangle {
               wrapMode: Text.WordWrap
               maximumLineCount: 2
               elide: Text.ElideRight
-              text: modelData.description
+              textFormat: Text.StyledText
+              text: Labels.highlight(modelData.description, Hints.terms, modelData.name)
               color: Color.foreground
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
@@ -86,8 +88,12 @@ Rectangle {
           }
           MouseArea {
             anchors.fill: parent
+            hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: root.current === index ? root.start(modelData.id) : root.current = index
+            // Its terms explained beside it (Glossary).
+            onContainsMouseChanged: containsMouse
+              ? Hints.show(parent, modelData.description, modelData.name) : Hints.hide(parent)
           }
         }
       }

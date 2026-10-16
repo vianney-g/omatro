@@ -11,6 +11,7 @@ fn main() {
         QmlFile::from("qml/VoucherView.qml"),
         QmlFile::from("qml/BadgeView.qml"),
         QmlFile::from("qml/NewGame.qml"),
+        QmlFile::from("qml/Glossary.qml"),
         QmlFile::from("qml/Fan.qml"),
         QmlFile::from("qml/ScoreFire.qml"),
         QmlFile::from("qml/Sparks.qml"),
@@ -20,6 +21,7 @@ fn main() {
         QmlFile::from("qml/Color.qml").singleton(true),
         QmlFile::from("qml/Style.qml").singleton(true),
         QmlFile::from("qml/Util.qml").singleton(true),
+        QmlFile::from("qml/Hints.qml").singleton(true),
     ]))
     // .js files are not module files: they go next to them, in the resources.
     .qrc_resources(["qml/Labels.js"])

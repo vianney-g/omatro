@@ -644,7 +644,7 @@ mod tests {
         let mut s = setup(&[Joker::OwnedServers, Joker::Bootstrapped]);
         s.board.money = 10;
         assert_eq!((s.play("KH KD").chips, s.play("KH KD").mult), (50, 6.0));
-        let mut s = setup(&[Joker::FridayDeploy, Joker::CrunchTime]);
+        let mut s = setup(&[Joker::FridayDeploy, Joker::LastCommit]);
         s.board.hands_left = 2;
         assert_eq!((s.play("KH KD").chips, s.play("KH KD").mult), (30, 2.0));
         s.board.hands_left = 1;

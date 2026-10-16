@@ -1,5 +1,6 @@
 import QtQuick
 import omatro
+import "Labels.js" as Labels
 
 // A joker: rarity, name, effect, what it adds now, its quip and its edition.
 Item {
@@ -8,6 +9,11 @@ Item {
   property var joker: null
   // The Kernel Panic: jokers face down.
   property bool hidden: false
+  // Hovered, its terms are explained beside it (Glossary).
+  HoverHandler {
+    onHoveredChanged: hovered && !root.hidden ? Hints.show(root, root.joker ? root.joker.description : "", root.joker ? root.joker.name : "") : Hints.hide(root)
+  }
+
   // The Windows Update: this joker does nothing this hand.
   property bool disabled: false
   // What a growing joker gives right now: {kind, text}.
@@ -62,7 +68,8 @@ Item {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
-        text: root.joker ? root.joker.description : ""
+        textFormat: Text.StyledText
+        text: root.joker ? Labels.highlight(root.joker.description, Hints.terms, root.joker.name) : ""
         color: Color.foreground
         font.family: Style.font.family
         font.pixelSize: Style.font.caption

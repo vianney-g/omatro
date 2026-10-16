@@ -2,6 +2,7 @@
 //! in, one JSON response per line out.
 
 use crate::game::{Cheat, DeckInfo, Game, SortBy, State};
+use crate::glossary::{Term, glossary};
 use crate::hand::HandKind;
 use crate::joker::{Bonus, Joker};
 use crate::run_deck::Deck;
@@ -21,6 +22,8 @@ pub enum Command {
     },
     /// Lists the starting decks, for the new game screen.
     Decks,
+    /// Lists the terms card texts mention, with what they mean.
+    Glossary,
     State,
     SelectBlind,
     SkipBlind,
@@ -110,6 +113,9 @@ pub enum Response {
     Decks {
         decks: Vec<DeckInfo>,
     },
+    Glossary {
+        terms: Vec<Term>,
+    },
 }
 
 #[derive(Default)]
@@ -171,12 +177,15 @@ impl Session {
                 decks: Deck::ALL.iter().map(|&d| d.into()).collect(),
             });
         }
+        if let Command::Glossary = command {
+            return Ok(Response::Glossary { terms: glossary() });
+        }
         if matches!(command, Command::Debug(_)) && !self.debug {
             return Err("debug commands are off (set OMATRO_DEBUG=1)".into());
         }
         let game = self.game.as_mut().ok_or("no game in progress")?;
         match command {
-            Command::NewGame { .. } | Command::Decks => unreachable!(),
+            Command::NewGame { .. } | Command::Decks | Command::Glossary => unreachable!(),
             Command::State => {}
             Command::SelectBlind => game.select_blind().map_err(|e| e.to_string())?,
             Command::SkipBlind => game.skip_blind().map_err(|e| e.to_string())?,

@@ -50,6 +50,7 @@ Window {
     else if (r.event === "preview") showPreview(r)
     else if (r.event === "scored") startScoring(r)
     else if (r.event === "error") notice = r.message
+    else if (r.event === "glossary") Hints.terms = r.terms
     else if (r.event === "decks") {
       decks = r.decks
       var last = decks.findIndex(function(d) { return d.id === settings.lastDeck })
@@ -133,6 +134,7 @@ Window {
 
   function newGame() {
     if (decks.length === 0) send({ cmd: "decks" })
+    if (Hints.terms.length === 0) send({ cmd: "glossary" })
     var last = decks.findIndex(function(d) { return d.id === settings.lastDeck })
     newGameScreen.current = Math.max(0, last)
     choosingDeck = true
@@ -1400,6 +1402,11 @@ Window {
       canCancel: root.game !== null
       onStart: function(deck) { root.startGame(deck) }
       onCancel: root.choosingDeck = false
+    }
+
+    // What the terms of the hovered card mean, over everything.
+    Glossary {
+      anchors.fill: parent
     }
   }
 }

@@ -108,6 +108,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 |---|---|
 | `{"cmd":"new_game","seed":42,"jokers":["dotfiles"],"deck":"thinkpad"}` | New game (`seed`, `jokers` and `deck` optional) |
 | `{"cmd":"decks"}` | Lists the decks a new game may start with |
+| `{"cmd":"glossary"}` | Lists the terms card texts mention, with what they mean |
 | `{"cmd":"state"}` | Returns the state |
 | `{"cmd":"select_blind"}` | Plays the blind on offer: deals a hand |
 | `{"cmd":"skip_blind"}` | Skips the blind on offer (not the boss) |
@@ -168,6 +169,9 @@ Responses:
   `bonuses`: each joker's badge if this hand were played.
 - `{"event":"decks","decks":[…]}` after `decks`: each deck's `id`, `name`,
   `description` and `quip`.
+- `{"event":"glossary","terms":[…]}` after `glossary`: each term's `name`, `kind`
+  (`edition`, `pull request`, `joker · AUR`…) and `description` (empty for hand
+  types, listed only so that a shorter name never matches inside them).
 - `{"event":"error","message":"…"}`.
 
 The hand is always sorted by descending rank.
