@@ -26,6 +26,10 @@ Window {
   // Height: the shop, with the joker row (230 high), the offers (230) and,
   // under them, the pull requests and packs (150).
   readonly property real designHeight: 920 * Style.themeScale
+  // Width of the play area (jokers, table, hand, shop), from the window's:
+  // never from the play area's own width, which follows its content and would
+  // make a layout loop (the shop collapsed after a purchase).
+  readonly property real playWidth: width - 3 * Style.spacing.huge - Style.space(250)
   Binding {
     target: Style
     property: "fit"
@@ -813,7 +817,7 @@ Window {
           count: root.game ? root.game.jokers.length : 0
           itemWidth: Style.space(120)
           spacing: Style.spacing.xxl
-          available: playArea.width
+          available: root.playWidth
           Repeater {
             id: jokerRepeater
             model: root.game ? root.game.jokers : []
@@ -892,7 +896,7 @@ Window {
           readonly property int vouchers: root.game ? root.game.vouchers_for_sale.length : 0
           readonly property int wide: root.game ? Math.max(1, root.game.shop.length, root.game.packs.length) : 1
           readonly property real itemWidth: {
-            var room = playArea.width - zonePadding - Style.spacing.huge - (wide - 1) * gap
+            var room = root.playWidth - zonePadding - Style.spacing.huge - (wide - 1) * gap
             var fit = vouchers > 1
               ? (room - zonePadding - (vouchers - 1) * gap) / (wide + vouchers)
               : (room - buttonsWidth) / wide
@@ -990,32 +994,38 @@ Window {
                 }
             }
 
-            // The pull requests of the ante (key M merges the first).
-            ShopZone {
-              id: pullRequests
-              title: "Pull request"
-              visible: shop.vouchers > 0
-                Repeater {
-                  model: root.game ? root.game.vouchers_for_sale : []
-                  Column {
-                    width: shop.itemWidth
-                    spacing: Style.spacing.md
-                    VoucherView {
+            // The pull requests of the ante (key M merges the first). The cell
+            // stays when there are none, so the packs stay under the offers
+            // (1 pixel: positioners skip empty items).
+            Item {
+              width: pullRequests.visible ? pullRequests.width : 1
+              height: pullRequests.visible ? pullRequests.height : 1
+              ShopZone {
+                id: pullRequests
+                title: "Pull request"
+                visible: shop.vouchers > 0
+                  Repeater {
+                    model: root.game ? root.game.vouchers_for_sale : []
+                    Column {
                       width: shop.itemWidth
-                      voucher: modelData
-                      opacity: root.canMerge(index) ? 1 : 0.5
-                    }
-                    Button {
-                      anchors.horizontalCenter: parent.horizontalCenter
-                      compact: true
-                      text: "M · " + Labels.money(modelData.price)
-                      bordered: true
-                      enabled: root.canMerge(index)
-                      opacity: enabled ? 1 : 0.5
-                      onClicked: root.buyVoucher(index)
+                      spacing: Style.spacing.md
+                      VoucherView {
+                        width: shop.itemWidth
+                        voucher: modelData
+                        opacity: root.canMerge(index) ? 1 : 0.5
+                      }
+                      Button {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        compact: true
+                        text: "M · " + Labels.money(modelData.price)
+                        bordered: true
+                        enabled: root.canMerge(index)
+                        opacity: enabled ? 1 : 0.5
+                        onClicked: root.buyVoucher(index)
+                      }
                     }
                   }
-                }
+              }
             }
 
             // Packs, opened on the spot.
@@ -1174,7 +1184,7 @@ Window {
           // Narrower cards for a bigger hand (Ultrawide).
           readonly property int count: Math.max(8, root.game ? root.game.hand_size : 8)
           readonly property real cardWidth: Math.min(Style.space(84),
-            (playArea.width - (count - 1) * spacing) / count)
+            (root.playWidth - (count - 1) * spacing) / count)
           Repeater {
             id: handRepeater
             model: root.hand
