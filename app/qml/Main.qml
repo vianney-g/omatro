@@ -510,6 +510,7 @@ Window {
       }
       else if (k === Qt.Key_Tab || k === Qt.Key_Backtab)
         root.sortHand(root.game && root.game.sort_by === "rank" ? "suit" : "rank")
+      else if (k === Qt.Key_J) jokerRow.cycle()
       else if (k === Qt.Key_R) root.reroll()
       else if (k === Qt.Key_S) root.skipBlind()
       else if (k === Qt.Key_M) root.buyVoucher(0)
@@ -711,20 +712,40 @@ Window {
             text: root.game ? "Clipboard " + root.game.consumables.filter(function(c) { return !c.transparent }).length
               + " / " + root.game.consumable_slots : ""
           }
-          Row {
+          // Past two cards (Transparent copies take no slot, but room), they
+          // overlap: hover or click one to bring it to the front.
+          Fan {
             id: clipboardRow
+            width: implicitWidth
+            height: implicitHeight
+            count: root.game ? root.game.consumables.length : 0
+            itemWidth: (Style.space(250) - spacing) / 2
             spacing: Style.spacing.md
-            // Narrower cards past two (Transparent copies take no slot, but room).
-            readonly property int count: Math.max(2, root.game ? root.game.consumables.length : 2)
-            readonly property real cardWidth: (Style.space(250) - (count - 1) * spacing) / count
+            available: Style.space(250)
             Repeater {
               model: root.game ? root.game.consumables : []
               Column {
+                x: clipboardRow.xOf(index)
+                y: clipboardRow.liftOf(index)
+                z: clipboardRow.zOf(index)
+                Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                Behavior on y { NumberAnimation { duration: 100 } }
                 spacing: Style.spacing.sm
-                ConsumableView { item: modelData; width: clipboardRow.cardWidth }
+                // Its controls only show in front, when the cards overlap.
+                readonly property bool controls: clipboardRow.showsControls(index)
+                HoverHandler {
+                  blocking: true
+                  onHoveredChanged: clipboardRow.hover(index, hovered)
+                }
+                ConsumableView {
+                  item: modelData
+                  width: clipboardRow.itemWidth
+                  TapHandler { onTapped: clipboardRow.pin(index) }
+                }
                 Caption {
-                  width: clipboardRow.cardWidth
+                  width: clipboardRow.itemWidth
                   visible: modelData.max_cards > 0
+                  opacity: parent.controls ? 1 : 0
                   fontSizeMode: Text.HorizontalFit
                   minimumPixelSize: Style.fontPx(0.6)
                   horizontalAlignment: Text.AlignHCenter
@@ -732,6 +753,8 @@ Window {
                 }
                 Row {
                   anchors.horizontalCenter: parent.horizontalCenter
+                  opacity: parent.controls ? 1 : 0
+                  enabled: parent.controls
                   spacing: Style.spacing.xs
                   Button {
                     compact: true
@@ -780,36 +803,55 @@ Window {
           text: root.game ? "Jokers " + root.game.jokers.length + " / " + root.game.max_jokers : ""
         }
 
-        Row {
+        // Jokers overlap when they no longer fit (Transparent jokers add
+        // slots): hover or click one, or press J, to bring it to the front.
+        Fan {
           id: jokerRow
           Layout.alignment: Qt.AlignHCenter
+          Layout.preferredWidth: implicitWidth
           Layout.preferredHeight: Style.space(230) + (root.shopping ? Style.space(40) : 0)
+          count: root.game ? root.game.jokers.length : 0
+          itemWidth: Style.space(120)
           spacing: Style.spacing.xxl
-          // Narrower jokers when the row is full (Transparent jokers add slots).
-          readonly property int count: Math.max(1, root.game ? root.game.jokers.length : 1)
-          readonly property real jokerWidth: Math.min(Style.space(120),
-            (playArea.width - (count - 1) * spacing) / count)
+          available: playArea.width
           Repeater {
             id: jokerRepeater
             model: root.game ? root.game.jokers : []
             Column {
-              width: jokerRow.jokerWidth
+              x: jokerRow.xOf(index)
+              y: jokerRow.liftOf(index)
+              z: jokerRow.zOf(index)
+              Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+              Behavior on y { NumberAnimation { duration: 100 } }
+              width: jokerRow.itemWidth
               spacing: Style.spacing.md
-              function flash(text, color) { view.flash(text, color) }
+              // A joker that triggers comes to the front while it flashes.
+              function flash(text, color) {
+                jokerRow.flash(index)
+                view.flash(text, color)
+              }
+              HoverHandler {
+                blocking: true
+                onHoveredChanged: jokerRow.hover(index, hovered)
+              }
               JokerView {
                 id: view
                 joker: modelData
-                width: jokerRow.jokerWidth
+                width: jokerRow.itemWidth
+                TapHandler { onTapped: jokerRow.pin(index) }
                 hidden: root.game.jokers_hidden
                 disabled: root.game.disabled_joker === index
                 // The badge follows the selected hand (Muscle Memory).
                 bonus: root.preview && root.preview.bonuses.length > index
                   ? root.preview.bonuses[index] : modelData.bonus
               }
-              // In the shop: sell, and move left or right (Fork copies its right neighbour).
+              // In the shop: sell, and move left or right (Fork copies its right
+              // neighbour); only in front when the jokers overlap.
               Row {
                 anchors.horizontalCenter: parent.horizontalCenter
                 visible: root.shopping
+                opacity: jokerRow.showsControls(index) ? 1 : 0
+                enabled: jokerRow.showsControls(index)
                 spacing: Style.spacing.xs
                 Button {
                   compact: true

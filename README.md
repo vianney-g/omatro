@@ -39,7 +39,8 @@ A new game starts by picking a deck, the machine you play on
 face cards, starting pull requests… The last one picked is remembered.
 
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, Tab to sort the hand
-by rank or suit, Shift+←/→ to move the selected card (or drag it), N for a new game, I for
+by rank or suit, Shift+←/→ to move the selected card (or drag it), J to bring the next
+joker to the front when they overlap (or hover or click one), N for a new game, I for
 fastfetch (run info: hand levels, cards left), Ctrl+Q to quit. Before a blind: Enter to
 play it, S to skip it. Ctrl+1 and Ctrl+2 apply the consumables of the clipboard. In the
 shop: 1 to 6 to buy the cards then the packs, in order, M to merge the pull request, R

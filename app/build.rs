@@ -11,6 +11,7 @@ fn main() {
         QmlFile::from("qml/VoucherView.qml"),
         QmlFile::from("qml/BadgeView.qml"),
         QmlFile::from("qml/NewGame.qml"),
+        QmlFile::from("qml/Fan.qml"),
         QmlFile::from("qml/ScoreFire.qml"),
         QmlFile::from("qml/Sparks.qml"),
         QmlFile::from("qml/CardView.qml"),

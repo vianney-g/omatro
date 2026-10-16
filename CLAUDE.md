@@ -73,8 +73,9 @@ A Cargo workspace with two crates:
   size). The window's own size must use `Style.themeScale`, never `Style.space()`, or it
   makes a binding loop. If the layout gets wider or taller (the shop sets the height:
   joker row and offers), raise `designWidth` or `designHeight`. Rows whose length
-  varies (hand size, joker slots) narrow their items instead (`handRow.cardWidth`,
-  `jokerRow.jokerWidth`).
+  varies narrow their items (the hand, `handRow.cardWidth`) or overlap them
+  (`Fan.qml`: the jokers and the clipboard, where the hovered, flashing or pinned
+  card comes to the front with its buttons).
 
 ## Debugging and screenshots
 
