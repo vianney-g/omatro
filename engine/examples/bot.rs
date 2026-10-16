@@ -6,7 +6,9 @@
 //!
 //! `--endless` goes on after the winning ante; `--chaos` uses the debug
 //! commands to reach further: money and a random joker at each shop, random
-//! commands, oligarchy cards and card modifiers.
+//! commands, oligarchy cards and card modifiers; `--save` saves the game after
+//! each command and, every 25 commands, resumes it in a new session, which
+//! must find the very same state.
 
 use omatro_engine::protocol::Session;
 use omatro_engine::rng::Rng;
@@ -46,7 +48,25 @@ struct Bot {
     state: Value,
     endless: bool,
     chaos: bool,
+    /// `--save`: the save file of this game.
+    save: Option<std::path::PathBuf>,
     out: Outcome,
+}
+
+/// Commands between two resumed sessions, with `--save`.
+const RESUME_EVERY: usize = 25;
+
+/// A session as the bot plays it: with the debug commands in chaos mode.
+fn new_session(chaos: bool, save: &Option<std::path::PathBuf>) -> Session {
+    let session = if chaos {
+        Session::from_env()
+    } else {
+        Session::default()
+    };
+    match save {
+        Some(path) => session.with_save(path.clone()),
+        None => session,
+    }
 }
 
 /// `--trace`: prints every command (but previews) on stderr.
@@ -80,6 +100,13 @@ impl Bot {
             self.state = state.clone();
             self.check(&command);
         }
+        if self.save.is_some()
+            && command["cmd"] != "preview"
+            && self.out.steps % RESUME_EVERY == 0
+            && self.state["phase"] != "lost"
+        {
+            self.resume_elsewhere(&command);
+        }
         if TRACE.load(std::sync::atomic::Ordering::Relaxed) && command["cmd"] != "preview" {
             eprintln!(
                 "{command} -> {} {} | ante {} {} hand {} pile {} hands {} discards {}",
@@ -94,6 +121,25 @@ impl Bot {
             );
         }
         response
+    }
+
+    /// Resumes the saved game in a new session, as the app does when it
+    /// starts again, and checks it finds the state it left.
+    fn resume_elsewhere(&mut self, after: &Value) {
+        let mut session = new_session(self.chaos, &self.save);
+        let resumed = serde_json::to_value(session.handle(r#"{"cmd":"resume"}"#)).unwrap();
+        let left = serde_json::to_value(self.session.handle(r#"{"cmd":"state"}"#)).unwrap();
+        if resumed["state"] != left["state"] {
+            let field = left["state"]
+                .as_object()
+                .and_then(|o| o.keys().find(|k| resumed["state"][k.as_str()] != left["state"][k.as_str()]))
+                .cloned()
+                .unwrap_or_else(|| format!("{}", resumed["message"]));
+            self.out
+                .violations
+                .push(format!("resumed game differs in {field} (after {})", after["cmd"]));
+        }
+        self.session = session;
     }
 
     fn phase(&self) -> &str {
@@ -449,15 +495,17 @@ impl Bot {
 }
 
 /// Plays one game; a panic becomes a violation.
-fn run_game(seed: u64, deck: Option<String>, endless: bool, chaos: bool) -> Outcome {
+fn run_game(seed: u64, deck: Option<String>, endless: bool, chaos: bool, save: bool) -> Outcome {
     let label = deck.clone().unwrap_or_else(|| "plain".into());
+    let save = save.then(|| {
+        std::env::temp_dir()
+            .join(format!("omatro-bot-{}", std::process::id()))
+            .join(format!("{seed}.json"))
+    });
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
         let bot = Bot {
-            session: if chaos {
-                Session::from_env()
-            } else {
-                Session::default()
-            },
+            session: new_session(chaos, &save),
+            save: save.clone(),
             rng: Rng::stream(seed, "bot"),
             state: Value::Null,
             endless,
@@ -470,6 +518,9 @@ fn run_game(seed: u64, deck: Option<String>, endless: bool, chaos: bool) -> Outc
         };
         bot.play(deck.as_deref())
     }));
+    if let Some(path) = &save {
+        let _ = std::fs::remove_file(path);
+    }
     result.unwrap_or_else(|_| Outcome {
         seed,
         deck: label,
@@ -489,6 +540,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let endless = args.iter().any(|a| a == "--endless");
     let chaos = args.iter().any(|a| a == "--chaos");
+    let save = args.iter().any(|a| a == "--save");
     if args.iter().any(|a| a == "--trace") {
         TRACE.store(true, std::sync::atomic::Ordering::Relaxed);
     }
@@ -536,7 +588,7 @@ fn main() {
                         .step_by(threads)
                         .map(|&seed| {
                             let deck = decks[(seed as usize) % decks.len()].clone();
-                            run_game(seed, deck, endless, chaos)
+                            run_game(seed, deck, endless, chaos, save)
                         })
                         .collect::<Vec<_>>()
                 })

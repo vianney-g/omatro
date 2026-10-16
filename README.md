@@ -38,6 +38,10 @@ A new game starts by picking a deck, the machine you play on
 ([docs/decks.md](docs/decks.md)): more hands or discards, money, slots, a deck without
 face cards, starting pull requests… The last one picked is remembered.
 
+The game in progress is saved after every move, in `~/.local/state/omatro/save.json`
+(`$XDG_STATE_HOME` if set): quit whenever you like, the next start offers to resume it.
+A lost game is removed.
+
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, Tab to sort the hand
 by rank or suit, Shift+←/→ to move the selected card (or drag it), J to bring the next
 joker to the front when they overlap (or hover or click one), N for a new game, I for
@@ -109,6 +113,8 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"new_game","seed":42,"jokers":["dotfiles"],"deck":"thinkpad"}` | New game (`seed`, `jokers` and `deck` optional) |
 | `{"cmd":"decks"}` | Lists the decks a new game may start with |
 | `{"cmd":"glossary"}` | Lists the terms card texts mention, with what they mean |
+| `{"cmd":"saved_game"}` | Tells whether a saved game can be resumed (the app only) |
+| `{"cmd":"resume"}` | Resumes the saved game |
 | `{"cmd":"state"}` | Returns the state |
 | `{"cmd":"select_blind"}` | Plays the blind on offer: deals a hand |
 | `{"cmd":"skip_blind"}` | Skips the blind on offer (not the boss) |
@@ -172,6 +178,8 @@ Responses:
 - `{"event":"glossary","terms":[…]}` after `glossary`: each term's `name`, `kind`
   (`edition`, `pull request`, `joker · AUR`…) and `description` (empty for hand
   types, listed only so that a shorter name never matches inside them).
+- `{"event":"saved_game","state":{…},"problem":null}` after `saved_game`: the saved
+  game's state (`null` without one), or the `problem` that keeps it from being resumed.
 - `{"event":"error","message":"…"}`.
 
 The hand is always sorted by descending rank.

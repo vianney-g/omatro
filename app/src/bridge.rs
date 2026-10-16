@@ -47,7 +47,7 @@ use crate::theme::{self, Theme};
 use core::pin::Pin;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QColor, QString};
-use omatro_engine::protocol::Session;
+use omatro_engine::protocol::{Session, default_save_path};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -58,7 +58,11 @@ pub struct EngineRust {
 impl Default for EngineRust {
     fn default() -> Self {
         EngineRust {
-            session: Session::from_env(),
+            // The game in progress is kept between runs.
+            session: match default_save_path() {
+                Some(path) => Session::from_env().with_save(path),
+                None => Session::from_env(),
+            },
         }
     }
 }

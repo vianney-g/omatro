@@ -3,7 +3,7 @@
 //! Hand-written rather than taken from `rand`: the same seed must give the
 //! same game whatever the dependency versions.
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Rng {
     state: u64,
     /// Chaos Monkey: `chance(n)` succeeds `luck` times in `n`.

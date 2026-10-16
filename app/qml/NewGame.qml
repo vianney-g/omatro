@@ -10,6 +10,8 @@ Rectangle {
   property var decks: []
   property int current: 0
   property bool canCancel: false
+  // A problem to report (a saved game that could not be resumed).
+  property string message: ""
   signal start(string deck)
   signal cancel()
 
@@ -37,6 +39,14 @@ Rectangle {
       anchors.horizontalCenter: parent.horizontalCenter
       text: "Pick your machine · arrows to choose · Enter to start" + (root.canCancel ? " · Escape to go back" : "")
       color: Color.muted
+      font.family: Style.font.family
+      font.pixelSize: Style.font.body
+    }
+    Text {
+      anchors.horizontalCenter: parent.horizontalCenter
+      visible: root.message !== ""
+      text: root.message
+      color: Color.urgent
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }

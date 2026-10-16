@@ -183,6 +183,19 @@ were opened from) or keeps the badge in `Game::tags` until its moment: `shop_tag
 cash-out (free offers in `free_offers`, `free_packs`), `select_blind` (`juggle`),
 `win_blind` (funding). Take waiting badges with `take_tags`.
 
+## Saves
+
+The app's `Session` (`with_save(default_save_path())`, in `bridge.rs`) writes the whole
+`Game` to `~/.local/state/omatro/save.json` after each command that changes it, and
+removes it once the game is lost; `saved_game` and `resume` read it back. `Game` and
+everything in it derive `Serialize`/`Deserialize`: a field added later needs
+`#[serde(default)]` so that older saves still load, and a change older saves can't
+follow bumps `SAVE_VERSION` (they are then reported, not resumed). `make bot ARGS="300
+1 --chaos --save"` resumes every game in a new session every 25 commands and checks
+the state is the same. Tests and the `omatro-engine` binary never save. When testing
+the app, point `XDG_STATE_HOME` elsewhere for omatro only, or it replaces the
+maintainer's game.
+
 ## Decks
 
 `run_deck.rs` lists the decks (`Deck`), picked on the new game screen (`NewGame.qml`,

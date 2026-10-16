@@ -8,6 +8,7 @@ use crate::joker::{Bonus, Joker};
 use crate::run_deck::Deck;
 use crate::score::Breakdown;
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -24,6 +25,10 @@ pub enum Command {
     Decks,
     /// Lists the terms card texts mention, with what they mean.
     Glossary,
+    /// Tells whether a saved game can be resumed, and its state.
+    SavedGame,
+    /// Resumes the saved game.
+    Resume,
     State,
     SelectBlind,
     SkipBlind,
@@ -116,6 +121,11 @@ pub enum Response {
     Glossary {
         terms: Vec<Term>,
     },
+    /// The saved game's state (none without one), or why it can't be resumed.
+    SavedGame {
+        state: Option<State>,
+        problem: Option<String>,
+    },
 }
 
 #[derive(Default)]
@@ -124,6 +134,44 @@ pub struct Session {
     debug: bool,
     /// Jokers of every new game that names none (debug only).
     start_jokers: Vec<Joker>,
+    /// Where the game in progress is saved after each command (none: never).
+    save: Option<PathBuf>,
+}
+
+/// Bumped when saves of older versions can no longer be read.
+pub const SAVE_VERSION: u32 = 1;
+
+/// A save file: the whole game, and the format it was written in.
+#[derive(Serialize, Deserialize)]
+struct Save {
+    version: u32,
+    game: Game,
+}
+
+/// Where the app keeps the game in progress: `$XDG_STATE_HOME/omatro/save.json`,
+/// else `~/.local/state/omatro/save.json`.
+pub fn default_save_path() -> Option<PathBuf> {
+    let state = std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))?;
+    Some(state.join("omatro").join("save.json"))
+}
+
+/// Reads a save; the message says why it can't be resumed.
+fn load(path: &Path) -> Result<Option<Game>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("the saved game can't be read: {e}")),
+    };
+    let unreadable = || "the saved game comes from another version of omatro".to_string();
+    let version: serde_json::Value = serde_json::from_str(&text).map_err(|_| unreadable())?;
+    if version["version"] != SAVE_VERSION {
+        return Err(unreadable());
+    }
+    let save: Save = serde_json::from_str(&text).map_err(|_| unreadable())?;
+    Ok(Some(save.game))
 }
 
 impl Session {
@@ -142,17 +190,61 @@ impl Session {
             game: None,
             debug,
             start_jokers,
+            save: None,
         }
     }
 
+    /// Saves the game in progress to this file after each command that
+    /// changes it, and removes the file once the game is lost.
+    pub fn with_save(mut self, path: PathBuf) -> Self {
+        self.save = Some(path);
+        self
+    }
+
     pub fn handle(&mut self, line: &str) -> Response {
-        match serde_json::from_str(line) {
-            Ok(command) => self
-                .run(command)
-                .unwrap_or_else(|message| Response::Error { message }),
+        match serde_json::from_str::<Command>(line) {
+            Ok(command) => {
+                let changes = !matches!(
+                    command,
+                    Command::State
+                        | Command::Preview { .. }
+                        | Command::Decks
+                        | Command::Glossary
+                        | Command::SavedGame
+                );
+                let response = self
+                    .run(command)
+                    .unwrap_or_else(|message| Response::Error { message });
+                if changes && !matches!(response, Response::Error { .. }) {
+                    self.persist();
+                }
+                response
+            }
             Err(e) => Response::Error {
                 message: format!("unreadable command: {e}"),
             },
+        }
+    }
+
+    /// Writes the game to the save file (to a temporary file first, so that a
+    /// crash never leaves half a save), or removes it once the game is lost.
+    fn persist(&self) {
+        let (Some(path), Some(game)) = (&self.save, &self.game) else {
+            return;
+        };
+        if game.is_over() {
+            let _ = std::fs::remove_file(path);
+            return;
+        }
+        let save = serde_json::json!({ "version": SAVE_VERSION, "game": game });
+        let tmp = path.with_extension("json.tmp");
+        let written = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|_| std::fs::write(&tmp, save.to_string()))
+            .and_then(|_| std::fs::rename(&tmp, path));
+        if let Err(e) = written {
+            eprintln!("omatro: could not save the game to {}: {e}", path.display());
         }
     }
 
@@ -180,12 +272,39 @@ impl Session {
         if let Command::Glossary = command {
             return Ok(Response::Glossary { terms: glossary() });
         }
+        if let Command::SavedGame = command {
+            let Some(path) = &self.save else {
+                return Ok(Response::SavedGame { state: None, problem: None });
+            };
+            return Ok(match load(path) {
+                Ok(game) => Response::SavedGame {
+                    state: game.map(|g| g.state()),
+                    problem: None,
+                },
+                Err(problem) => Response::SavedGame {
+                    state: None,
+                    problem: Some(problem),
+                },
+            });
+        }
+        if let Command::Resume = command {
+            let path = self.save.as_ref().ok_or("no saved game")?;
+            let game = load(path)?.ok_or("no saved game")?;
+            let game = self.game.insert(game);
+            return Ok(Response::State {
+                state: game.state(),
+            });
+        }
         if matches!(command, Command::Debug(_)) && !self.debug {
             return Err("debug commands are off (set OMATRO_DEBUG=1)".into());
         }
         let game = self.game.as_mut().ok_or("no game in progress")?;
         match command {
-            Command::NewGame { .. } | Command::Decks | Command::Glossary => unreachable!(),
+            Command::NewGame { .. }
+            | Command::Decks
+            | Command::Glossary
+            | Command::SavedGame
+            | Command::Resume => unreachable!(),
             Command::State => {}
             Command::SelectBlind => game.select_blind().map_err(|e| e.to_string())?,
             Command::SkipBlind => game.skip_blind().map_err(|e| e.to_string())?,
@@ -407,5 +526,46 @@ mod tests {
         );
         let r = send(&mut session, r#"{"cmd":"debug","mony":1}"#);
         assert_eq!(r["event"], "error");
+    }
+
+    #[test]
+    fn games_are_saved_and_resumed() {
+        let dir = std::env::temp_dir().join(format!("omatro-save-{}", std::process::id()));
+        let path = dir.join("save.json");
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut first = Session::default().with_save(path.clone());
+        let none = send(&mut first, r#"{"cmd":"saved_game"}"#);
+        assert_eq!((&none["state"], &none["problem"]), (&Value::Null, &Value::Null));
+        send(&mut first, r#"{"cmd":"new_game","seed":7,"deck":"think_pad"}"#);
+        send(&mut first, r#"{"cmd":"select_blind"}"#);
+        send(&mut first, r#"{"cmd":"play","cards":[0,1]}"#);
+        assert!(path.exists());
+        let before = send(&mut first, r#"{"cmd":"state"}"#)["state"].clone();
+
+        // The app restarted: it finds the game, and resumes it as it was.
+        let mut again = Session::default().with_save(path.clone());
+        let saved = send(&mut again, r#"{"cmd":"saved_game"}"#);
+        assert_eq!(saved["state"]["score"], before["score"]);
+        assert_eq!(send(&mut again, r#"{"cmd":"resume"}"#)["state"], before);
+        // The same draws follow.
+        let play = r#"{"cmd":"play","cards":[0]}"#;
+        assert_eq!(send(&mut first, play)["state"], send(&mut again, play)["state"]);
+
+        // A save it can't read is reported, never resumed.
+        std::fs::write(&path, r#"{"version":0}"#).unwrap();
+        let mut other = Session::default().with_save(path.clone());
+        assert!(send(&mut other, r#"{"cmd":"saved_game"}"#)["problem"].is_string());
+        assert_eq!(send(&mut other, r#"{"cmd":"resume"}"#)["event"], "error");
+
+        // A lost game leaves nothing to resume.
+        while send(&mut again, r#"{"cmd":"state"}"#)["state"]["phase"] == "playing" {
+            send(&mut again, play);
+        }
+        assert!(!path.exists());
+        // Sessions without a save file never write one.
+        let mut plain = Session::default();
+        send(&mut plain, r#"{"cmd":"new_game","seed":7}"#);
+        assert!(!dir.join("save.json").exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

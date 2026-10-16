@@ -113,7 +113,7 @@ impl HandKind {
 }
 
 /// The level of each hand type, raised during the game.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HandLevels([u32; HandKind::ALL.len()]);
 
 impl Default for HandLevels {
@@ -150,7 +150,7 @@ impl HandLevels {
 }
 
 /// How many times each hand type was played this game.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HandCounts([u32; HandKind::ALL.len()]);
 
 impl HandCounts {

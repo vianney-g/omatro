@@ -29,7 +29,7 @@ pub const MAX_JOKERS: usize = 5;
 pub const SHOP_OFFERS: usize = 2;
 pub const REROLL_COST: u32 = 5;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
     /// Before a blind: play it, or skip it if it is not the boss.
@@ -307,7 +307,7 @@ pub struct HandInfo {
 }
 
 /// Money earned at the end of a blind.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Reward {
     pub blind: u32,
     /// $1 per unplayed hand.
@@ -566,7 +566,7 @@ pub enum SortBy {
 }
 
 /// A consumable in the clipboard; a Transparent one takes no slot (Copy-on-Write).
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Held {
     pub consumable: Consumable,
     pub transparent: bool,
@@ -612,7 +612,7 @@ fn roll_oligarchy(rng: &mut Rng) -> Oligarchy {
 }
 
 /// A card of an open pack.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 enum PackItem {
     Consumable(Consumable),
     Joker {
@@ -623,7 +623,7 @@ enum PackItem {
     Card(Card),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct OpenedPack {
     pack: Pack,
     items: Vec<PackItem>,
@@ -633,7 +633,7 @@ struct OpenedPack {
 }
 
 /// Something for sale.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 enum Offer {
     Joker {
         joker: Joker,
@@ -644,6 +644,9 @@ enum Offer {
     Card(Card),
 }
 
+/// The whole game, saved as it is (`Session` writes it after each command):
+/// fields added later need `#[serde(default)]` for older saves to load.
+#[derive(Serialize, Deserialize)]
 pub struct Game {
     seed: u64,
     deck_rng: Rng,
@@ -841,6 +844,11 @@ impl Game {
         game.roll_blind_tags();
         game.await_blind();
         game
+    }
+
+    /// The game is lost: nothing left to resume.
+    pub fn is_over(&self) -> bool {
+        self.phase == Phase::Lost
     }
 
     fn deck_is(&self, deck: Deck) -> bool {

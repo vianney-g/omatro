@@ -51,6 +51,10 @@ Window {
     else if (r.event === "scored") startScoring(r)
     else if (r.event === "error") notice = r.message
     else if (r.event === "glossary") Hints.terms = r.terms
+    else if (r.event === "saved_game") {
+      savedGame = r.state
+      saveProblem = r.problem ? "Couldn't resume your game: " + r.problem + "." : ""
+    }
     else if (r.event === "decks") {
       decks = r.decks
       var last = decks.findIndex(function(d) { return d.id === settings.lastDeck })
@@ -66,8 +70,12 @@ Window {
     onTriggered: OmarchyTheme.refresh()
   }
 
+  // A game left in progress is offered first; otherwise, the deck choice.
   Component.onCompleted: {
-    newGame()
+    send({ cmd: "glossary" })
+    send({ cmd: "saved_game" })
+    if (savedGame !== null) resuming = true
+    else newGame()
     keyCatcher.forceActiveFocus()
   }
 
@@ -130,6 +138,21 @@ Window {
     id: settings
     category: "omatro"
     property string lastDeck: ""
+  }
+
+  // ---- resuming the game left in progress --------------------------------
+  property var savedGame: null
+  property bool resuming: false
+  // Why the saved game could not be resumed, shown on the deck choice.
+  property string saveProblem: ""
+  function resumeGame() {
+    resuming = false
+    send({ cmd: "resume" })
+    if (game === null) newGame()
+  }
+  function declineResume() {
+    resuming = false
+    newGame()
   }
 
   function newGame() {
@@ -481,6 +504,11 @@ Window {
     Keys.onPressed: function(event) {
       var k = event.key
       if (k === Qt.Key_Q && (event.modifiers & Qt.ControlModifier)) Qt.quit()
+      else if (root.resuming) {
+        if (k === Qt.Key_Return || k === Qt.Key_Enter) root.resumeGame()
+        else if (k === Qt.Key_N) root.declineResume()
+        else return
+      }
       else if (root.choosingDeck) {
         if (k === Qt.Key_Left) newGameScreen.move(-1)
         else if (k === Qt.Key_Right) newGameScreen.move(1)
@@ -1399,9 +1427,19 @@ Window {
       anchors.fill: parent
       visible: root.choosingDeck
       decks: root.decks
+      message: root.saveProblem
       canCancel: root.game !== null
       onStart: function(deck) { root.startGame(deck) }
       onCancel: root.choosingDeck = false
+    }
+
+    // ---- at start: resume the game left in progress
+    ResumeGame {
+      anchors.fill: parent
+      visible: root.resuming
+      saved: root.savedGame
+      onResume: root.resumeGame()
+      onNewGame: root.declineResume()
     }
 
     // What the terms of the hovered card mean, over everything.

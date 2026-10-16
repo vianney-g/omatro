@@ -229,7 +229,7 @@ pub enum Joker {
 }
 
 /// What the jokers that aim at something get at each blind.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Targets {
     /// Rolling Release: the suit that scores ×1.5.
     pub suit: Suit,
@@ -1604,7 +1604,7 @@ fn round(value: f64) -> f64 {
 }
 
 /// A joker the player owns, with its edition and what it gained so far.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OwnedJoker {
     pub joker: Joker,
     pub edition: Option<Edition>,
