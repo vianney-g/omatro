@@ -17,6 +17,11 @@ A standalone Qt Quick application, like omawrite or omacut, but written in Rust
 A personal project, unaffiliated with Balatro: the mechanics are borrowed, but not the
 name, the artwork, the text or the code. The content is themed around Omarchy, Arch and
 Hyprland, with affectionate jokes about DHH; it is unaffiliated with them too.
+Names of real people, products and companies belong to their owners; they appear
+as affectionate parody.
+
+The code is under the MIT license (see [LICENSE](LICENSE)); the license covers the
+code only, not the names and trademarks the game mentions.
 
 ## Installation
 
