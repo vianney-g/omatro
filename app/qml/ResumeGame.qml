@@ -21,13 +21,13 @@ Rectangle {
     var s = saved
     if (!s) return ""
     var blind = s.blinds.find(function(b) { return b.kind === s.blind })
-    var where = s.phase === "shop" ? "in the shop"
-      : s.phase === "pack" ? "opening a package"
+    var where = s.phase === "shop" ? I18n.tr("in the shop")
+      : s.phase === "pack" ? I18n.tr("opening a package")
       : blind ? blind.name : ""
-    var parts = ["Ante " + s.ante + " / " + s.winning_ante, where]
-    if (s.run_deck) parts.push("on " + s.run_deck.name)
+    var parts = [I18n.tr("Ante {a} / {b}", { a: s.ante, b: s.winning_ante }), where]
+    if (s.run_deck) parts.push(I18n.tr("on {deck}", { deck: s.run_deck.name }))
     parts.push(Labels.money(s.money))
-    parts.push(s.jokers.length + (s.jokers.length === 1 ? " joker" : " jokers"))
+    parts.push(I18n.tr(s.jokers.length === 1 ? "{n} joker" : "{n} jokers", { n: s.jokers.length }))
     return parts.join(" · ")
   }
 
@@ -37,7 +37,7 @@ Rectangle {
 
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
-      text: "Resume your game?"
+      text: I18n.tr("Resume your game?")
       color: Color.accent
       font.family: Style.font.family
       font.pixelSize: Style.font.displayLarge
@@ -52,7 +52,7 @@ Rectangle {
     }
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
-      text: "A new game replaces it once started."
+      text: I18n.tr("A new game replaces it once started.")
       color: Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
@@ -61,12 +61,12 @@ Rectangle {
       anchors.horizontalCenter: parent.horizontalCenter
       spacing: Style.spacing.xxl
       Button {
-        text: "Continue (Enter)"
+        text: I18n.tr("Continue (Enter)")
         bordered: true
         onClicked: root.resume()
       }
       Button {
-        text: "New game (N)"
+        text: I18n.tr("New game (N)")
         onClicked: root.newGame()
       }
     }

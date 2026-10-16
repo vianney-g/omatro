@@ -38,6 +38,9 @@ A new game starts by picking a deck, the machine you play on
 ([docs/decks.md](docs/decks.md)): more hands or discards, money, slots, a deck without
 face cards, starting pull requests… The last one picked is remembered.
 
+The game speaks English and French: the system's language by default, L (or the
+buttons of the new game screen) to switch. Card names and quips stay in English.
+
 The game in progress is saved after every move, in `~/.local/state/omatro/save.json`
 (`$XDG_STATE_HOME` if set): quit whenever you like, the next start offers to resume it.
 A lost game is removed.
@@ -113,6 +116,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"new_game","seed":42,"jokers":["dotfiles"],"deck":"thinkpad"}` | New game (`seed`, `jokers` and `deck` optional) |
 | `{"cmd":"decks"}` | Lists the decks a new game may start with |
 | `{"cmd":"glossary"}` | Lists the terms card texts mention, with what they mean |
+| `{"cmd":"language","lang":"fr"}` | Sets the language of the responses (`en`, `fr`) and returns the catalog |
 | `{"cmd":"saved_game"}` | Tells whether a saved game can be resumed (the app only) |
 | `{"cmd":"resume"}` | Resumes the saved game |
 | `{"cmd":"state"}` | Returns the state |
@@ -180,6 +184,9 @@ Responses:
   types, listed only so that a shorter name never matches inside them).
 - `{"event":"saved_game","state":{…},"problem":null}` after `saved_game`: the saved
   game's state (`null` without one), or the `problem` that keeps it from being resumed.
+- `{"event":"language","lang":"fr","table":{…},"languages":[…]}` after `language`: the
+  catalog (English text → translation, `{name}` slots in templates) for the
+  interface's own text, and the languages to choose from.
 - `{"event":"error","message":"…"}`.
 
 The hand is always sorted by descending rank.

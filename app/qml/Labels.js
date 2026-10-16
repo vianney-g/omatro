@@ -2,6 +2,25 @@
 
 // Displayed text: ranks, suits, effects, numbers (hand names come from the engine).
 
+// ---- language: the catalog the engine sent (QML bindings use I18n.tr, which
+// follows a change; texts built here follow it when the state comes again)
+
+var table = {}
+var decimalComma = false
+
+function setLanguage(lang, catalog) {
+  table = catalog || {}
+  decimalComma = lang === "fr"
+}
+
+function tr(text, args) {
+  var out = table[text] || text
+  if (args)
+    for (var key in args)
+      out = out.split("{" + key + "}").join(String(args[key]))
+  return out
+}
+
 var SUITS = { hearts: "♥", diamonds: "♦", clubs: "♣", spades: "♠" }
 
 function rank(r) { return r <= 10 ? String(r) : ["J", "Q", "K", "A"][r - 11] }
@@ -19,25 +38,30 @@ function number(n) {
     var e = Math.floor(Math.log10(n))
     return (n / Math.pow(10, e)).toFixed(3) + "e" + e
   }
-  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, decimalComma ? "\u202f" : ",")
 }
 
-function money(n) { return n < 0 ? "−$" + (-n) : "$" + n }
+// $4 in English, 4 $ in French.
+function money(n) {
+  var amount = n < 0 ? "−" + (-n) : String(n)
+  return decimalComma ? amount + "\u00a0$" : (n < 0 ? "−$" + (-n) : "$" + n)
+}
 
 // "1 card", "2 cards", "1–3 cards".
 function range(min, max) {
-  return (min === max ? String(min) : min + "–" + max) + (max === 1 ? " card" : " cards")
+  return tr(max === 1 ? "{n} card" : "{n} cards", { n: min === max ? String(min) : min + "–" + max })
 }
 
 function mult(m) {
-  return Number.isInteger(m) ? String(m) : m.toFixed(1)
+  var s = Number.isInteger(m) ? String(m) : m.toFixed(1)
+  return decimalComma ? s.replace(".", ",") : s
 }
 
 // An engine effect: {"chips": 11}, {"mult": 2}, {"x_mult": 2}, {"money": 2} or "again".
 function effect(e) {
-  if (e === "again") return "Again!"
-  if (e === "debuffed") return "Debuffed"
-  if (e === "balance") return "Balanced"
+  if (e === "again") return tr("Again!")
+  if (e === "debuffed") return tr("Debuffed")
+  if (e === "balance") return tr("Balanced")
   if (e.money !== undefined) return "+" + money(e.money)
   if (e.chips !== undefined) return "+" + e.chips
   if (e.mult !== undefined) return "+" + mult(e.mult) + " mult"
@@ -51,7 +75,7 @@ function isMoney(e) { return e.money !== undefined }
 
 var BLIND_STATUSES = { upcoming: "Upcoming", select: "Next", current: "In progress", defeated: "Defeated", skipped: "Skipped" }
 
-function blindStatus(s) { return BLIND_STATUSES[s] || "" }
+function blindStatus(s) { return BLIND_STATUSES[s] ? tr(BLIND_STATUSES[s]) : "" }
 
 // ---- glossary: terms card texts mention (from the engine's `glossary`)
 

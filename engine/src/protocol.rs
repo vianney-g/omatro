@@ -4,6 +4,7 @@
 use crate::game::{Cheat, DeckInfo, Game, SortBy, State};
 use crate::glossary::{Term, glossary};
 use crate::hand::HandKind;
+use crate::i18n::{Catalog, Lang, translate_response};
 use crate::joker::{Bonus, Joker};
 use crate::run_deck::Deck;
 use crate::score::Breakdown;
@@ -29,6 +30,11 @@ pub enum Command {
     SavedGame,
     /// Resumes the saved game.
     Resume,
+    /// Sets the language of the responses, and returns the catalog for the
+    /// interface's own text.
+    Language {
+        lang: Lang,
+    },
     State,
     SelectBlind,
     SkipBlind,
@@ -121,6 +127,13 @@ pub enum Response {
     Glossary {
         terms: Vec<Term>,
     },
+    /// The language set, its catalog (English text → translation), and the
+    /// languages to choose from.
+    Language {
+        lang: Lang,
+        table: std::collections::HashMap<String, String>,
+        languages: Vec<LanguageInfo>,
+    },
     /// The saved game's state (none without one), or why it can't be resumed.
     SavedGame {
         state: Option<State>,
@@ -136,6 +149,14 @@ pub struct Session {
     start_jokers: Vec<Joker>,
     /// Where the game in progress is saved after each command (none: never).
     save: Option<PathBuf>,
+    /// The language of the responses (`handle_json` translates them).
+    lang: Lang,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LanguageInfo {
+    pub id: Lang,
+    pub name: &'static str,
 }
 
 /// Bumped when saves of older versions can no longer be read.
@@ -191,6 +212,7 @@ impl Session {
             debug,
             start_jokers,
             save: None,
+            lang: Lang::En,
         }
     }
 
@@ -211,6 +233,7 @@ impl Session {
                         | Command::Decks
                         | Command::Glossary
                         | Command::SavedGame
+                        | Command::Language { .. }
                 );
                 let response = self
                     .run(command)
@@ -224,6 +247,15 @@ impl Session {
                 message: format!("unreadable command: {e}"),
             },
         }
+    }
+
+    /// Handles a command and returns the response as JSON, translated into
+    /// the session's language: what the app and the binary use.
+    pub fn handle_json(&mut self, line: &str) -> String {
+        let response = self.handle(line);
+        let mut value = serde_json::to_value(response).expect("responses serialize");
+        translate_response(&mut value, self.lang);
+        value.to_string()
     }
 
     /// Writes the game to the save file (to a temporary file first, so that a
@@ -272,6 +304,17 @@ impl Session {
         if let Command::Glossary = command {
             return Ok(Response::Glossary { terms: glossary() });
         }
+        if let Command::Language { lang } = command {
+            self.lang = lang;
+            return Ok(Response::Language {
+                lang,
+                table: Catalog::table(lang),
+                languages: Lang::ALL
+                    .iter()
+                    .map(|&id| LanguageInfo { id, name: id.name() })
+                    .collect(),
+            });
+        }
         if let Command::SavedGame = command {
             let Some(path) = &self.save else {
                 return Ok(Response::SavedGame { state: None, problem: None });
@@ -304,7 +347,8 @@ impl Session {
             | Command::Decks
             | Command::Glossary
             | Command::SavedGame
-            | Command::Resume => unreachable!(),
+            | Command::Resume
+            | Command::Language { .. } => unreachable!(),
             Command::State => {}
             Command::SelectBlind => game.select_blind().map_err(|e| e.to_string())?,
             Command::SkipBlind => game.skip_blind().map_err(|e| e.to_string())?,

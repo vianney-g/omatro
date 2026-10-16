@@ -49,10 +49,10 @@ Item {
     : card.seal === "gold_star" ? "★" : card.seal === "retry" ? "↻"
     : card.seal === "theme_sync" ? "◐" : "❯"
   readonly property string details: {
-    if (faceDown) return "Face down: dealt by the boss."
+    if (faceDown) return I18n.tr("Face down: dealt by the boss.")
     var lines = []
-    if (disabledBy) lines.push("Disabled by " + disabledBy + ": scores nothing.")
-    if (forced) lines.push("The Clippy keeps it selected.")
+    if (disabledBy) lines.push(I18n.tr("Disabled by {boss}: scores nothing.", { boss: disabledBy }))
+    if (forced) lines.push(I18n.tr("The Clippy keeps it selected."))
     if (enhancement) lines.push(enhancement.name + ": " + enhancement.description)
     if (seal) lines.push(seal.name + " seal: " + seal.description)
     if (edition) lines.push(edition.name + ": " + edition.description)

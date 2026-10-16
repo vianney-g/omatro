@@ -49,7 +49,7 @@ Item {
       Text {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
-        text: root.joker ? root.joker.rarity_name : ""
+        text: root.joker ? I18n.tr(root.joker.rarity_name) : ""
         color: root.rarityColor
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
@@ -163,7 +163,7 @@ Item {
   Text {
     anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: Style.space(40) }
     visible: root.disabled && !root.hidden
-    text: "disabled"
+    text: I18n.tr("disabled")
     color: Color.urgent
     font.family: Style.font.family
     font.pixelSize: Style.font.subtitle

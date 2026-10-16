@@ -9,6 +9,7 @@ mod docs;
 pub mod game;
 pub mod glossary;
 pub mod hand;
+pub mod i18n;
 pub mod joker;
 pub mod modifier;
 pub mod pack;

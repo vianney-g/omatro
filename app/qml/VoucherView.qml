@@ -28,7 +28,7 @@ Rectangle {
     Text {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
-      text: "pull request"
+      text: I18n.tr("pull request")
       color: Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.caption

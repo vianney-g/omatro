@@ -14,16 +14,16 @@ use serde::Serialize;
 pub struct Term {
     pub name: String,
     /// What it is: "edition", "pull request", "joker · AUR"…
-    pub kind: String,
+    pub category: String,
     /// What it does; empty for words that only keep a shorter name from
     /// matching inside them (hand types: "Fork Bomb" is not the joker Fork).
     pub description: String,
 }
 
-fn term(name: impl Into<String>, kind: impl Into<String>, description: impl Into<String>) -> Term {
+fn term(name: impl Into<String>, category: impl Into<String>, description: impl Into<String>) -> Term {
     Term {
         name: name.into(),
-        kind: kind.into(),
+        category: category.into(),
         description: description.into(),
     }
 }
@@ -92,8 +92,8 @@ mod tests {
     fn every_name_means_one_thing() {
         let mut seen: HashMap<String, String> = HashMap::new();
         for t in glossary() {
-            if let Some(kind) = seen.insert(t.name.clone(), t.kind.clone()) {
-                panic!("{:?} is both a {kind} and a {}", t.name, t.kind);
+            if let Some(category) = seen.insert(t.name.clone(), t.category.clone()) {
+                panic!("{:?} is both a {category} and a {}", t.name, t.category);
             }
         }
     }

@@ -12,9 +12,10 @@ original, never Balatro's (only the mechanics are borrowed). Each item has a `qu
 a one-line joke shown under its effect (50 characters at most, or it overflows the card).
 New content names and quips are proposed to the maintainer for approval before coding.
 
-The whole codebase and the interface are in English: code, comments, error messages,
-UI text, README and commit messages. Numbers are displayed in English format
-(`12,345`, `2.5`, `$4`). Conversation with the maintainer may be in French.
+The whole codebase is in English: code, comments, error messages, UI text as written in
+the code, README and commit messages. The game is translated (English and French, see
+Translations); English numbers read `12,345`, `2.5`, `$4`, French ones `12 345`,
+`2,5`, `4 $`. Conversation with the maintainer may be in French.
 
 ## Commands
 
@@ -182,6 +183,20 @@ boss reroll, free packs through `open_free_pack`, which come back to the phase t
 were opened from) or keeps the badge in `Game::tags` until its moment: `shop_tags` at
 cash-out (free offers in `free_offers`, `free_packs`), `select_blind` (`juggle`),
 `win_blind` (funding). Take waiting badges with `take_tags`.
+
+## Translations
+
+`locales/fr.json` is the French catalog: English text → translation; keys with
+`{name}` slots are templates (`"+{n} mult"`), whose slots are translated in turn (hand
+types, nested messages) or written as French numbers. The engine stays in English:
+`Session::handle_json` translates responses on the way out (`i18n.rs`: descriptions,
+notes, messages, badges' `text`, `hand_name`, and `name` only word for word, so card
+names stay), and the `language` command sends the catalog to the interface, whose own
+text goes through `I18n.tr("English text", { slot: value })` (and `Labels.tr` in
+`Labels.js`). Card names and quips are never translated. New content needs its
+French text in the catalog (`the_catalog_covers_the_content` fails otherwise); new
+notes or UI text too: `make bot ARGS="2000 1 --chaos --lang fr"` lists what remains
+in English.
 
 ## Saves
 

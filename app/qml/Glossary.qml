@@ -49,7 +49,7 @@ Item {
           }
           Text {
             width: parent.width
-            text: modelData.kind
+            text: modelData.category
             color: Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption

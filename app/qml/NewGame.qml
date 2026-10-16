@@ -14,6 +14,7 @@ Rectangle {
   property string message: ""
   signal start(string deck)
   signal cancel()
+  signal language(string lang)
 
   color: Util.alpha(Color.background, 0.96)
 
@@ -29,7 +30,7 @@ Rectangle {
 
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
-      text: "New game"
+      text: I18n.tr("New game")
       color: Color.accent
       font.family: Style.font.family
       font.pixelSize: Style.font.displayLarge
@@ -37,7 +38,7 @@ Rectangle {
     }
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
-      text: "Pick your machine · arrows to choose · Enter to start" + (root.canCancel ? " · Escape to go back" : "")
+      text: I18n.tr("Pick your machine · arrows to choose · Enter to start") + (root.canCancel ? I18n.tr(" · Escape to go back") : "")
       color: Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
@@ -109,17 +110,39 @@ Rectangle {
       }
     }
 
+    // The language of the game (L switches).
+    Row {
+      anchors.horizontalCenter: parent.horizontalCenter
+      spacing: Style.spacing.md
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        text: I18n.tr("Language (L)")
+        color: Color.muted
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+      }
+      Repeater {
+        model: I18n.languages
+        Button {
+          compact: true
+          text: modelData.name
+          bordered: modelData.id === I18n.lang
+          onClicked: root.language(modelData.id)
+        }
+      }
+    }
+
     Row {
       anchors.horizontalCenter: parent.horizontalCenter
       spacing: Style.spacing.xxl
       Button {
-        text: "Start (Enter)"
+        text: I18n.tr("Start (Enter)")
         enabled: root.decks.length > 0
         onClicked: root.start(root.decks[root.current].id)
       }
       Button {
         visible: root.canCancel
-        text: "Back (Escape)"
+        text: I18n.tr("Back (Escape)")
         onClicked: root.cancel()
       }
     }

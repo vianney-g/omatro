@@ -21,7 +21,7 @@ Rectangle {
     Text {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
-      text: "package"
+      text: I18n.tr("package")
       color: Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.caption

@@ -8,7 +8,8 @@
 //! commands to reach further: money and a random joker at each shop, random
 //! commands, oligarchy cards and card modifiers; `--save` saves the game after
 //! each command and, every 25 commands, resumes it in a new session, which
-//! must find the very same state.
+//! must find the very same state; `--lang fr` plays in French and lists the
+//! texts the catalog doesn't translate.
 
 use omatro_engine::protocol::Session;
 use omatro_engine::rng::Rng;
@@ -56,6 +57,9 @@ struct Bot {
 /// Commands between two resumed sessions, with `--save`.
 const RESUME_EVERY: usize = 25;
 
+/// `--lang`: the language the bot plays in.
+static LANG: Mutex<String> = Mutex::new(String::new());
+
 /// A session as the bot plays it: with the debug commands in chaos mode.
 fn new_session(chaos: bool, save: &Option<std::path::PathBuf>) -> Session {
     let session = if chaos {
@@ -63,10 +67,15 @@ fn new_session(chaos: bool, save: &Option<std::path::PathBuf>) -> Session {
     } else {
         Session::default()
     };
-    match save {
+    let mut session = match save {
         Some(path) => session.with_save(path.clone()),
         None => session,
+    };
+    let lang = LANG.lock().map(|l| l.clone()).unwrap_or_default();
+    if !lang.is_empty() {
+        session.handle_json(&json!({"cmd": "language", "lang": lang}).to_string());
     }
+    session
 }
 
 /// `--trace`: prints every command (but previews) on stderr.
@@ -94,8 +103,8 @@ impl Bot {
         if command["cmd"] != "preview" {
             self.out.steps += 1;
         }
-        let response = serde_json::to_value(self.session.handle(&command.to_string()))
-            .expect("responses serialize");
+        let response: Value = serde_json::from_str(&self.session.handle_json(&command.to_string()))
+            .expect("responses are JSON");
         if let Some(state) = response.get("state") {
             self.state = state.clone();
             self.check(&command);
@@ -127,8 +136,8 @@ impl Bot {
     /// starts again, and checks it finds the state it left.
     fn resume_elsewhere(&mut self, after: &Value) {
         let mut session = new_session(self.chaos, &self.save);
-        let resumed = serde_json::to_value(session.handle(r#"{"cmd":"resume"}"#)).unwrap();
-        let left = serde_json::to_value(self.session.handle(r#"{"cmd":"state"}"#)).unwrap();
+        let resumed: Value = serde_json::from_str(&session.handle_json(r#"{"cmd":"resume"}"#)).unwrap();
+        let left: Value = serde_json::from_str(&self.session.handle_json(r#"{"cmd":"state"}"#)).unwrap();
         if resumed["state"] != left["state"] {
             let field = left["state"]
                 .as_object()
@@ -541,6 +550,14 @@ fn main() {
     let endless = args.iter().any(|a| a == "--endless");
     let chaos = args.iter().any(|a| a == "--chaos");
     let save = args.iter().any(|a| a == "--save");
+    let lang = args
+        .iter()
+        .position(|a| a == "--lang")
+        .and_then(|i| args.get(i + 1))
+        .cloned();
+    if let (Some(lang), Ok(mut l)) = (&lang, LANG.lock()) {
+        *l = lang.clone();
+    }
     if args.iter().any(|a| a == "--trace") {
         TRACE.store(true, std::sync::atomic::Ordering::Relaxed);
     }
@@ -576,13 +593,15 @@ fn main() {
     let start = Instant::now();
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
     let seeds: Vec<u64> = (first..first + games).collect();
+    let mut misses = std::collections::BTreeSet::new();
     let outcomes: Vec<Outcome> = std::thread::scope(|scope| {
         let handles: Vec<_> = (0..threads)
             .map(|t| {
                 let seeds = &seeds;
                 let decks = &decks;
                 scope.spawn(move || {
-                    seeds
+                    omatro_engine::i18n::record_misses();
+                    let outcomes: Vec<Outcome> = seeds
                         .iter()
                         .skip(t)
                         .step_by(threads)
@@ -590,11 +609,18 @@ fn main() {
                             let deck = decks[(seed as usize) % decks.len()].clone();
                             run_game(seed, deck, endless, chaos, save)
                         })
-                        .collect::<Vec<_>>()
+                        .collect();
+                    (outcomes, omatro_engine::i18n::take_misses())
                 })
             })
             .collect();
-        handles.into_iter().flat_map(|h| h.join().unwrap()).collect()
+        let mut outcomes = Vec::new();
+        for h in handles {
+            let (o, m) = h.join().unwrap();
+            outcomes.extend(o);
+            misses.extend(m);
+        }
+        outcomes
     });
 
     let n = outcomes.len();
@@ -706,5 +732,12 @@ fn main() {
     }
     if problems.is_empty() {
         println!("  none");
+    }
+
+    if let Some(lang) = &lang {
+        println!("\nUntranslated into {lang}: {}", misses.len());
+        for text in &misses {
+            println!("  {text}");
+        }
     }
 }

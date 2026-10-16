@@ -74,7 +74,7 @@ Row {
           width: parent.width
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "Target"
+            text: I18n.tr("Target")
             color: Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -90,7 +90,7 @@ Row {
         }
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
-          text: "Reward: " + Labels.money(modelData.reward)
+          text: I18n.tr("Reward: {money}", { money: Labels.money(modelData.reward) })
           color: Color.accent
           font.family: Style.font.family
           font.pixelSize: Style.font.body
@@ -124,13 +124,13 @@ Row {
             spacing: Style.spacing.md
             Button {
               anchors.horizontalCenter: parent.horizontalCenter
-              text: "Play (Enter)"
+              text: I18n.tr("Play (Enter)")
               onClicked: root.play()
             }
             Button {
               anchors.horizontalCenter: parent.horizontalCenter
               visible: modelData.kind !== "boss"
-              text: "Skip (S)"
+              text: I18n.tr("Skip (S)")
               onClicked: root.skip()
             }
             // What skipping gives.
@@ -142,7 +142,7 @@ Row {
             Button {
               anchors.horizontalCenter: parent.horizontalCenter
               visible: modelData.kind === "boss" && root.bossRerollCost >= 0
-              text: "Reroll (B) · $" + root.bossRerollCost
+              text: I18n.tr("Reroll (B) · {money}", { money: Labels.money(root.bossRerollCost) })
               onClicked: root.rerollBoss()
             }
           }

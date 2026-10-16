@@ -69,8 +69,9 @@ impl Default for EngineRust {
 
 impl qobject::Engine {
     pub fn handle(self: Pin<&mut Self>, line: &QString) -> QString {
-        let reply = self.rust_mut().session.handle(&line.to_string());
-        QString::from(&serde_json::to_string(&reply).unwrap_or_default())
+        // Translated into the language the interface set.
+        let reply = self.rust_mut().session.handle_json(&line.to_string());
+        QString::from(&reply)
     }
 }
 

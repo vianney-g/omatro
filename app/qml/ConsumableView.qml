@@ -34,8 +34,8 @@ Rectangle {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       text: !root.item ? ""
-        : root.transparent ? (root.narrow ? "transparent" : root.item.kind + " · transparent")
-        : root.item.kind
+        : root.transparent ? (root.narrow ? I18n.tr("transparent") : I18n.tr("{kind} · transparent", { kind: I18n.tr(root.item.kind) }))
+        : I18n.tr(root.item.kind)
       color: root.transparent ? Color.accent : Color.muted
       fontSizeMode: Text.HorizontalFit
       minimumPixelSize: Style.fontPx(0.6)

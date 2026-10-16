@@ -29,8 +29,8 @@ Column {
   Text {
     anchors.horizontalCenter: parent.horizontalCenter
     text: root.opened
-      ? root.opened.description + " · " + root.opened.picks_left + " left"
-        + (root.opened.with_hand ? " · select cards below for the commands that need them" : "")
+      ? I18n.tr("{description} · {n} left", { description: root.opened.description, n: root.opened.picks_left })
+        + (root.opened.with_hand ? " · " + I18n.tr("select cards below for the commands that need them") : "")
       : ""
     color: Color.muted
     font.family: Style.font.family
@@ -57,7 +57,7 @@ Column {
           width: parent.width
           visible: modelData.max_cards > 0
           horizontalAlignment: Text.AlignHCenter
-          text: visible ? "select " + Labels.range(modelData.min_cards, modelData.max_cards) : ""
+          text: visible ? I18n.tr("select {range}", { range: Labels.range(modelData.min_cards, modelData.max_cards) }) : ""
           color: Color.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
@@ -71,7 +71,7 @@ Column {
         }
         Button {
           anchors.horizontalCenter: parent.horizontalCenter
-          text: "Install"
+          text: I18n.tr("Install")
           enabled: root.canPick(modelData)
           opacity: enabled ? 1 : 0.5
           onClicked: root.pick(index)
@@ -82,7 +82,7 @@ Column {
 
   Button {
     anchors.horizontalCenter: parent.horizontalCenter
-    text: "Ctrl+C (skip)"
+    text: I18n.tr("Ctrl+C (skip)")
     onClicked: root.skip()
   }
 }

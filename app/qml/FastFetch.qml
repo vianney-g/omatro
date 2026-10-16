@@ -56,8 +56,8 @@ Rectangle {
         }
         Header {
           anchors.baseline: parent.children[0].baseline
-          text: (root.game && root.game.run_deck ? "on " + root.game.run_deck.name + " · " : "")
-            + "Your run, beautifully over-reported. · I or Esc: close"
+          text: (root.game && root.game.run_deck ? I18n.tr("on {deck}", { deck: root.game.run_deck.name }) + " · " : "")
+            + I18n.tr("Your run, beautifully over-reported. · I or Esc: close")
           font.italic: true
         }
       }
@@ -72,10 +72,10 @@ Rectangle {
           readonly property var widths: [Style.space(190), Style.space(56), Style.space(110), Style.space(56)]
 
           Row {
-            Header { width: table.widths[0]; text: "Hand" }
-            Header { width: table.widths[1]; text: "Level" }
-            Header { width: table.widths[2]; text: "Chips × Mult" }
-            Header { width: table.widths[3]; text: "Played"; horizontalAlignment: Text.AlignRight }
+            Header { width: table.widths[0]; text: I18n.tr("Hand") }
+            Header { width: table.widths[1]; text: I18n.tr("Level") }
+            Header { width: table.widths[2]; text: I18n.tr("Chips × Mult") }
+            Header { width: table.widths[3]; text: I18n.tr("Played"); horizontalAlignment: Text.AlignRight }
           }
 
           Repeater {
@@ -86,7 +86,7 @@ Rectangle {
                 Label { text: modelData.name; font.bold: modelData.level > 1 }
                 Header { visible: modelData.quip !== ""; text: modelData.quip; font.italic: true }
               }
-              Label { width: table.widths[1]; text: "lvl." + modelData.level }
+              Label { width: table.widths[1]; text: I18n.tr("lvl.{n}", { n: modelData.level }) }
               Row {
                 width: table.widths[2]
                 Label { text: Labels.number(modelData.chips); color: Color.accent }
@@ -114,11 +114,11 @@ Rectangle {
             font.bold: true
           }
           Header {
-            text: (root.game ? root.game.deck_size : 52) + " files, no hidden dotfiles. Yet."
+            text: I18n.tr("{n} files, no hidden dotfiles. Yet.", { n: root.game ? root.game.deck_size : 52 })
             font.italic: true
           }
           Label {
-            text: root.game ? root.game.remaining.length + " / " + root.game.deck_size + " cards left" : ""
+            text: root.game ? I18n.tr("{a} / {b} cards left", { a: root.game.remaining.length, b: root.game.deck_size }) : ""
           }
           Label {
             readonly property int blobs: {
@@ -129,7 +129,7 @@ Rectangle {
               return n
             }
             visible: blobs > 0
-            text: blobs + " Binary Blob" + (blobs > 1 ? "s" : "")
+            text: I18n.tr(blobs > 1 ? "{n} Binary Blobs" : "{n} Binary Blob", { n: blobs })
             color: Color.muted
           }
           Repeater {
@@ -176,7 +176,7 @@ Rectangle {
             wrapMode: Text.WordWrap
             text: root.game && root.game.vouchers.length
               ? root.game.vouchers.map(function(v) { return v.name + ": " + v.description }).join("\n")
-              : "No pull request merged yet."
+              : I18n.tr("No pull request merged yet.")
             color: root.game && root.game.vouchers.length ? Color.foreground : Color.muted
           }
         }

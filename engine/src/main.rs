@@ -12,8 +12,7 @@ fn main() -> io::Result<()> {
         if line.trim().is_empty() {
             continue;
         }
-        serde_json::to_writer(&mut out, &session.handle(&line))?;
-        writeln!(out)?;
+        writeln!(out, "{}", session.handle_json(&line))?;
         out.flush()?;
     }
     Ok(())

@@ -45,15 +45,21 @@ Window {
 
   function receive(line) {
     var r
-    try { r = JSON.parse(line) } catch (e) { notice = "Unreadable response from the engine."; return }
+    try { r = JSON.parse(line) } catch (e) { notice = I18n.tr("Unreadable response from the engine."); return }
     if (r.event === "state") applyState(r.state)
     else if (r.event === "preview") showPreview(r)
     else if (r.event === "scored") startScoring(r)
     else if (r.event === "error") notice = r.message
     else if (r.event === "glossary") Hints.terms = r.terms
+    else if (r.event === "language") {
+      Labels.setLanguage(r.lang, r.table)
+      I18n.lang = r.lang
+      I18n.languages = r.languages
+      I18n.table = r.table
+    }
     else if (r.event === "saved_game") {
       savedGame = r.state
-      saveProblem = r.problem ? "Couldn't resume your game: " + r.problem + "." : ""
+      saveProblem = r.problem ? I18n.tr("Couldn't resume your game: {why}.", { why: r.problem }) : ""
     }
     else if (r.event === "decks") {
       decks = r.decks
@@ -72,6 +78,8 @@ Window {
 
   // A game left in progress is offered first; otherwise, the deck choice.
   Component.onCompleted: {
+    var lang = settings.language || (Qt.locale().name.indexOf("fr") === 0 ? "fr" : "en")
+    send({ cmd: "language", lang: lang })
     send({ cmd: "glossary" })
     send({ cmd: "saved_game" })
     if (savedGame !== null) resuming = true
@@ -138,6 +146,24 @@ Window {
     id: settings
     category: "omatro"
     property string lastDeck: ""
+    // The language chosen in the game ("": the system's).
+    property string language: ""
+  }
+
+  // ---- language: the engine translates its text and sends the catalog for
+  // the interface's; what it already sent comes again, translated
+  function setLanguage(lang) {
+    settings.language = lang
+    send({ cmd: "language", lang: lang })
+    send({ cmd: "glossary" })
+    send({ cmd: "decks" })
+    if (resuming) send({ cmd: "saved_game" })
+    if (game !== null && !busy) send({ cmd: "state" })
+  }
+  // L: the next language.
+  function nextLanguage() {
+    var ids = I18n.languages.map(function(l) { return l.id })
+    if (ids.length > 0) setLanguage(ids[(ids.indexOf(I18n.lang) + 1) % ids.length])
   }
 
   // ---- resuming the game left in progress --------------------------------
@@ -182,7 +208,7 @@ Window {
 
   function toggleCard(i) {
     if (!selecting || i < 0 || i >= hand.length) return
-    if (playing && game.forced === i) { notice = "The Clippy insists on this card."; return }
+    if (playing && game.forced === i) { notice = I18n.tr("The Clippy insists on this card."); return }
     var s = selected.slice()
     var k = s.indexOf(i)
     if (k >= 0) s.splice(k, 1)
@@ -224,7 +250,7 @@ Window {
 
   function discard() {
     if (!playing || selected.length === 0) return
-    if (game.discards_left === 0) { notice = "No discards left."; return }
+    if (game.discards_left === 0) { notice = I18n.tr("No discards left."); return }
     send({ cmd: "discard", cards: selected })
   }
 
@@ -286,7 +312,7 @@ Window {
     if (canMerge(i)) {
       var name = game.vouchers_for_sale[i].name
       send({ cmd: "buy_voucher", index: i })
-      notice = "Merged " + name + "."
+      notice = I18n.tr("Merged {name}.", { name: name })
     }
   }
   function rerollBoss() {
@@ -313,8 +339,9 @@ Window {
     if (!inPack || i < 0 || i >= game.opened.choices.length) return
     var choice = game.opened.choices[i]
     if (!canPick(choice)) {
-      notice = choice.max_cards > 0 ? choice.name + ": select " + Labels.range(choice.min_cards, choice.max_cards) + "."
-        : "No room for another joker."
+      notice = choice.max_cards > 0
+        ? I18n.tr("{name}: select {range}.", { name: choice.name, range: Labels.range(choice.min_cards, choice.max_cards) })
+        : I18n.tr("No room for another joker.")
       return
     }
     notice = ""
@@ -328,12 +355,12 @@ Window {
     if (!game || i >= game.consumables.length) return
     var c = game.consumables[i]
     if (!canUse(c)) {
-      if (c.max_cards > 0) notice = c.name + ": select " + Labels.range(c.min_cards, c.max_cards) + " during a blind."
-      else if (c.needs_hand) notice = c.name + ": use it during a blind, on the cards in hand."
+      if (c.max_cards > 0) notice = I18n.tr("{name}: select {range} during a blind.", { name: c.name, range: Labels.range(c.min_cards, c.max_cards) })
+      else if (c.needs_hand) notice = I18n.tr("{name}: use it during a blind, on the cards in hand.", { name: c.name })
       return
     }
     send({ cmd: "use_consumable", index: i, cards: c.max_cards > 0 ? selected : [] })
-    notice = (c.kind === "theme" ? "Applied " : "Ran ") + c.name + "."
+    notice = I18n.tr(c.kind === "theme" ? "Applied {name}." : "Ran {name}.", { name: c.name })
   }
   function sellConsumable(i) {
     if (!busy) send({ cmd: "sell_consumable", index: i })
@@ -343,7 +370,7 @@ Window {
   }
   function reroll() {
     if (!shopping) return
-    if (!canPay(game.reroll_cost)) { notice = "Not enough money to reroll."; return }
+    if (!canPay(game.reroll_cost)) { notice = I18n.tr("Not enough money to reroll."); return }
     send({ cmd: "reroll" })
   }
 
@@ -391,7 +418,7 @@ Window {
         : step.source.kind === "held" ? handRepeater.itemAt(step.source.index)
         : step.source.kind === "joker" ? jokerRepeater.itemAt(step.source.index)
         : null
-      if (step.effect === "balance") notice = "Hyprland Dwindle balanced chips and mult"
+      if (step.effect === "balance") notice = I18n.tr("Hyprland Dwindle balanced chips and mult")
       if (view) view.flash(Labels.effect(step.effect), color)
     } else if (stepIndex === steps.length) {
       showTotal = true
@@ -399,7 +426,7 @@ Window {
       stepTimer.interval = 900
     } else {
       stepTimer.stop()
-      notice = scoring.hand_name + ": " + Labels.number(scoring.total) + " points"
+      notice = I18n.tr("{hand}: {points} points", { hand: scoring.hand_name, points: Labels.number(scoring.total) })
         + (scoring.notes.length ? " · " + scoring.notes.join(" ") : "")
       var s = pendingState
       scoring = null
@@ -504,6 +531,7 @@ Window {
     Keys.onPressed: function(event) {
       var k = event.key
       if (k === Qt.Key_Q && (event.modifiers & Qt.ControlModifier)) Qt.quit()
+      else if (k === Qt.Key_L) root.nextLanguage()
       else if (root.resuming) {
         if (k === Qt.Key_Return || k === Qt.Key_Enter) root.resumeGame()
         else if (k === Qt.Key_N) root.declineResume()
@@ -593,7 +621,7 @@ Window {
           // The machine the game is played on.
           Caption {
             visible: root.game !== null && root.game.run_deck !== null
-            text: visible ? "on " + root.game.run_deck.name : ""
+            text: visible ? I18n.tr("on {deck}", { deck: root.game.run_deck.name }) : ""
           }
         }
 
@@ -606,9 +634,10 @@ Window {
             spacing: Style.spacing.xs
             Caption {
               text: root.game
-                ? "Ante " + root.game.ante + (root.endless ? "" : " / " + root.game.winning_ante)
+                ? (root.endless ? I18n.tr("Ante {n}", { n: root.game.ante })
+                    : I18n.tr("Ante {a} / {b}", { a: root.game.ante, b: root.game.winning_ante }))
                   + " · " + (root.currentBlind ? root.currentBlind.name : "")
-                : "Ante"
+                : I18n.tr("Ante")
             }
             Value { text: root.game ? Labels.number(root.game.target) : "–" }
             // The boss's effect, while it applies.
@@ -631,7 +660,7 @@ Window {
             id: scoreCol
             anchors { fill: parent; margins: Style.spacing.xxl }
             spacing: Style.spacing.xs
-            Caption { text: "Blind score" }
+            Caption { text: I18n.tr("Blind score") }
             Value { text: Labels.number(root.shownScore) }
           }
         }
@@ -643,7 +672,7 @@ Window {
             id: moneyCol
             anchors { fill: parent; margins: Style.spacing.xxl }
             spacing: Style.spacing.xs
-            Caption { text: "Money" }
+            Caption { text: I18n.tr("Money") }
             Value { text: root.game ? Labels.money(root.game.money) : "–"; color: Color.accent }
           }
         }
@@ -665,7 +694,7 @@ Window {
             anchors { fill: parent; margins: Style.spacing.xxl }
             spacing: Style.spacing.md
             Text {
-              text: root.handName || "Choose cards"
+              text: root.handName || I18n.tr("Choose cards")
               color: root.handName ? Color.foreground : Color.muted
               font.family: Style.font.family
               font.pixelSize: Style.font.heading
@@ -703,7 +732,7 @@ Window {
             Column {
               id: handsCol
               anchors { fill: parent; margins: Style.spacing.xl }
-              Caption { text: "Hands" }
+              Caption { text: I18n.tr("Hands") }
               Value { text: root.game ? root.game.hands_left : "–"; color: Color.accent }
             }
           }
@@ -713,20 +742,20 @@ Window {
             Column {
               id: discardsCol
               anchors { fill: parent; margins: Style.spacing.xl }
-              Caption { text: "Discards" }
+              Caption { text: I18n.tr("Discards") }
               Value { text: root.game ? root.game.discards_left : "–"; color: Color.urgent }
             }
           }
         }
 
-        Caption { text: root.game ? "Deck: " + root.game.remaining.length + " / " + root.game.deck_size : "" }
+        Caption { text: root.game ? I18n.tr("Deck: {a} / {b}", { a: root.game.remaining.length, b: root.game.deck_size }) : "" }
 
         // Badges won, waiting for their moment.
         Column {
           Layout.fillWidth: true
           visible: root.game !== null && root.game.tags.length > 0
           spacing: Style.spacing.sm
-          Caption { text: "Badges" }
+          Caption { text: I18n.tr("Badges") }
           Flow {
             width: parent.width
             spacing: Style.spacing.sm
@@ -783,7 +812,7 @@ Window {
                   fontSizeMode: Text.HorizontalFit
                   minimumPixelSize: Style.fontPx(0.6)
                   horizontalAlignment: Text.AlignHCenter
-                  text: "select " + Labels.range(modelData.min_cards, modelData.max_cards)
+                  text: I18n.tr("select {range}", { range: Labels.range(modelData.min_cards, modelData.max_cards) })
                 }
                 Row {
                   anchors.horizontalCenter: parent.horizontalCenter
@@ -792,7 +821,7 @@ Window {
                   spacing: Style.spacing.xs
                   Button {
                     compact: true
-                    text: "Apply"
+                    text: I18n.tr("Apply")
                     enabled: root.canUse(modelData)
                     opacity: enabled ? 1 : 0.5
                     onClicked: root.useConsumable(index)
@@ -815,13 +844,13 @@ Window {
           Layout.fillWidth: true
           wrapMode: Text.WordWrap
           text: root.shopping
-            ? "1-6: buy · M: merge · R: reroll\nEnter: next blind · I: fastfetch\nCtrl+Q: quit"
+            ? I18n.tr("1-6: buy · M: merge · R: reroll\nEnter: next blind · I: fastfetch\nCtrl+Q: quit")
             : root.inPack
-            ? (root.packHand ? "1-9, 0: select cards\n" : "1-5: install\n") + "Ctrl+C: skip · I: fastfetch\nCtrl+Q: quit"
+            ? I18n.tr(root.packHand ? "1-9, 0: select cards\n" : "1-5: install\n") + I18n.tr("Ctrl+C: skip · I: fastfetch\nCtrl+Q: quit")
             : root.choosing
-            ? "Enter: play the blind · S: skip it\n" + (root.game.boss_reroll_cost !== null ? "B: reroll the boss · " : "")
-              + "N: new game\nI: fastfetch · Ctrl+Q: quit"
-            : "1-9, 0: choose · Enter: play\nD: discard · Tab: sort\nShift+←/→: move a card\nN: new game · I: fastfetch\nCtrl+Q: quit"
+            ? I18n.tr("Enter: play the blind · S: skip it\n") + (root.game.boss_reroll_cost !== null ? I18n.tr("B: reroll the boss · ") : "")
+              + I18n.tr("N: new game\nI: fastfetch · Ctrl+Q: quit")
+            : I18n.tr("1-9, 0: choose · Enter: play\nD: discard · Tab: sort\nShift+←/→: move a card\nN: new game · I: fastfetch\nCtrl+Q: quit")
         }
       }
 
@@ -834,7 +863,7 @@ Window {
 
         Caption {
           Layout.alignment: Qt.AlignHCenter
-          text: root.game ? "Jokers " + root.game.jokers.length + " / " + root.game.max_jokers : ""
+          text: root.game ? I18n.tr("Jokers {a} / {b}", { a: root.game.jokers.length, b: root.game.max_jokers }) : ""
         }
 
         // Jokers overlap when they no longer fit (Transparent jokers add
@@ -895,7 +924,7 @@ Window {
                 }
                 Button {
                   compact: true
-                  text: "Sell " + Labels.money(modelData.sell_value)
+                  text: I18n.tr("Sell {money}", { money: Labels.money(modelData.sell_value) })
                   onClicked: root.sell(index)
                 }
                 Button {
@@ -920,7 +949,7 @@ Window {
           spacing: Style.spacing.xxl
           readonly property real gap: Style.space(16)
           readonly property real zonePadding: 2 * Style.spacing.xxl
-          readonly property real buttonsWidth: Style.space(160)
+          readonly property real buttonsWidth: Style.space(190)
           // Items get narrower when a column has more of them (More
           // Workspaces, PRs: welcome).
           readonly property int vouchers: root.game ? root.game.vouchers_for_sale.length : 0
@@ -953,14 +982,14 @@ Window {
                 spacing: Style.spacing.lg
                 Button {
                   width: shop.buttonsWidth
-                  text: "Next blind (Enter)"
+                  text: I18n.tr("Next blind (Enter)")
                   bordered: true
                   enabled: root.shopping
                   onClicked: root.confirm()
                 }
                 Button {
                   width: shop.buttonsWidth
-                  text: "Reroll (R) · " + (root.game ? Labels.money(root.game.reroll_cost) : "")
+                  text: I18n.tr("Reroll (R) · {money}", { money: root.game ? Labels.money(root.game.reroll_cost) : "" })
                   bordered: true
                   enabled: root.shopping && root.canPay(root.game.reroll_cost)
                   opacity: enabled ? 1 : 0.5
@@ -971,7 +1000,7 @@ Window {
 
             ShopZone {
               id: offersZone
-              title: "Offers"
+              title: I18n.tr("Offers")
                 Repeater {
                   model: root.game ? root.game.shop : []
                   Column {
@@ -1020,7 +1049,7 @@ Window {
                   verticalAlignment: Text.AlignVCenter
                   horizontalAlignment: Text.AlignHCenter
                   wrapMode: Text.WordWrap
-                  text: "Sold out: reroll for new offers."
+                  text: I18n.tr("Sold out: reroll for new offers.")
                 }
             }
 
@@ -1032,7 +1061,7 @@ Window {
               height: pullRequests.visible ? pullRequests.height : 1
               ShopZone {
                 id: pullRequests
-                title: "Pull request"
+                title: I18n.tr("Pull request")
                 visible: shop.vouchers > 0
                   Repeater {
                     model: root.game ? root.game.vouchers_for_sale : []
@@ -1060,7 +1089,7 @@ Window {
 
             // Packs, opened on the spot.
             ShopZone {
-              title: "Packages"
+              title: I18n.tr("Packages")
               visible: root.game !== null && root.game.packs.length > 0
                 Repeater {
                   model: root.game ? root.game.packs : []
@@ -1255,14 +1284,14 @@ Window {
           visible: !root.shopping && !root.choosing && !root.inPack
           spacing: Style.spacing.xxl
           Button {
-            text: "Play hand"
+            text: I18n.tr("Play hand")
             bordered: true
             enabled: root.playing && root.selected.length > 0
             opacity: enabled ? 1 : 0.5
             onClicked: root.play()
           }
           Button {
-            text: "Discard"
+            text: I18n.tr("Discard")
             bordered: true
             enabled: root.playing && root.selected.length > 0 && root.game.discards_left > 0
             opacity: enabled ? 1 : 0.5
@@ -1274,13 +1303,13 @@ Window {
             spacing: Style.spacing.md
             Caption {
               anchors.verticalCenter: parent.verticalCenter
-              text: "Sort (Tab)"
+              text: I18n.tr("Sort (Tab)")
             }
             Repeater {
               model: [["rank", "Rank"], ["suit", "Suit"]]
               Button {
                 compact: true
-                text: modelData[1]
+                text: I18n.tr(modelData[1])
                 bordered: root.game !== null && root.game.sort_by === modelData[0]
                 enabled: root.selecting
                 opacity: enabled ? 1 : 0.5
@@ -1316,7 +1345,7 @@ Window {
 
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: endCol.victory ? "Omarchy achieved!" : endCol.won ? "Blind won!" : "Game over"
+            text: I18n.tr(endCol.victory ? "Omarchy achieved!" : endCol.won ? "Blind won!" : "Game over")
             color: endCol.won ? Color.accent : Color.urgent
             font.family: Style.font.family
             font.pixelSize: Style.font.displayLarge
@@ -1328,8 +1357,8 @@ Window {
             wrapMode: Text.WordWrap
             visible: endCol.victory || !endCol.won
             text: endCol.victory
-              ? "Ante " + root.game.winning_ante + " beaten. Go post your setup on r/unixporn."
-              : "Have you tried rebooting?"
+              ? I18n.tr("Ante {n} beaten. Go post your setup on r/unixporn.", { n: root.game.winning_ante })
+              : I18n.tr("Have you tried rebooting?")
             color: Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.body
@@ -1366,12 +1395,12 @@ Window {
               model: {
                 var r = root.game && root.game.reward
                 if (!r) return []
-                var lines = [["Blind", r.blind], ["Hands left", r.hands], ["Interest", r.interest]]
-                if (r.jokers > 0) lines.push(["Jokers", r.jokers])
-                if (r.cards > 0) lines.push(["Enterprise cards", r.cards])
-                if (r.badges > 0) lines.push(["Badges", r.badges])
-                if (r.discards > 0) lines.push(["Discards left", r.discards])
-                lines.push(["Total", r.total])
+                var lines = [[I18n.tr("Blind"), r.blind], [I18n.tr("Hands left"), r.hands], [I18n.tr("Interest"), r.interest]]
+                if (r.jokers > 0) lines.push([I18n.tr("Jokers"), r.jokers])
+                if (r.cards > 0) lines.push([I18n.tr("Enterprise cards"), r.cards])
+                if (r.badges > 0) lines.push([I18n.tr("Badges"), r.badges])
+                if (r.discards > 0) lines.push([I18n.tr("Discards left"), r.discards])
+                lines.push([I18n.tr("Total"), r.total])
                 var cells = []
                 for (var i = 0; i < lines.length; i++)
                   cells.push({ text: lines[i][0], value: false, last: i === lines.length - 1 },
@@ -1392,13 +1421,13 @@ Window {
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: Style.spacing.xxl
             Button {
-              text: endCol.victory ? "Endless mode (Enter)" : endCol.won ? "Cash out (Enter)" : "New game (Enter)"
+              text: I18n.tr(endCol.victory ? "Endless mode (Enter)" : endCol.won ? "Cash out (Enter)" : "New game (Enter)")
               bordered: true
               onClicked: root.confirm()
             }
             Button {
               visible: endCol.victory
-              text: "New game (N)"
+              text: I18n.tr("New game (N)")
               bordered: true
               onClicked: root.newGame()
             }
@@ -1428,6 +1457,7 @@ Window {
       visible: root.choosingDeck
       decks: root.decks
       message: root.saveProblem
+      onLanguage: function(lang) { root.setLanguage(lang) }
       canCancel: root.game !== null
       onStart: function(deck) { root.startGame(deck) }
       onCancel: root.choosingDeck = false
