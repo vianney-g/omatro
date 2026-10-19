@@ -3,9 +3,10 @@
 use crate::blind::{self, BlindKind, WINNING_ANTE};
 use crate::boss::Boss;
 use crate::card::{ACE, Card, Suit, standard_deck};
+use crate::collection::Item;
 use crate::consumable::{CONSUMABLE_SLOTS, Command, Consumable, Oligarchy, Theme};
 use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, Rules, evaluate_with};
-use crate::joker::{Board, Bonus, Joker, OwnedJoker, Rarity, SYNCTHING_BLINDS, Targets};
+use crate::joker::{Board, BlindEnd, Bonus, Joker, OwnedJoker, Rarity, SYNCTHING_BLINDS, Targets};
 use crate::modifier::{Edition, Enhancement, Seal};
 use crate::pack::{Pack, PackKind, SHOP_PACKS};
 use crate::rng::Rng;
@@ -260,6 +261,10 @@ pub struct DeckInfo {
     pub name: &'static str,
     pub description: &'static str,
     pub quip: &'static str,
+    /// A hidden deck not unlocked yet: the achievement it waits for, and
+    /// what that takes.
+    pub achievement: Option<&'static str>,
+    pub condition: Option<&'static str>,
 }
 
 impl From<Deck> for DeckInfo {
@@ -269,6 +274,8 @@ impl From<Deck> for DeckInfo {
             name: deck.name(),
             description: deck.description(),
             quip: deck.quip(),
+            achievement: None,
+            condition: None,
         }
     }
 }
@@ -650,6 +657,21 @@ enum Offer {
     Card(Card),
 }
 
+/// Something that happened in the game, for the profile: the collection
+/// and the achievements (`Game::take_events`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Event {
+    /// Obtained without staying in the game: a consumable used, a badge
+    /// won, a pack opened, a boss beaten.
+    Obtained(Item),
+    HandPlayed { kind: HandKind, total: f64 },
+    BlindWon { boss: bool, hands: usize, discards: u32 },
+    JokerSold,
+    /// Rerolls in this shop so far.
+    Rerolled { in_shop: u32 },
+    GameOver { won: bool },
+}
+
 /// The whole game, saved as it is (`Session` writes it after each command):
 /// fields added later need `#[serde(default)]` for older saves to load.
 #[derive(Serialize, Deserialize)]
@@ -762,6 +784,21 @@ pub struct Game {
     /// (then it keeps its order, and drawn cards go to the right).
     sort_by: SortBy,
     arranged: bool,
+    /// Hidden jokers the player has not unlocked: never offered.
+    #[serde(default)]
+    locked: Vec<Joker>,
+    /// A cheat was used: the game counts for no achievement.
+    #[serde(default)]
+    cheated: bool,
+    /// Most jokers held at once (Bare Metal).
+    #[serde(default)]
+    most_jokers: usize,
+    /// Rerolls in this shop (Sunk Cost).
+    #[serde(default)]
+    shop_rerolls: u32,
+    /// What happened since the session last looked.
+    #[serde(skip)]
+    events: Vec<Event>,
 }
 
 impl Game {
@@ -842,6 +879,11 @@ impl Game {
             free_rerolls: 0,
             sort_by: SortBy::Rank,
             arranged: false,
+            locked: Vec::new(),
+            cheated: false,
+            most_jokers: 0,
+            shop_rerolls: 0,
+            events: Vec::new(),
         };
         game.set_up_deck();
         game.starting_deck = game.deck.len();
@@ -855,6 +897,76 @@ impl Game {
     /// The game is lost: nothing left to resume.
     pub fn is_over(&self) -> bool {
         self.phase == Phase::Lost
+    }
+
+    /// Keeps these hidden jokers out of the game (not unlocked yet).
+    pub fn lock(&mut self, jokers: Vec<Joker>) {
+        self.locked = jokers;
+    }
+
+    /// The hidden jokers kept out of this game.
+    pub fn locked(&self) -> &[Joker] {
+        &self.locked
+    }
+
+    /// The game was helped (debug jokers): it counts for no achievement.
+    pub fn mark_cheated(&mut self) {
+        self.cheated = true;
+    }
+
+    pub fn cheated(&self) -> bool {
+        self.cheated
+    }
+
+    pub fn money(&self) -> i64 {
+        self.money
+    }
+
+    pub fn ante(&self) -> u32 {
+        self.ante
+    }
+
+    /// Most jokers held at once so far.
+    pub fn most_jokers(&self) -> usize {
+        self.most_jokers.max(self.jokers.len())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn events_for_tests(&mut self, events: Vec<Event>) {
+        self.events = events;
+    }
+
+    /// What happened since the last call.
+    pub fn take_events(&mut self) -> Vec<Event> {
+        self.most_jokers = self.most_jokers();
+        std::mem::take(&mut self.events)
+    }
+
+    /// What the game holds now, for the collection: jokers and their
+    /// editions, the deck, merged pull requests, the clipboard, the modifiers
+    /// of the cards, and the hand types played.
+    pub fn owned_items(&self) -> Vec<Item> {
+        let mut items: Vec<Item> = Vec::new();
+        items.extend(self.run_deck.map(Item::Deck));
+        for joker in &self.jokers {
+            items.push(Item::Joker(joker.joker));
+            items.extend(joker.edition.map(Item::Edition));
+        }
+        items.extend(self.vouchers.iter().map(|&v| Item::Voucher(v)));
+        items.extend(self.consumables.iter().map(|h| Item::Consumable(h.consumable)));
+        for card in &self.deck {
+            items.extend(card.enhancement.map(Item::Enhancement));
+            items.extend(card.seal.map(Item::Seal));
+            items.extend(card.edition.map(Item::Edition));
+        }
+        items.extend(
+            HandKind::ALL
+                .into_iter()
+                .filter(|&k| self.plays.get(k) > 0)
+                .map(Item::Hand),
+        );
+        items.dedup();
+        items
     }
 
     fn deck_is(&self, deck: Deck) -> bool {
@@ -897,6 +1009,13 @@ impl Game {
                     };
                 }
             }
+            Deck::Raid1 => {
+                let copies: Vec<Card> = self.deck.clone();
+                for card in copies {
+                    self.next_card_id += 1;
+                    self.deck.push(card.with_id(self.next_card_id - 1));
+                }
+            }
             Deck::LiveUsb => {
                 for card in &mut self.deck {
                     card.rank = 2 + self.card_rng.below(13) as u8;
@@ -921,6 +1040,7 @@ impl Game {
     /// Wins a badge: badges: 2x waits to copy the next one; the others act
     /// right away or wait for the next shop, blind or boss.
     fn gain_tag(&mut self, tag: Tag) {
+        self.events.push(Event::Obtained(Item::Tag(tag)));
         if tag == Tag::Badges2x {
             self.tags.push(tag);
             return;
@@ -1357,7 +1477,7 @@ impl Game {
         let studio = if self.deck_is(Deck::StudioDisplay) {
             2
         } else {
-            0
+            usize::from(self.deck_is(Deck::Raid1))
         };
         let swap: usize = self
             .jokers
@@ -1891,6 +2011,10 @@ impl Game {
     /// After any hand: Incident Commander pays if the boss struck, The OOM
     /// Killer discards 2 cards, then the blind is won, lost or goes on.
     fn end_hand(&mut self, mut breakdown: Breakdown, triggered: bool) -> Breakdown {
+        self.events.push(Event::HandPlayed {
+            kind: breakdown.hand,
+            total: breakdown.total,
+        });
         let commanders = self.abilities(Joker::IncidentCommander) as u32;
         if triggered && commanders > 0 {
             self.money += 8 * commanders as i64;
@@ -1937,6 +2061,7 @@ impl Game {
             }
             _ => {
                 self.phase = Phase::Lost;
+                self.events.push(Event::GameOver { won: false });
                 None
             }
         }
@@ -2078,10 +2203,15 @@ impl Game {
             }
         }
         let boss = self.blind == BlindKind::Boss;
+        let end = BlindEnd {
+            boss,
+            last_hand: self.hands_left == 0,
+            one_hand: self.blind_hands.len() == 1,
+        };
         let rng = &mut self.round_rng;
         let mut broke_beta = false;
         self.jokers.retain_mut(|joker| {
-            let kept = joker.end_of_blind(boss, rng);
+            let kept = joker.end_of_blind(end, rng);
             if !kept {
                 reward.notes.push(format!("{} broke.", joker.joker.name()));
                 broke_beta |= joker.joker == Joker::BetaRelease;
@@ -2117,6 +2247,17 @@ impl Game {
         }
         self.reward = Some(reward);
         self.victory = self.ante == WINNING_ANTE && boss;
+        self.events.push(Event::BlindWon {
+            boss,
+            hands: self.blind_hands.len(),
+            discards: self.discards_used,
+        });
+        if boss {
+            self.events.push(Event::Obtained(Item::Boss(self.boss)));
+        }
+        if self.victory {
+            self.events.push(Event::GameOver { won: true });
+        }
     }
 
     /// The hand the chosen cards would make, without playing them.
@@ -2257,6 +2398,7 @@ impl Game {
         self.hand.clear();
         self.reroll_cost = self.base_reroll_cost();
         self.free_rerolls = self.count(Joker::Paru) as u32;
+        self.shop_rerolls = 0;
         self.roll_offers();
         self.packs = (0..SHOP_PACKS).map(|_| self.roll_pack()).collect();
         self.shop_tags();
@@ -2276,7 +2418,8 @@ impl Game {
             Joker::StableRelease => self.beta_broken,
             _ => true,
         };
-        !owned && !offered && lifecycle && joker.rarity() != Rarity::Legendary
+        let hidden = self.locked.contains(&joker);
+        !owned && !offered && lifecycle && !hidden && joker.rarity() != Rarity::Legendary
     }
 
     /// Draws new offers: for each slot, a joker (weight 20), a theme (4) or a
@@ -2541,6 +2684,7 @@ impl Game {
         }
         let sold = self.jokers.remove(index);
         self.money += sold.sell_value() as i64;
+        self.events.push(Event::JokerSold);
         match sold.joker {
             Joker::StickerPack => self.gain_tag(Tag::Badges2x),
             Joker::Syncthing if sold.counter >= SYNCTHING_BLINDS && !self.jokers.is_empty() => {
@@ -2825,6 +2969,7 @@ impl Game {
     }
 
     fn apply_consumable(&mut self, consumable: Consumable, targets: &[usize]) {
+        self.events.push(Event::Obtained(Item::Consumable(consumable)));
         match consumable {
             Consumable::Theme(theme) => {
                 self.levels.raise(theme.hand(), 1);
@@ -3108,6 +3253,7 @@ impl Game {
     /// Draws a pack's cards, without duplicates; a coreutils pack also draws a
     /// hand from the deck for its commands.
     fn open_pack(&mut self, pack: Pack) {
+        self.events.push(Event::Obtained(Item::Pack(pack.kind)));
         let mut items: Vec<PackItem> = Vec::new();
         // Theme Preview: the theme of the most played hand comes first.
         if pack.kind == PackKind::Base16 && self.has(Voucher::ThemePreview) {
@@ -3285,6 +3431,10 @@ impl Game {
         for joker in &mut self.jokers {
             joker.on_reroll();
         }
+        self.shop_rerolls += 1;
+        self.events.push(Event::Rerolled {
+            in_shop: self.shop_rerolls,
+        });
         self.roll_offers();
         Ok(())
     }
@@ -3311,6 +3461,7 @@ impl Game {
     }
 
     pub fn cheat(&mut self, cheat: Cheat) -> Result<(), GameError> {
+        self.cheated = true;
         if let Some(money) = cheat.money {
             self.money = money as i64;
         }
@@ -5296,9 +5447,9 @@ mod tests {
         assert_eq!((game.hands_left, game.discards_left), (HANDS_PER_BLIND + 3, 0));
         let mut swap = OwnedJoker::new(Joker::SwapFile, None);
         for _ in 0..4 {
-            assert!(swap.end_of_blind(false, &mut Rng::new(1)));
+            assert!(swap.end_of_blind(BlindEnd::default(), &mut Rng::new(1)));
         }
-        assert!(!swap.end_of_blind(false, &mut Rng::new(1)));
+        assert!(!swap.end_of_blind(BlindEnd::default(), &mut Rng::new(1)));
     }
 
     #[test]
@@ -5456,5 +5607,88 @@ mod tests {
         }
         assert!(seen.len() > 1);
         assert!(game.state().jokers[0].bonus.as_ref().unwrap().text.starts_with("$4 for "));
+    }
+
+    #[test]
+    fn locked_jokers_are_never_offered() {
+        let hidden = [
+            Joker::HashCollision,
+            Joker::Postmortem,
+            Joker::SingleBinary,
+            Joker::IntegerOverflow,
+        ];
+        let mut offered = HashSet::new();
+        for seed in 0..40 {
+            let mut game = won_game(seed, vec![]);
+            game.lock(hidden.to_vec());
+            game.cash_out().unwrap();
+            game.money = 10_000;
+            for _ in 0..40 {
+                offered.extend(game.offers.iter().filter_map(offered_joker));
+                game.reroll().unwrap();
+            }
+            for _ in 0..5 {
+                offered.extend(game.random_joker_of(Rarity::Extra));
+                offered.extend(game.random_joker_of(Rarity::Aur));
+            }
+        }
+        assert!(hidden.iter().all(|j| !offered.contains(j)));
+        assert!(offered.len() > 100);
+    }
+
+    #[test]
+    fn raid_1_mirrors_every_card() {
+        let game = Game::with_deck(5, vec![], Some(Deck::Raid1));
+        assert_eq!(game.deck.len(), 104);
+        let ids: HashSet<u32> = game.deck.iter().map(|c| c.id).collect();
+        assert_eq!(ids.len(), 104);
+        assert_eq!(game.hand_size(), HAND_SIZE + 1);
+    }
+
+    #[test]
+    fn hash_collision_and_single_binary() {
+        let mut game = playing(3, vec![Joker::HashCollision]);
+        game.hand = cards("KH KH 9S 7C 5H 4D 3S 2C");
+        assert_eq!(game.play(&[0, 1]).unwrap().mult, 4.0);
+        game.hand = cards("KH KD 9S 7C 5H 4D 3S 2C");
+        assert_eq!(game.play(&[0, 1]).unwrap().mult, 2.0);
+
+        let mut game = playing(3, vec![Joker::SingleBinary]);
+        game.hand = cards("KH QD 9S 7C 5H 4D 3S 2C");
+        assert_eq!(game.play(&[0]).unwrap().mult, 3.0);
+        game.jokers.push(OwnedJoker::new(Joker::Dotfiles, None));
+        game.hand = cards("KH QD 9S 7C 5H 4D 3S 2C");
+        assert_eq!(game.play(&[0]).unwrap().mult, 1.0);
+    }
+
+    #[test]
+    fn postmortem_and_integer_overflow_grow_with_how_blinds_are_won() {
+        let mut game = playing(3, vec![Joker::Postmortem, Joker::IntegerOverflow]);
+        // Won in one hand: Integer Overflow doubles, Postmortem waits.
+        game.cheat(Cheat::default()).unwrap();
+        game.blind_hands.push(HandKind::Pair);
+        game.score = game.target();
+        game.win_blind();
+        let counters = |g: &Game| (g.jokers[0].counter, g.jokers[1].counter);
+        assert_eq!(counters(&game), (1.0, 2.0));
+        // Won on the last of several hands.
+        game.blind_hands.push(HandKind::Pair);
+        game.hands_left = 0;
+        game.win_blind();
+        assert_eq!(counters(&game), (1.5, 1.0));
+    }
+
+    #[test]
+    fn events_tell_what_was_obtained_and_done() {
+        let mut game = shopping(9, vec![Joker::Dotfiles]);
+        game.take_events();
+        game.reroll().unwrap();
+        game.sell(0).unwrap();
+        assert_eq!(
+            game.take_events(),
+            [Event::Rerolled { in_shop: 1 }, Event::JokerSold]
+        );
+        assert_eq!(game.most_jokers(), 1);
+        assert!(game.owned_items().iter().all(|i| !matches!(i, Item::Joker(_))));
     }
 }

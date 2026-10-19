@@ -1,7 +1,9 @@
 //! Human-readable references in `docs/`, generated from the code. A test fails
 //! when one no longer matches; `make docs` rewrites them.
 
+use crate::achievement::Achievement;
 use crate::boss::Boss;
+use crate::collection::Item;
 use crate::consumable::{Command, Oligarchy, Theme};
 use crate::hand::HandKind;
 use crate::joker::{Edition, Joker};
@@ -25,6 +27,11 @@ fn cell(text: &str) -> String {
     text.replace('|', "\\|")
 }
 
+/// " · hidden: Duplicate Detected" for an item an achievement unlocks.
+fn hidden(item: Item) -> String {
+    Achievement::unlocking(item).map_or_else(String::new, |a| format!(" · hidden: {}", a.name()))
+}
+
 fn header(title: &str, intro: &str) -> String {
     format!(
         "# {title}\n\n\
@@ -46,15 +53,18 @@ fn jokers() -> String {
          While a hand is scored, each scoring card scores its chips, then card jokers\n\
          trigger, and retriggers score it again; then jokers trigger for the cards\n\
          held in hand; then each joker, left to right, adds its effect. Order matters:\n\
-         Fork copies the joker on its right.",
+         Fork copies the joker on its right.\n\n\
+         Hidden jokers only show up once their achievement is done (see\n\
+         [achievements.md](achievements.md)).",
     );
     doc += "| Id | Name | Rarity | Price | Effect | Quip |\n|---|---|---|---|---|---|\n";
     for joker in jokers {
         doc += &format!(
-            "| `{}` | {} | {} | ${} | {} | *{}* |\n",
+            "| `{}` | {} | {}{} | ${} | {} | *{}* |\n",
             id(joker),
             joker.name(),
             joker.rarity().name(),
+            hidden(Item::Joker(joker)),
             joker.price(),
             joker.description(),
             cell(joker.quip())
@@ -342,16 +352,43 @@ fn decks() -> String {
     let mut doc = header(
         "Decks",
         "The machine a game is played on (decks, in the original), chosen on the new\n\
-         game screen: an advantage, sometimes a drawback.",
+         game screen: an advantage, sometimes a drawback. A hidden deck waits for\n\
+         its achievement (see [achievements.md](achievements.md)).",
     );
     doc += "| Id | Deck | Effect | Quip |\n|---|---|---|---|\n";
     for deck in Deck::ALL {
         doc += &format!(
-            "| `{}` | {} | {} | *{}* |\n",
+            "| `{}` | {} | {}{} | *{}* |\n",
             id(deck),
             deck.name(),
             deck.description(),
+            hidden(Item::Deck(deck)),
             cell(deck.quip())
+        );
+    }
+    doc
+}
+
+fn achievements() -> String {
+    let mut doc = header(
+        "Achievements",
+        "Feats kept in the profile from one game to the next, with the collection:\n\
+         every joker, deck, consumable, pull request, badge, boss, package, modifier\n\
+         and hand type, found once obtained in a game (a joker bought, a badge won, a\n\
+         boss beaten…). Some achievements unlock a hidden item, which games never\n\
+         offer before. A game where a cheat was used still fills the collection, but\n\
+         counts for no achievement.",
+    );
+    doc += "| Id | Achievement | Condition | Unlocks | Quip |\n|---|---|---|---|---|\n";
+    for a in Achievement::ALL {
+        doc += &format!(
+            "| `{}` | {} | {} | {} | *{}* |\n",
+            id(a),
+            a.name(),
+            a.description(),
+            a.unlocks()
+                .map_or_else(String::new, |i| format!("{} ({})", i.name(), i.family().singular())),
+            cell(a.quip())
         );
     }
     doc
@@ -359,7 +396,8 @@ fn decks() -> String {
 
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 12] = [
+    let docs: [(&str, fn() -> String); 13] = [
+        ("achievements.md", achievements),
         ("jokers.md", jokers),
         ("editions.md", editions),
         ("hands.md", hands),

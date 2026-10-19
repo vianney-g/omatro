@@ -15,6 +15,7 @@ Rectangle {
   signal start(string deck)
   signal cancel()
   signal language(string lang)
+  signal collection()
 
   color: Util.alpha(Color.background, 0.96)
 
@@ -39,6 +40,7 @@ Rectangle {
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
       text: I18n.tr("Pick your machine · arrows to choose · Enter to start") + (root.canCancel ? I18n.tr(" · Escape to go back") : "")
+        + I18n.tr(" · C: collection")
       color: Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
@@ -60,6 +62,8 @@ Rectangle {
         model: root.decks
         Rectangle {
           readonly property bool chosen: index === root.current
+          // A hidden deck, until its achievement.
+          readonly property bool locked: !!modelData.achievement
           width: Style.space(285)
           height: Style.space(88)
           radius: Style.cornerRadius
@@ -67,6 +71,30 @@ Rectangle {
           border.width: chosen ? Style.space(2) : Style.normalBorderWidth
           border.color: chosen ? Color.accent : Style.normalBorderColor
           Column {
+            visible: locked
+            anchors { fill: parent; margins: Style.space(8) }
+            spacing: Style.space(3)
+            Text {
+              text: "?????"
+              color: Color.urgent
+              font.family: Style.font.family
+              font.pixelSize: Style.font.subtitle
+              font.bold: true
+            }
+            Text {
+              width: parent.width
+              wrapMode: Text.WordWrap
+              maximumLineCount: 2
+              elide: Text.ElideRight
+              text: locked ? I18n.tr("Hidden: {achievement}", { achievement: modelData.achievement })
+                + " · " + I18n.tr(modelData.condition) : ""
+              color: Color.muted
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+          }
+          Column {
+            visible: !locked
             anchors { fill: parent; margins: Style.space(8) }
             spacing: Style.space(3)
             Text {
@@ -101,9 +129,9 @@ Rectangle {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.current === index ? root.start(modelData.id) : root.current = index
+            onClicked: root.current === index && !parent.locked ? root.start(modelData.id) : root.current = index
             // Its terms explained beside it (Glossary).
-            onContainsMouseChanged: containsMouse
+            onContainsMouseChanged: containsMouse && !parent.locked
               ? Hints.show(parent, modelData.description, modelData.name) : Hints.hide(parent)
           }
         }
@@ -137,8 +165,12 @@ Rectangle {
       spacing: Style.spacing.xxl
       Button {
         text: I18n.tr("Start (Enter)")
-        enabled: root.decks.length > 0
+        enabled: root.decks.length > 0 && !root.decks[root.current].achievement
         onClicked: root.start(root.decks[root.current].id)
+      }
+      Button {
+        text: I18n.tr("Collection (C)")
+        onClicked: root.collection()
       }
       Button {
         visible: root.canCancel

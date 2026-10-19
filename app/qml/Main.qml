@@ -46,7 +46,13 @@ Window {
   function receive(line) {
     var r
     try { r = JSON.parse(line) } catch (e) { notice = I18n.tr("Unreadable response from the engine."); return }
+    // What the collection gained: shown once a hand's score is told.
+    if (r.news) {
+      if (r.event === "scored") pendingNews = pendingNews.concat(r.news)
+      else showNews(r.news)
+    }
     if (r.event === "state") applyState(r.state)
+    else if (r.event === "collection") collection = r.collection
     else if (r.event === "preview") showPreview(r)
     else if (r.event === "scored") startScoring(r)
     else if (r.event === "error") notice = r.message
@@ -101,6 +107,36 @@ Window {
   property real shownScore: 0
   property string notice: ""
   property bool infoOpen: false   // fastfetch panel
+
+  // ---- collection and achievements (C), and what they gain (news)
+  property var collection: null
+  property bool collectionOpen: false
+  property var pendingNews: []
+  property var news: []           // shown at the top right, oldest first
+  function openCollection() {
+    send({ cmd: "collection" })
+    collectionOpen = true
+  }
+  function showNews(items) {
+    // Many finds at once make a single line.
+    var found = items.filter(function(n) { return n.kind === "found" })
+    var shown = items.filter(function(n) { return n.kind !== "found" })
+    if (found.length > 3)
+      shown.unshift({ kind: "found", name: I18n.tr("{n} new things", { n: found.length }), text: "" })
+    else
+      shown = found.concat(shown)
+    news = news.concat(shown).slice(-6)
+    newsTimer.restart()
+  }
+  Timer {
+    id: newsTimer
+    interval: 3500
+    repeat: true
+    onTriggered: {
+      root.news = root.news.slice(1)
+      if (root.news.length === 0) stop()
+    }
+  }
   Behavior on shownScore { NumberAnimation { duration: 900; easing.type: Easing.OutCubic } }
   // Flames on the blind score while a single hand beats the blind: 1 at the
   // target, 2 at 1.5×, 3 at 3×; they die down a moment after the hand.
@@ -167,6 +203,7 @@ Window {
     send({ cmd: "glossary" })
     send({ cmd: "decks" })
     if (resuming) send({ cmd: "saved_game" })
+    if (collectionOpen) send({ cmd: "collection" })
     if (game !== null && !busy) send({ cmd: "state" })
   }
   // L: the next language.
@@ -191,7 +228,8 @@ Window {
   }
 
   function newGame() {
-    if (decks.length === 0) send({ cmd: "decks" })
+    // Again each time: a deck may have been unlocked since.
+    send({ cmd: "decks" })
     if (Hints.terms.length === 0) send({ cmd: "glossary" })
     var last = decks.findIndex(function(d) { return d.id === settings.lastDeck })
     newGameScreen.current = Math.max(0, last)
@@ -461,6 +499,10 @@ Window {
       pendingState = null
       showTotal = false
       applyState(s)
+      if (pendingNews.length) {
+        showNews(pendingNews)
+        pendingNews = []
+      }
       fireOut.restart()
     }
   }
@@ -567,13 +609,23 @@ Window {
         else if (k === Qt.Key_N) root.declineResume()
         else return
       }
+      else if (root.collectionOpen) {
+        if (k === Qt.Key_Escape || k === Qt.Key_C) root.collectionOpen = false
+        else if (k === Qt.Key_Left) collectionScreen.move(-1)
+        else if (k === Qt.Key_Right) collectionScreen.move(1)
+        else if (k === Qt.Key_Up) collectionScreen.scroll(-1)
+        else if (k === Qt.Key_Down) collectionScreen.scroll(1)
+        else return
+      }
+      else if (k === Qt.Key_C && !(event.modifiers & Qt.ControlModifier)) root.openCollection()
       else if (root.choosingDeck) {
         if (k === Qt.Key_Left) newGameScreen.move(-1)
         else if (k === Qt.Key_Right) newGameScreen.move(1)
         else if (k === Qt.Key_Up) newGameScreen.move(-3)
         else if (k === Qt.Key_Down) newGameScreen.move(3)
         else if (k === Qt.Key_Return || k === Qt.Key_Enter) {
-          if (root.decks.length) root.startGame(root.decks[newGameScreen.current].id)
+          var chosen = root.decks[newGameScreen.current]
+          if (chosen && !chosen.achievement) root.startGame(chosen.id)
         }
         else if (k === Qt.Key_Escape && root.game !== null) root.choosingDeck = false
         else return
@@ -944,13 +996,13 @@ Window {
           Layout.fillWidth: true
           wrapMode: Text.WordWrap
           text: root.shopping
-            ? I18n.tr("1-6: buy · M: merge · R: reroll\nEnter: next blind · I: fastfetch\nCtrl+Q: quit")
+            ? I18n.tr("1-6: buy · M: merge · R: reroll\nEnter: next blind · I: fastfetch · C: collection\nCtrl+Q: quit")
             : root.inPack
-            ? I18n.tr(root.packHand ? "1-9, 0: select cards\n" : "1-5: install\n") + I18n.tr("Ctrl+C: skip · I: fastfetch\nCtrl+Q: quit")
+            ? I18n.tr(root.packHand ? "1-9, 0: select cards\n" : "1-5: install\n") + I18n.tr("Ctrl+C: skip · I: fastfetch\nC: collection · Ctrl+Q: quit")
             : root.choosing
             ? I18n.tr("Enter: play the blind · S: skip it\n") + (root.game.boss_reroll_cost !== null ? I18n.tr("B: reroll the boss · ") : "")
-              + I18n.tr("N: new game\nI: fastfetch · Ctrl+Q: quit")
-            : I18n.tr("1-9, 0: choose · Enter: play\nD: discard · Tab: sort\nShift+←/→: move a card\nN: new game · I: fastfetch\nCtrl+Q: quit")
+              + I18n.tr("N: new game · C: collection\nI: fastfetch · Ctrl+Q: quit")
+            : I18n.tr("1-9, 0: choose · Enter: play\nD: discard · Tab: sort\nShift+←/→: move a card\nN: new game · I: fastfetch\nC: collection · Ctrl+Q: quit")
         }
       }
 
@@ -1573,6 +1625,54 @@ Window {
       canCancel: root.game !== null
       onStart: function(deck) { root.startGame(deck) }
       onCancel: root.choosingDeck = false
+      onCollection: root.openCollection()
+    }
+
+    // ---- the collection and the achievements
+    Collection {
+      id: collectionScreen
+      anchors.fill: parent
+      visible: root.collectionOpen
+      collection: root.collection
+      onClose: root.collectionOpen = false
+    }
+
+    // ---- news: items found, achievements done, what they unlocked
+    Column {
+      anchors { top: parent.top; right: parent.right; margins: Style.spacing.huge }
+      spacing: Style.spacing.md
+      Repeater {
+        model: root.news
+        Rectangle {
+          readonly property bool feat: modelData.kind !== "found"
+          anchors.right: parent.right
+          width: newsText.implicitWidth + 2 * Style.spacing.xl
+          height: newsText.implicitHeight + 2 * Style.spacing.lg
+          radius: Style.cornerRadius
+          color: Qt.tint(Color.background, Util.alpha(feat ? Color.warm : Color.accent, 0.15))
+          border.width: Style.space(2)
+          border.color: feat ? Color.warm : Color.accent
+          Column {
+            id: newsText
+            anchors.centerIn: parent
+            spacing: Style.spacing.xs
+            Text {
+              text: I18n.tr(modelData.kind === "achievement" ? "Achievement unlocked"
+                : modelData.kind === "unlocked" ? "Now in your games" : "New in the collection")
+              color: Color.muted
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+            Text {
+              text: modelData.name + (modelData.text ? " · " + modelData.text : "")
+              color: feat ? Color.warm : Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              font.bold: true
+            }
+          }
+        }
+      }
     }
 
     // ---- at start: resume the game left in progress

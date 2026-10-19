@@ -226,6 +226,10 @@ pub enum Joker {
     TransitiveDependencies,
     RmRfNodeModules,
     DistroHopping,
+    HashCollision,
+    Postmortem,
+    SingleBinary,
+    IntegerOverflow,
 }
 
 /// What the jokers that aim at something get at each blind.
@@ -375,6 +379,16 @@ impl HandContext<'_> {
     }
 }
 
+/// Hash Collision: two cards of the same rank and suit.
+fn has_twins(cards: &[Card]) -> bool {
+    cards.iter().enumerate().any(|(i, a)| {
+        a.has_rank()
+            && cards[i + 1..]
+                .iter()
+                .any(|b| b.has_rank() && b.rank == a.rank && b.suit == a.suit)
+    })
+}
+
 /// Split Brain: a club and a card of another suit, two different cards.
 fn split_brain(cards: &[Card]) -> bool {
     let others = [Suit::Hearts, Suit::Diamonds, Suit::Spades];
@@ -428,7 +442,7 @@ fn is_even(card: Card) -> bool {
 }
 
 impl Joker {
-    pub const ALL: [Joker; 154] = [
+    pub const ALL: [Joker; 158] = [
         Joker::Dotfiles,
         Joker::Omakase,
         Joker::RubyGem,
@@ -583,6 +597,10 @@ impl Joker {
         Joker::TransitiveDependencies,
         Joker::RmRfNodeModules,
         Joker::DistroHopping,
+        Joker::HashCollision,
+        Joker::Postmortem,
+        Joker::SingleBinary,
+        Joker::IntegerOverflow,
     ];
 
     pub fn name(self) -> &'static str {
@@ -741,6 +759,10 @@ impl Joker {
             Joker::TransitiveDependencies => "Transitive Dependencies",
             Joker::RmRfNodeModules => "rm -rf node_modules",
             Joker::DistroHopping => "Distro Hopping",
+            Joker::HashCollision => "Hash Collision",
+            Joker::Postmortem => "Postmortem",
+            Joker::SingleBinary => "Single Binary",
+            Joker::IntegerOverflow => "Integer Overflow",
         }
     }
 
@@ -910,6 +932,12 @@ impl Joker {
             Joker::TransitiveDependencies => "When a blind starts, creates 2 core jokers (if there is room)",
             Joker::RmRfNodeModules => "When a blind starts, destroys the joker on its right and gains twice its sell value as mult",
             Joker::DistroHopping => "When a small or big blind starts, gains ×0.5 mult and destroys another random joker",
+            Joker::HashCollision => "×2 mult if the hand contains two identical cards (same rank and suit)",
+            Joker::Postmortem => "Gains ×0.5 mult when a blind is won on its last hand",
+            Joker::SingleBinary => "×3 mult if it is your only joker",
+            Joker::IntegerOverflow => {
+                "Doubles its mult when a blind is won in one hand; back to ×1 otherwise"
+            }
         }
     }
 
@@ -1071,6 +1099,10 @@ impl Joker {
             Joker::TransitiveDependencies => "You installed one. Got two more.",
             Joker::RmRfNodeModules => "Frees 2 GB. Feels like a win.",
             Joker::DistroHopping => "Wipe everything, reinstall, feel alive.",
+            Joker::HashCollision => "Two files, one checksum. Uh oh.",
+            Joker::Postmortem => "We learned a lot. Mostly about failure.",
+            Joker::SingleBinary => "Statically linked, zero dependencies.",
+            Joker::IntegerOverflow => "MAX_INT + 1 = surprise.",
         }
     }
 
@@ -1155,7 +1187,9 @@ impl Joker {
             | Joker::Flatpak
             | Joker::BtrfsSnapshot
             | Joker::RmRfNodeModules
-            | Joker::DistroHopping => Rarity::Extra,
+            | Joker::DistroHopping
+            | Joker::Postmortem
+            | Joker::SingleBinary => Rarity::Extra,
             Joker::TwoFactorAuth
             | Joker::JqFilter
             | Joker::RollingRelease
@@ -1164,7 +1198,9 @@ impl Joker {
             | Joker::Bloatware
             | Joker::PackageMaintainer
             | Joker::Syncthing
-            | Joker::Upstream => Rarity::Aur,
+            | Joker::Upstream
+            | Joker::HashCollision
+            | Joker::IntegerOverflow => Rarity::Aur,
             _ => Rarity::Core,
         }
     }
@@ -1304,7 +1340,9 @@ impl Joker {
             | Joker::HockeyStick
             | Joker::StickerPack
             | Joker::TransitiveDependencies
-            | Joker::RmRfNodeModules => 6,
+            | Joker::RmRfNodeModules
+            | Joker::Postmortem
+            | Joker::SingleBinary => 6,
             Joker::MeetupPizza
             | Joker::GemInstall
             | Joker::FuzzyFinder
@@ -1322,7 +1360,9 @@ impl Joker {
             | Joker::HipsterStack
             | Joker::MinimalWaybar
             | Joker::PackageMaintainer
-            | Joker::Syncthing => 8,
+            | Joker::Syncthing
+            | Joker::HashCollision
+            | Joker::IntegerOverflow => 8,
             Joker::Upstream => 10,
         }
     }
@@ -1378,7 +1418,9 @@ impl Joker {
             | Joker::RmaDepartment
             | Joker::ThePrimeagen
             | Joker::MailingList
-            | Joker::SkipIntro => 1.0,
+            | Joker::SkipIntro
+            | Joker::Postmortem
+            | Joker::IntegerOverflow => 1.0,
             _ => 0.0,
         }
     }
@@ -1487,6 +1529,8 @@ impl Joker {
                 Effect::XMult(counter)
             }
             Joker::SplitBrain if split_brain(&hand.scoring()) => Effect::XMult(2.0),
+            Joker::HashCollision if has_twins(hand.played) => Effect::XMult(2.0),
+            Joker::SingleBinary if board.jokers.len() == 1 => Effect::XMult(3.0),
             Joker::RainbowPrompt if all_suits(&hand.scoring()) => Effect::XMult(3.0),
             Joker::PitchBlack
                 if hand
@@ -1550,6 +1594,8 @@ impl Joker {
             | Joker::ThePrimeagen
             | Joker::MailingList
             | Joker::SkipIntro
+            | Joker::Postmortem
+            | Joker::IntegerOverflow
                 if counter > 1.0 =>
             {
                 Effect::XMult(counter)
@@ -1614,6 +1660,16 @@ pub struct OwnedJoker {
     pub sell_bonus: u32,
     /// Progress towards the next gain (Mailing List: cards discarded).
     pub progress: u32,
+}
+
+/// How a won blind went, for the jokers that care.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct BlindEnd {
+    pub boss: bool,
+    /// Won on its last hand (Postmortem).
+    pub last_hand: bool,
+    /// Won with a single hand (Integer Overflow).
+    pub one_hand: bool,
 }
 
 /// Cards Mailing List needs discarded to gain ×1 mult.
@@ -1755,7 +1811,14 @@ impl OwnedJoker {
                 ("mult", format!("+{c} mult"))
             }
             Joker::FreeTrial | Joker::CiRunner => ("chips", format!("+{c} chips")),
-            Joker::OrphanCleanup | Joker::ThemeCollector => ("x_mult", format!("×{c} mult")),
+            Joker::OrphanCleanup
+            | Joker::ThemeCollector
+            | Joker::Postmortem
+            | Joker::IntegerOverflow => ("x_mult", format!("×{c} mult")),
+            Joker::SingleBinary => {
+                let alone = board.jokers.len() == 1;
+                ("x_mult", format!("×{} mult", if alone { 3 } else { 1 }))
+            }
             Joker::MuscleMemory => ("mult", format!("+{} mult", hand_plays?)),
             Joker::Unixporn => ("money", format!("+${unique_themes} / blind")),
             Joker::VintageThinkpad => ("money", format!("sells ${}", self.sell_value())),
@@ -1895,7 +1958,8 @@ impl OwnedJoker {
     }
 
     /// At the end of a won blind; false when the joker breaks.
-    pub fn end_of_blind(&mut self, boss: bool, rng: &mut Rng) -> bool {
+    pub fn end_of_blind(&mut self, end: BlindEnd, rng: &mut Rng) -> bool {
+        let boss = end.boss;
         match self.joker {
             Joker::VintageThinkpad => self.sell_bonus += 3,
             Joker::OrphanCleanup if boss => self.counter = 1.0,
@@ -1912,6 +1976,9 @@ impl OwnedJoker {
             }
             Joker::Syncthing => self.counter += 1.0,
             Joker::HockeyStick if boss => self.counter += 2.0,
+            Joker::Postmortem if end.last_hand => self.counter += 0.5,
+            Joker::IntegerOverflow if end.one_hand => self.counter *= 2.0,
+            Joker::IntegerOverflow => self.counter = 1.0,
             _ => {}
         }
         true
@@ -1966,7 +2033,7 @@ mod tests {
         let memory = OwnedJoker::new(Joker::MuscleMemory, None);
         assert_eq!(memory.bonus(None, &Board::default()), None);
         assert_eq!(memory.bonus(Some((HandKind::Pair, 4)), &Board::default()).unwrap().text, "+4 mult");
-        cleanup.end_of_blind(true, &mut Rng::new(1));
+        cleanup.end_of_blind(BlindEnd { boss: true, ..BlindEnd::default() }, &mut Rng::new(1));
         assert_eq!(cleanup.counter, 1.0);
     }
 
@@ -2000,8 +2067,8 @@ mod tests {
         assert!(!espresso.after_hand());
         let mut hype = OwnedJoker::new(Joker::HypeCycle, None);
         let rng = &mut Rng::new(1);
-        assert!((0..4).all(|_| hype.end_of_blind(false, rng)));
-        assert!(!hype.end_of_blind(false, rng));
+        assert!((0..4).all(|_| hype.end_of_blind(BlindEnd::default(), rng)));
+        assert!(!hype.end_of_blind(BlindEnd::default(), rng));
         let mut drink = OwnedJoker::new(Joker::EnergyDrink, None);
         let five = crate::card::cards("2H 3H 4H 5H 6H");
         assert!((0..19).all(|_| drink.on_cards_discarded(&five, &Targets::default())));

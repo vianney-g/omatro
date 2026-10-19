@@ -13,6 +13,9 @@ trigger, and retriggers score it again; then jokers trigger for the cards
 held in hand; then each joker, left to right, adds its effect. Order matters:
 Fork copies the joker on its right.
 
+Hidden jokers only show up once their achievement is done (see
+[achievements.md](achievements.md)).
+
 | Id | Name | Rarity | Price | Effect | Quip |
 |---|---|---|---|---|---|
 | `cloud_credits` | Cloud Credits | core | $2 | You can spend down to −$20 | *Free until the invoice arrives.* |
@@ -125,6 +128,8 @@ Fork copies the joker on its right.
 | `hockey_stick` | Hockey Stick | extra | $6 | +$1 at the end of each blind, +$2 more after each boss | *Growth chart up and to the right.* |
 | `sticker_pack` | Sticker Pack | extra | $6 | Sell it to win the badge badges: 2x | *Free stickers at every conference.* |
 | `rm_rf_node_modules` | rm -rf node_modules | extra | $6 | When a blind starts, destroys the joker on its right and gains twice its sell value as mult | *Frees 2 GB. Feels like a win.* |
+| `postmortem` | Postmortem | extra · hidden: Core Dump | $6 | Gains ×0.5 mult when a blind is won on its last hand | *We learned a lot. Mostly about failure.* |
+| `single_binary` | Single Binary | extra · hidden: Bare Metal | $6 | ×3 mult if it is your only joker | *Statically linked, zero dependencies.* |
 | `no_build` | No Build | extra | $7 | ×2 mult if the played hand has 3 cards or fewer | *Webpack? Never heard of her.* |
 | `heartbleed` | Heartbleed | extra | $7 | 1 in 2 chance of ×1.5 mult for each scoring heart | *Your heart leaks, 64 KB at a time.* |
 | `mvp` | MVP | extra | $7 | Flushes and Straights can be made with 4 cards | *Minimum viable flush.* |
@@ -161,6 +166,8 @@ Fork copies the joker on its right.
 | `hipster_stack` | Hipster Stack | AUR | $8 | Gains ×0.2 mult per hand in a row that isn't your most played type | *Never the popular framework.* |
 | `package_maintainer` | Package Maintainer | AUR | $8 | ×1.5 mult per extra joker you own | *Every extra package, lovingly maintained.* |
 | `syncthing` | Syncthing | AUR | $8 | Sold after 2 blinds, copies another random joker | *Two blinds to sync, then a perfect copy.* |
+| `hash_collision` | Hash Collision | AUR · hidden: Duplicate Detected | $8 | ×2 mult if the hand contains two identical cards (same rank and suit) | *Two files, one checksum. Uh oh.* |
+| `integer_overflow` | Integer Overflow | AUR · hidden: Heat Death | $8 | Doubles its mult when a blind is won in one hand; back to ×1 otherwise | *MAX_INT + 1 = surprise.* |
 | `orphan_cleanup` | Orphan Cleanup | AUR | $9 | Gains ×0.25 mult per card sold; resets after a boss | *pacman -Rns $(pacman -Qdtq)* |
 | `fork` | Fork | AUR | $10 | Copies the ability of the joker on its right | *Same features. MIT licensed.* |
 | `upstream` | Upstream | AUR | $10 | Copies the ability of the leftmost joker | *Tracks the first joker, always.* |

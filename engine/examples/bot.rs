@@ -9,7 +9,8 @@
 //! commands, oligarchy cards and card modifiers; `--save` saves the game after
 //! each command and, every 25 commands, resumes it in a new session, which
 //! must find the very same state; `--lang fr` plays in French and lists the
-//! texts the catalog doesn't translate.
+//! texts the catalog doesn't translate; `--profile` gives each game a new
+//! profile: hidden items must stay out, and the achievements done are listed.
 
 use omatro_engine::protocol::Session;
 use omatro_engine::rng::Rng;
@@ -41,6 +42,8 @@ struct Outcome {
     violations: Vec<String>,
     stuck: bool,
     steps: usize,
+    /// `--profile`: achievements done in this game.
+    achievements: Vec<String>,
 }
 
 struct Bot {
@@ -60,12 +63,52 @@ const RESUME_EVERY: usize = 25;
 /// `--lang`: the language the bot plays in.
 static LANG: Mutex<String> = Mutex::new(String::new());
 
+/// `--profile`: each game has a profile of its own.
+static PROFILE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn with_profile() -> bool {
+    PROFILE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Ids of the jokers achievements unlock: a new profile never sees them.
+fn hidden_jokers() -> Vec<String> {
+    omatro_engine::achievement::Achievement::ALL
+        .iter()
+        .filter_map(|a| match a.unlocks() {
+            Some(omatro_engine::collection::Item::Joker(j)) => serde_json::to_value(j).ok(),
+            _ => None,
+        })
+        .filter_map(|v| v.as_str().map(String::from))
+        .collect()
+}
+
+/// Jokers anywhere in the state: owned, on offer, in an open pack.
+fn jokers_in(value: &Value, found: &mut Vec<String>) {
+    match value {
+        Value::Object(map) => {
+            if map.get("kind").is_some_and(|k| k == "joker")
+                && let Some(id) = map.get("id").and_then(Value::as_str)
+            {
+                found.push(id.to_string());
+            }
+            map.values().for_each(|v| jokers_in(v, found));
+        }
+        Value::Array(items) => items.iter().for_each(|v| jokers_in(v, found)),
+        _ => {}
+    }
+}
+
 /// A session as the bot plays it: with the debug commands in chaos mode.
 fn new_session(chaos: bool, save: &Option<std::path::PathBuf>) -> Session {
     let session = if chaos {
         Session::from_env()
     } else {
         Session::default()
+    };
+    let session = if with_profile() {
+        session.with_new_profile()
+    } else {
+        session
     };
     let mut session = match save {
         Some(path) => session.with_save(path.clone()),
@@ -105,6 +148,14 @@ impl Bot {
         }
         let response: Value = serde_json::from_str(&self.session.handle_json(&command.to_string()))
             .expect("responses are JSON");
+        for news in response["news"].as_array().into_iter().flatten() {
+            if news["kind"] == "achievement"
+                && let Some(name) = news["name"].as_str()
+                && !self.out.achievements.iter().any(|a| a == name)
+            {
+                self.out.achievements.push(name.to_string());
+            }
+        }
         if let Some(state) = response.get("state") {
             self.state = state.clone();
             self.check(&command);
@@ -205,6 +256,14 @@ impl Bot {
         }
         if s["phase"] == "playing" && s["hand"].as_array().is_some_and(Vec::is_empty) {
             broken.push("playing with an empty hand".into());
+        }
+        if with_profile() {
+            let mut seen = Vec::new();
+            jokers_in(s, &mut seen);
+            let hidden = hidden_jokers();
+            for joker in seen.iter().filter(|j| hidden.contains(j)) {
+                broken.push(format!("hidden joker {joker} before its achievement"));
+            }
         }
         let after = command["cmd"].as_str().unwrap_or("?");
         self.out
@@ -570,6 +629,9 @@ fn main() {
     if let (Some(lang), Ok(mut l)) = (&lang, LANG.lock()) {
         *l = lang.clone();
     }
+    if args.iter().any(|a| a == "--profile") {
+        PROFILE.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
     if args.iter().any(|a| a == "--trace") {
         TRACE.store(true, std::sync::atomic::Ordering::Relaxed);
     }
@@ -588,8 +650,9 @@ fn main() {
         }
     }));
 
+    // A new profile has its hidden decks locked.
     let decks: Vec<Option<String>> = {
-        let mut session = Session::default();
+        let mut session = new_session(false, &None);
         let r = serde_json::to_value(session.handle(r#"{"cmd":"decks"}"#)).unwrap();
         std::iter::once(None)
             .chain(
@@ -597,6 +660,7 @@ fn main() {
                     .as_array()
                     .into_iter()
                     .flatten()
+                    .filter(|d| d["achievement"].is_null())
                     .filter_map(|d| d["id"].as_str().map(|s| Some(s.to_string()))),
             )
             .collect()
@@ -711,6 +775,20 @@ fn main() {
         .filter(|id| !per_joker.contains_key(id.as_str()))
         .collect::<Vec<_>>();
     println!("  never held at the end: {}", never.join(", "));
+
+    if with_profile() {
+        let mut done: BTreeMap<&str, usize> = BTreeMap::new();
+        for o in &outcomes {
+            for a in &o.achievements {
+                *done.entry(a).or_default() += 1;
+            }
+        }
+        println!("\nAchievements (games where done):");
+        for a in omatro_engine::achievement::Achievement::ALL {
+            let count = done.get(a.name()).copied().unwrap_or(0);
+            println!("  {:<26} {count:>5}", a.name());
+        }
+    }
 
     let mut errors: BTreeMap<(String, String), (usize, u64)> = BTreeMap::new();
     for o in &outcomes {

@@ -21,10 +21,11 @@ pub enum Deck {
     GithubProfile,
     HyprlandDwindle,
     LiveUsb,
+    Raid1,
 }
 
 impl Deck {
-    pub const ALL: [Deck; 15] = [
+    pub const ALL: [Deck; 16] = [
         Deck::ThinkPad,
         Deck::Framework,
         Deck::Basecamp,
@@ -40,6 +41,7 @@ impl Deck {
         Deck::GithubProfile,
         Deck::HyprlandDwindle,
         Deck::LiveUsb,
+        Deck::Raid1,
     ];
 
     pub fn name(self) -> &'static str {
@@ -59,6 +61,7 @@ impl Deck {
             Deck::GithubProfile => "GitHub Profile",
             Deck::HyprlandDwindle => "Hyprland Dwindle",
             Deck::LiveUsb => "Live USB",
+            Deck::Raid1 => "RAID 1",
         }
     }
 
@@ -83,6 +86,7 @@ impl Deck {
                 "Chips and mult are balanced when scoring; blinds are twice as big"
             }
             Deck::LiveUsb => "Every card's rank and suit is random",
+            Deck::Raid1 => "Start with two copies of every card; +1 hand size",
         }
     }
 
@@ -103,6 +107,7 @@ impl Deck {
             Deck::GithubProfile => "Achievements unlocked. Twice.",
             Deck::HyprlandDwindle => "Perfectly balanced, as all splits should be.",
             Deck::LiveUsb => "Different every boot.",
+            Deck::Raid1 => "Every disk, mirrored.",
         }
     }
 }

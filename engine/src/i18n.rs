@@ -316,6 +316,13 @@ mod tests {
         texts.extend(crate::run_deck::Deck::ALL.iter().map(|d| d.description().to_string()));
         texts.extend(crate::boss::Boss::ALL.iter().map(|b| b.description().to_string()));
         texts.extend(crate::hand::HandKind::ALL.iter().map(|h| h.name().to_string()));
+        for a in crate::achievement::Achievement::ALL {
+            texts.push(a.description().to_string());
+        }
+        for f in crate::collection::Family::ALL {
+            texts.push(f.name().to_string());
+            texts.push(f.singular().to_string());
+        }
         let missing: Vec<&String> = texts.iter().filter(|t| fr(t).is_none()).collect();
         assert!(missing.is_empty(), "untranslated: {missing:#?}");
     }

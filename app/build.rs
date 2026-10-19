@@ -5,6 +5,7 @@ fn main() {
         QmlFile::from("qml/Main.qml"),
         QmlFile::from("qml/BlindSelect.qml"),
         QmlFile::from("qml/FastFetch.qml"),
+        QmlFile::from("qml/Collection.qml"),
         QmlFile::from("qml/ConsumableView.qml"),
         QmlFile::from("qml/PackView.qml"),
         QmlFile::from("qml/PackOpening.qml"),

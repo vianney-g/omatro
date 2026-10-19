@@ -3,7 +3,8 @@
 <!-- Generated from the engine code by `make docs`: do not edit by hand. -->
 
 The machine a game is played on (decks, in the original), chosen on the new
-game screen: an advantage, sometimes a drawback.
+game screen: an advantage, sometimes a drawback. A hidden deck waits for
+its achievement (see [achievements.md](achievements.md)).
 
 | Id | Deck | Effect | Quip |
 |---|---|---|---|
@@ -22,3 +23,4 @@ game screen: an advantage, sometimes a drawback.
 | `github_profile` | GitHub Profile | Gain badges: 2x after each boss | *Achievements unlocked. Twice.* |
 | `hyprland_dwindle` | Hyprland Dwindle | Chips and mult are balanced when scoring; blinds are twice as big | *Perfectly balanced, as all splits should be.* |
 | `live_usb` | Live USB | Every card's rank and suit is random | *Different every boot.* |
+| `raid1` | RAID 1 | Start with two copies of every card; +1 hand size · hidden: It's Not a Phase | *Every disk, mirrored.* |

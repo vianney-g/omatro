@@ -1,11 +1,14 @@
 //! Protocol between the engine and the display: one JSON command per line
 //! in, one JSON response per line out.
 
+use crate::achievement::Achievement;
+use crate::collection::{Collection, Item, collection};
 use crate::game::{Cheat, DeckInfo, Game, SortBy, State};
 use crate::glossary::{Term, glossary};
 use crate::hand::HandKind;
 use crate::i18n::{Catalog, Lang, translate_response};
 use crate::joker::{Bonus, Joker};
+use crate::profile::{News, Profile};
 use crate::run_deck::Deck;
 use crate::score::Breakdown;
 use serde::{Deserialize, Serialize};
@@ -26,6 +29,8 @@ pub enum Command {
     Decks,
     /// Lists the terms card texts mention, with what they mean.
     Glossary,
+    /// The collection and the achievements, as the profile has them.
+    Collection,
     /// Tells whether a saved game can be resumed, and its state.
     SavedGame,
     /// Resumes the saved game.
@@ -131,6 +136,9 @@ pub enum Response {
     Glossary {
         terms: Vec<Term>,
     },
+    Collection {
+        collection: Collection,
+    },
     /// The language set, its catalog (English text → translation), and the
     /// languages to choose from.
     Language {
@@ -155,6 +163,12 @@ pub struct Session {
     save: Option<PathBuf>,
     /// The language of the responses (`handle_json` translates them).
     lang: Lang,
+    /// The player's collection and achievements (none: everything is
+    /// unlocked, nothing is kept), and the file it is written to.
+    profile: Option<Profile>,
+    profile_path: Option<PathBuf>,
+    /// What the profile gained since the last response.
+    news: Vec<News>,
 }
 
 #[derive(Debug, Serialize)]
@@ -217,6 +231,9 @@ impl Session {
             start_jokers,
             save: None,
             lang: Lang::En,
+            profile: None,
+            profile_path: None,
+            news: Vec::new(),
         }
     }
 
@@ -225,6 +242,46 @@ impl Session {
     pub fn with_save(mut self, path: PathBuf) -> Self {
         self.save = Some(path);
         self
+    }
+
+    /// Keeps a profile, read from this file and written back whenever it
+    /// gains something.
+    pub fn with_profile(mut self, path: PathBuf) -> Self {
+        self.profile = Some(Profile::load(&path));
+        self.profile_path = Some(path);
+        self
+    }
+
+    /// Keeps a profile in memory only (tests, the bot).
+    pub fn with_new_profile(mut self) -> Self {
+        self.profile = Some(Profile::default());
+        self
+    }
+
+    pub fn profile(&self) -> Option<&Profile> {
+        self.profile.as_ref()
+    }
+
+    /// What the profile gained since the last call: items found,
+    /// achievements and what they unlocked.
+    pub fn take_news(&mut self) -> Vec<News> {
+        std::mem::take(&mut self.news)
+    }
+
+    /// Takes in what happened in the game, and writes the profile if it
+    /// gained anything.
+    fn observe(&mut self) {
+        let (Some(profile), Some(game)) = (&mut self.profile, &mut self.game) else {
+            return;
+        };
+        let before = profile.clone();
+        let news = profile.observe(game);
+        self.news.extend(news);
+        if *profile != before
+            && let Some(path) = &self.profile_path
+        {
+            profile.save(path);
+        }
     }
 
     pub fn handle(&mut self, line: &str) -> Response {
@@ -236,6 +293,7 @@ impl Session {
                         | Command::Preview { .. }
                         | Command::Decks
                         | Command::Glossary
+                        | Command::Collection
                         | Command::SavedGame
                         | Command::Language { .. }
                 );
@@ -244,6 +302,7 @@ impl Session {
                     .unwrap_or_else(|message| Response::Error { message });
                 if changes && !matches!(response, Response::Error { .. }) {
                     self.persist();
+                    self.observe();
                 }
                 response
             }
@@ -258,6 +317,10 @@ impl Session {
     pub fn handle_json(&mut self, line: &str) -> String {
         let response = self.handle(line);
         let mut value = serde_json::to_value(response).expect("responses serialize");
+        let news = self.take_news();
+        if !news.is_empty() {
+            value["news"] = serde_json::to_value(news).expect("news serialize");
+        }
         translate_response(&mut value, self.lang);
         value.to_string()
     }
@@ -291,22 +354,61 @@ impl Session {
             deck,
         } = command
         {
+            if let (Some(profile), Some(deck)) = (&self.profile, deck)
+                && !profile.deck_unlocked(deck)
+            {
+                let a = Achievement::unlocking(Item::Deck(deck)).map_or("", Achievement::name);
+                return Err(format!("{} is locked: {a} unlocks it", deck.name()));
+            }
             if jokers.is_empty() {
                 jokers = self.start_jokers.clone();
             }
+            let helped = !jokers.is_empty();
             let seed = seed.unwrap_or_else(random_seed);
-            let game = self.game.insert(Game::with_deck(seed, jokers, deck));
+            let mut game = Game::with_deck(seed, jokers, deck);
+            if helped {
+                game.mark_cheated();
+            }
+            if let Some(profile) = &self.profile {
+                game.lock(profile.locked_jokers());
+            }
+            let game = self.game.insert(game);
             return Ok(Response::State {
                 state: game.state(),
             });
         }
         if let Command::Decks = command {
-            return Ok(Response::Decks {
-                decks: Deck::ALL.iter().map(|&d| d.into()).collect(),
-            });
+            let decks = Deck::ALL
+                .iter()
+                .map(|&d| {
+                    let mut info = DeckInfo::from(d);
+                    if let Some(profile) = &self.profile
+                        && !profile.deck_unlocked(d)
+                    {
+                        let a = Achievement::unlocking(Item::Deck(d));
+                        info.achievement = a.map(Achievement::name);
+                        info.condition = a.map(Achievement::description);
+                    }
+                    info
+                })
+                .collect();
+            return Ok(Response::Decks { decks });
         }
         if let Command::Glossary = command {
             return Ok(Response::Glossary { terms: glossary() });
+        }
+        if let Command::Collection = command {
+            let profile = self.profile.as_mut().ok_or("no profile in this session")?;
+            let news = profile.opened_collection();
+            if !news.is_empty()
+                && let Some(path) = &self.profile_path
+            {
+                profile.save(path);
+            }
+            self.news.extend(news);
+            return Ok(Response::Collection {
+                collection: collection(profile),
+            });
         }
         if let Command::Language { lang } = command {
             self.lang = lang;
@@ -350,6 +452,7 @@ impl Session {
             Command::NewGame { .. }
             | Command::Decks
             | Command::Glossary
+            | Command::Collection
             | Command::SavedGame
             | Command::Resume
             | Command::Language { .. } => unreachable!(),
@@ -481,7 +584,7 @@ mod tests {
     fn decks_are_listed_and_chosen() {
         let mut session = Session::default();
         let r = send(&mut session, r#"{"cmd":"decks"}"#);
-        assert_eq!(r["decks"].as_array().unwrap().len(), 15);
+        assert_eq!(r["decks"].as_array().unwrap().len(), Deck::ALL.len());
         let r = send(
             &mut session,
             r#"{"cmd":"new_game","seed":1,"deck":"basecamp"}"#,
@@ -616,6 +719,48 @@ mod tests {
         let mut plain = Session::default();
         send(&mut plain, r#"{"cmd":"new_game","seed":7}"#);
         assert!(!dir.join("save.json").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_profile_follows_games_and_locks_hidden_items() {
+        let dir = std::env::temp_dir().join(format!("omatro-collection-{}", std::process::id()));
+        let path = dir.join("profile.json");
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut session = Session::default().with_profile(path.clone());
+        let decks = send(&mut session, r#"{"cmd":"decks"}"#);
+        let raid = decks["decks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["id"] == "raid1")
+            .unwrap();
+        assert_eq!(raid["achievement"], "It's Not a Phase");
+        let r = send(&mut session, r#"{"cmd":"new_game","seed":1,"deck":"raid1"}"#);
+        assert_eq!(r["message"], "RAID 1 is locked: It's Not a Phase unlocks it");
+
+        let reply: Value = serde_json::from_str(
+            &session.handle_json(r#"{"cmd":"new_game","seed":1,"deck":"think_pad"}"#),
+        )
+        .unwrap();
+        assert_eq!(reply["news"][0]["name"], "ThinkPad");
+        assert!(path.exists());
+        assert!(session.game.as_ref().unwrap().locked().contains(&Joker::HashCollision));
+
+        let reply: Value =
+            serde_json::from_str(&session.handle_json(r#"{"cmd":"collection"}"#)).unwrap();
+        assert_eq!(reply["news"][0]["name"], "RTFM");
+        let collection = &reply["collection"];
+        assert_eq!(collection["found"], 1);
+        assert_eq!(collection["families"][1]["name"], "Decks");
+        // Read again by the next session.
+        let again = Session::default().with_profile(path.clone());
+        assert!(again.profile().unwrap().is_done(Achievement::Rtfm));
+        // Sessions without a profile lock nothing.
+        let mut plain = Session::default();
+        assert_eq!(send(&mut plain, r#"{"cmd":"collection"}"#)["event"], "error");
+        send(&mut plain, r#"{"cmd":"new_game","seed":1,"deck":"raid1"}"#);
+        assert!(plain.game.as_ref().unwrap().locked().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
