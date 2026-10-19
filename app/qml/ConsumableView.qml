@@ -62,11 +62,24 @@ Rectangle {
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
     }
+    // What it would do now (the level a theme reaches, money…), in place
+    // of the quip.
+    Text {
+      width: parent.width
+      visible: text !== ""
+      horizontalAlignment: Text.AlignHCenter
+      wrapMode: Text.WordWrap
+      text: root.item && root.item.current ? root.item.current : ""
+      color: Color.accent
+      font.family: Style.font.family
+      font.pixelSize: Style.font.caption
+      font.bold: true
+    }
     Text {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
-      visible: !root.narrow
+      visible: !root.narrow && !(root.item && root.item.current)
       text: root.item ? root.item.quip : ""
       color: Color.muted
       font.family: Style.font.family

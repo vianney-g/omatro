@@ -18,6 +18,11 @@ pub mod qobject {
 
         #[qinvokable]
         fn handle(self: Pin<&mut Engine>, line: &QString) -> QString;
+
+        /// Debug only: the steps of `OMATRO_SCRIPT`, which the interface plays
+        /// to take screenshots without a keyboard (see CLAUDE.md).
+        #[qinvokable]
+        fn script(self: &Engine) -> QString;
     }
 
     extern "RustQt" {
@@ -72,6 +77,12 @@ impl qobject::Engine {
         // Translated into the language the interface set.
         let reply = self.rust_mut().session.handle_json(&line.to_string());
         QString::from(&reply)
+    }
+
+    pub fn script(&self) -> QString {
+        let debug = std::env::var("OMATRO_DEBUG").is_ok_and(|v| v == "1");
+        let script = std::env::var("OMATRO_SCRIPT").unwrap_or_default();
+        QString::from(if debug { script.as_str() } else { "" })
     }
 }
 

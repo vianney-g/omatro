@@ -51,6 +51,9 @@ pub enum Command {
     Buy {
         offer: usize,
     },
+    BuyAndUse {
+        offer: usize,
+    },
     Sell {
         joker: usize,
     },
@@ -112,6 +115,7 @@ pub enum Response {
         cards: Vec<usize>,
         hand: Option<HandKind>,
         hand_name: Option<&'static str>,
+        hand_level: Option<u32>,
         scoring: Vec<usize>,
         base_chips: u64,
         base_mult: f64,
@@ -367,6 +371,7 @@ impl Session {
                 return Ok(Response::Preview {
                     hand: evaluated.as_ref().map(|e| e.kind),
                     hand_name: evaluated.as_ref().map(|e| e.kind.name()),
+                    hand_level: evaluated.as_ref().map(|e| game.levels().level(e.kind)),
                     bonuses: evaluated
                         .as_ref()
                         .map_or_else(Vec::new, |e| game.bonuses_for(e.kind)),
@@ -381,6 +386,7 @@ impl Session {
             Command::Discard { cards } => game.discard(&cards).map_err(|e| e.to_string())?,
             Command::CashOut => game.cash_out().map_err(|e| e.to_string())?,
             Command::Buy { offer } => game.buy(offer).map_err(|e| e.to_string())?,
+            Command::BuyAndUse { offer } => game.buy_and_use(offer).map_err(|e| e.to_string())?,
             Command::Sell { joker } => game.sell(joker).map_err(|e| e.to_string())?,
             Command::UseConsumable { index, cards } => game
                 .use_consumable(index, &cards)

@@ -294,6 +294,12 @@ mod tests {
         );
         assert_eq!(fr("$4 for Two Pair").unwrap(), "4 $ pour Double paire");
         assert_eq!(fr("×1.5 mult").unwrap(), "×1,5 mult");
+        assert_eq!(fr("+$15 now").unwrap(), "+15 $ maintenant");
+        assert_eq!(
+            fr("Straight: level 1 → 2 (60 × 7.5)").unwrap(),
+            "Suite : niveau 1 → 2 (60 × 7,5)"
+        );
+        assert_eq!(fr("would create Nord").unwrap(), "créerait Nord");
     }
 
     /// Every content text has its translation: a new card without one fails

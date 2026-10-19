@@ -36,6 +36,8 @@ pub struct Breakdown {
     pub cards: Vec<Card>,
     pub hand: HandKind,
     pub hand_name: &'static str,
+    /// The hand type's level it scored at.
+    pub hand_level: u32,
     pub scoring: Vec<usize>,
     pub base_chips: u64,
     pub base_mult: f64,
@@ -318,6 +320,7 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
         cards: played.to_vec(),
         hand: evaluated.kind,
         hand_name: evaluated.kind.name(),
+        hand_level: table.levels.level(evaluated.kind),
         scoring: evaluated.scoring,
         base_chips,
         base_mult,

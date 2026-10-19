@@ -116,6 +116,10 @@ Window {
   readonly property bool playing: game !== null && game.phase === "playing" && !busy
   readonly property bool shopping: game !== null && game.phase === "shop" && !busy
   readonly property bool choosing: game !== null && game.phase === "blind_select"
+  // Jokers can be sold or moved between hands, in the shop and before a blind.
+  readonly property bool jokerControls: game !== null
+    && (game.phase === "playing" || game.phase === "shop" || game.phase === "blind_select")
+  readonly property bool jokersEditable: jokerControls && !busy
   // A pack is open; coreutils packs draw a hand to select cards from.
   readonly property bool inPack: game !== null && game.phase === "pack"
   readonly property bool packHand: inPack && game.opened !== null && game.opened.with_hand
@@ -131,11 +135,16 @@ Window {
   // The boss at work: cards it hides or disables, by card id (the hand shown
   // during the score animation is not the state's hand).
   readonly property string bossName: game !== null && game.boss_active ? game.boss.name : ""
+  // The ante's boss is still ahead, or being played.
+  readonly property bool upcomingBoss: game !== null && game.phase !== "lost"
+    && game.blinds.some(function(b) { return b.kind === "boss" && b.status !== "defeated" })
   readonly property var faceDownIds: game ? game.hand.filter(function(c, i) { return game.face_down[i] })
     .map(function(c) { return c.id }) : []
   readonly property var debuffedIds: game ? game.hand.filter(function(c, i) { return game.debuffed[i] })
     .map(function(c) { return c.id }) : []
   readonly property int forcedId: game && game.forced !== null ? game.hand[game.forced].id : -1
+  readonly property int handLevel: scoring ? scoring.hand_level
+    : (preview && preview.hand ? preview.hand_level : 0)
   readonly property string handName: scoring ? scoring.hand_name
     : (preview && preview.hand ? preview.hand_name : "")
 
@@ -221,7 +230,11 @@ Window {
 
   // Moves or sorts the hand; the selection follows its cards.
   function rearrange(command) {
-    if (!selecting) return
+    if (selecting) keepingSelection(command)
+  }
+  // Sends a command that leaves the hand's cards as they were (or moves
+  // them): the selection, and its preview, stay.
+  function keepingSelection(command) {
     var ids = selected.map(function(i) { return hand[i].id })
     send(command)
     selected = ids.map(function(id) { return hand.findIndex(function(c) { return c.id === id }) })
@@ -285,16 +298,31 @@ Window {
   }
 
   function canBuy(offer) {
+    if (offer.kind === "card") return shopping && canPay(offer.price)
     if (offer.kind !== "joker")
       return shopping && canPay(offer.price) && game.consumables.length < game.consumable_slots
     var transparent = offer.edition !== null && offer.edition.id === "transparent"
     return shopping && canPay(offer.price) && (transparent || game.jokers.length < game.max_jokers)
   }
+  // Themes and commands that need no cards in hand can be used at once,
+  // even with a full clipboard.
+  function canBuyAndUse(offer) {
+    return shopping && (offer.kind === "theme" || offer.kind === "command")
+      && !offer.needs_hand && canPay(offer.price)
+  }
+  function buyAndUse(i) {
+    if (!shopping || i < 0 || i >= game.shop.length) return
+    var offer = game.shop[i]
+    var before = game.shop.length
+    send({ cmd: "buy_and_use", offer: i })
+    if (game.shop.length < before)
+      notice = I18n.tr(offer.kind === "theme" ? "Applied {name}." : "Ran {name}.", { name: offer.name })
+  }
   function buy(i) {
     if (shopping && i >= 0 && i < game.shop.length) send({ cmd: "buy", offer: i })
   }
   function sell(i) {
-    if (shopping) send({ cmd: "sell", joker: i })
+    if (jokersEditable) keepingSelection({ cmd: "sell", joker: i })
   }
   // Whether a consumable can be used now: commands that change cards need
   // the right number of them selected, during a blind.
@@ -366,7 +394,7 @@ Window {
     if (!busy) send({ cmd: "sell_consumable", index: i })
   }
   function moveJoker(from, to) {
-    if (!busy) send({ cmd: "move_joker", from: from, to: to })
+    if (jokersEditable) keepingSelection({ cmd: "move_joker", from: from, to: to })
   }
   function reroll() {
     if (!shopping) return
@@ -528,7 +556,9 @@ Window {
     anchors.fill: parent
     focus: true
 
-    Keys.onPressed: function(event) {
+    Keys.onPressed: function(event) { pressKey(event) }
+
+    function pressKey(event) {
       var k = event.key
       if (k === Qt.Key_Q && (event.modifiers & Qt.ControlModifier)) Qt.quit()
       else if (k === Qt.Key_L) root.nextLanguage()
@@ -595,6 +625,56 @@ Window {
       event.accepted = true
     }
 
+    // Debug only (OMATRO_DEBUG=1): plays the steps of OMATRO_SCRIPT, separated
+    // by ";": "key:Return", "key:Shift+Left", "key:Ctrl+1", "sleep:500",
+    // "shot:/path/name.png" (the window, as rendered), "size:1100,700", "quit".
+    // Screenshots this way need no keyboard, pointer or focus, even offscreen.
+    property var scriptSteps: []
+    Timer {
+      id: scriptTimer
+      interval: 300
+      onTriggered: keyCatcher.runScript()
+    }
+    Component.onCompleted: {
+      var script = engine.script()
+      if (script === "") return
+      scriptSteps = script.split(";").map(function(s) { return s.trim() }).filter(function(s) { return s !== "" })
+      scriptTimer.start()
+    }
+    function runScript() {
+      if (!scriptSteps.length) return
+      var step = scriptSteps[0]
+      scriptSteps = scriptSteps.slice(1)
+      var colon = step.indexOf(":")
+      var verb = colon < 0 ? step : step.slice(0, colon)
+      var arg = colon < 0 ? "" : step.slice(colon + 1)
+      var wait = 300
+      if (verb === "key") {
+        var parts = arg.split("+")
+        var modifiers = 0
+        for (var i = 0; i < parts.length - 1; i++)
+          modifiers |= parts[i] === "Shift" ? Qt.ShiftModifier : parts[i] === "Ctrl" ? Qt.ControlModifier : 0
+        var key = Qt["Key_" + parts[parts.length - 1]]
+        if (key === undefined) console.warn("script: unknown key", arg)
+        else pressKey({ key: key, modifiers: modifiers, accepted: false })
+      }
+      else if (verb === "sleep") wait = parseInt(arg)
+      else if (verb === "shot") {
+        root.contentItem.grabToImage(function(result) {
+          if (!result.saveToFile(arg)) console.warn("script: couldn't save", arg)
+        })
+      }
+      else if (verb === "size") {
+        var wh = arg.split(",")
+        root.width = parseInt(wh[0])
+        root.height = parseInt(wh[1])
+      }
+      else if (verb === "quit") Qt.quit()
+      else console.warn("script: unknown step", step)
+      scriptTimer.interval = wait
+      scriptTimer.start()
+    }
+
     RowLayout {
       anchors { fill: parent; margins: Style.spacing.huge }
       spacing: Style.spacing.huge
@@ -640,13 +720,17 @@ Window {
                 : I18n.tr("Ante")
             }
             Value { text: root.game ? Labels.number(root.game.target) : "–" }
-            // The boss's effect, while it applies.
+            // The ante's boss, ahead of its blind (muted) and while its effect
+            // applies (urgent).
             Text {
               width: parent.width
-              visible: root.bossName !== "" && root.game.phase === "playing"
+              visible: root.upcomingBoss
               wrapMode: Text.WordWrap
-              text: visible ? root.game.boss.description : ""
-              color: Color.urgent
+              textFormat: Text.StyledText
+              text: visible
+                ? "<b>" + I18n.tr("Boss: {name}", { name: root.game.boss.name }) + "</b><br>" + root.game.boss.description
+                : ""
+              color: root.bossName !== "" && root.game.phase === "playing" ? Color.urgent : Color.muted
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -693,12 +777,27 @@ Window {
             id: calcCol
             anchors { fill: parent; margins: Style.spacing.xxl }
             spacing: Style.spacing.md
-            Text {
-              text: root.handName || I18n.tr("Choose cards")
-              color: root.handName ? Color.foreground : Color.muted
-              font.family: Style.font.family
-              font.pixelSize: Style.font.heading
-              font.bold: root.handName !== ""
+            // The hand and its level.
+            Row {
+              width: parent.width
+              spacing: Style.spacing.md
+              Text {
+                id: handNameText
+                text: root.handName || I18n.tr("Choose cards")
+                color: root.handName ? Color.foreground : Color.muted
+                font.family: Style.font.family
+                font.pixelSize: Style.font.heading
+                font.bold: root.handName !== ""
+              }
+              Text {
+                anchors.baseline: handNameText.baseline
+                visible: root.handLevel > 0
+                text: I18n.tr("lvl.{n}", { n: root.handLevel })
+                color: Color.accent
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.bold: true
+              }
             }
             Row {
               spacing: Style.spacing.md
@@ -772,8 +871,9 @@ Window {
           spacing: Style.spacing.md
           Caption {
             // Transparent consumables take no slot.
-            text: root.game ? "Clipboard " + root.game.consumables.filter(function(c) { return !c.transparent }).length
-              + " / " + root.game.consumable_slots : ""
+            text: root.game ? I18n.tr("Clipboard {a} / {b}", {
+              a: root.game.consumables.filter(function(c) { return !c.transparent }).length,
+              b: root.game.consumable_slots }) : ""
           }
           // Past two cards (Transparent copies take no slot, but room), they
           // overlap: hover or click one to bring it to the front.
@@ -872,7 +972,7 @@ Window {
           id: jokerRow
           Layout.alignment: Qt.AlignHCenter
           Layout.preferredWidth: implicitWidth
-          Layout.preferredHeight: Style.space(230) + (root.shopping ? Style.space(40) : 0)
+          Layout.preferredHeight: Style.space(230) + (root.jokerControls ? Style.space(40) : 0)
           count: root.game ? root.game.jokers.length : 0
           itemWidth: Style.space(120)
           spacing: Style.spacing.xxl
@@ -908,13 +1008,13 @@ Window {
                 bonus: root.preview && root.preview.bonuses.length > index
                   ? root.preview.bonuses[index] : modelData.bonus
               }
-              // In the shop: sell, and move left or right (Fork copies its right
-              // neighbour); only in front when the jokers overlap.
+              // Sell, and move left or right (Fork copies its right neighbour);
+              // only in front when the jokers overlap.
               Row {
                 anchors.horizontalCenter: parent.horizontalCenter
-                visible: root.shopping
+                visible: root.jokerControls
                 opacity: jokerRow.showsControls(index) ? 1 : 0
-                enabled: jokerRow.showsControls(index)
+                enabled: root.jokersEditable && jokerRow.showsControls(index)
                 spacing: Style.spacing.xs
                 Button {
                   compact: true
@@ -1031,14 +1131,26 @@ Window {
                       opacity: root.canBuy(modelData) ? 1 : 0.5
                     }
                     }
-                    Button {
+                    Row {
                       anchors.horizontalCenter: parent.horizontalCenter
-                      compact: true
-                      text: (index + 1) + " · " + Labels.money(modelData.price)
-                      bordered: true
-                      enabled: root.canBuy(modelData)
-                      opacity: enabled ? 1 : 0.5
-                      onClicked: root.buy(index)
+                      spacing: Style.spacing.xs
+                      Button {
+                        compact: true
+                        text: (index + 1) + " · " + Labels.money(modelData.price)
+                        bordered: true
+                        enabled: root.canBuy(modelData)
+                        opacity: enabled ? 1 : 0.5
+                        onClicked: root.buy(index)
+                      }
+                      // Bought and used at once, without the clipboard.
+                      Button {
+                        compact: true
+                        visible: (modelData.kind === "theme" || modelData.kind === "command") && !modelData.needs_hand
+                        text: I18n.tr("Use now")
+                        enabled: root.canBuyAndUse(modelData)
+                        opacity: enabled ? 1 : 0.5
+                        onClicked: root.buyAndUse(index)
+                      }
                     }
                   }
                 }

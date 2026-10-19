@@ -407,6 +407,18 @@ impl Bot {
                 self.use_consumables();
                 continue;
             }
+            // Clipboard full: themes and commands that need no hand are used at once.
+            let now = offers.iter().position(|o| {
+                matches!(o["kind"].as_str(), Some("theme" | "command"))
+                    && o["needs_hand"] == false
+                    && self.money() >= o["price"].as_i64().unwrap_or(0)
+            });
+            if let Some(offer) = now {
+                let r = self.probe(json!({"cmd": "buy_and_use", "offer": offer}));
+                if r["event"] != "error" {
+                    continue;
+                }
+            }
             // Full row: make room for a rarer joker.
             let rare = offers.iter().position(|o| {
                 o["kind"] == "joker"

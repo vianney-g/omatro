@@ -2,47 +2,46 @@ import QtQuick
 import omatro
 import "Labels.js" as Labels
 
-// A badge, like a README badge: grey label, coloured value; hovering it tells
-// what it does.
+// A badge, like a README badge ("label: value"); hovering it tells what it
+// does.
 Item {
   id: root
 
   property var tag: null
 
-  implicitWidth: pill.width
-  implicitHeight: pill.height
+  implicitWidth: Math.max(pill.width, currentText.visible ? currentText.implicitWidth : 0)
+  implicitHeight: pill.height + (currentText.visible ? currentText.implicitHeight : 0)
 
-  Row {
+  // What it would give now ("+$15 now"), under the pill.
+  Text {
+    id: currentText
+    anchors { top: pill.bottom; horizontalCenter: pill.horizontalCenter }
+    visible: text !== ""
+    text: root.tag && root.tag.current ? root.tag.current : ""
+    color: Color.accent
+    font.family: Style.font.family
+    font.pixelSize: Style.font.caption
+    font.bold: true
+  }
+
+  // One pill: "resolution: 4k".
+  Rectangle {
     id: pill
-    Rectangle {
-      width: labelText.implicitWidth + 2 * Style.space(6)
-      height: labelText.implicitHeight + 2 * Style.space(3)
-      color: Util.alpha(Color.foreground, 0.25)
-      radius: Style.cornerRadius
-      Text {
-        id: labelText
-        anchors.centerIn: parent
-        text: root.tag ? root.tag.label : ""
-        color: Color.foreground
-        font.family: Style.font.family
-        font.pixelSize: Style.font.caption
-      }
-    }
-    Rectangle {
-      visible: root.tag !== null && root.tag.value !== ""
-      width: valueText.implicitWidth + 2 * Style.space(6)
-      height: valueText.implicitHeight + 2 * Style.space(3)
-      color: Util.alpha(Color.accent, 0.45)
-      radius: Style.cornerRadius
-      Text {
-        id: valueText
-        anchors.centerIn: parent
-        text: root.tag ? root.tag.value : ""
-        color: Color.foreground
-        font.family: Style.font.family
-        font.pixelSize: Style.font.caption
-        font.bold: true
-      }
+    width: labelText.implicitWidth + 2 * Style.space(6)
+    height: labelText.implicitHeight + 2 * Style.space(3)
+    color: Util.alpha(Color.accent, 0.3)
+    border.width: Style.normalBorderWidth
+    border.color: Util.alpha(Color.accent, 0.6)
+    radius: Style.cornerRadius
+    Text {
+      id: labelText
+      anchors.centerIn: parent
+      textFormat: Text.StyledText
+      text: !root.tag ? "" : root.tag.value === "" ? "<b>" + root.tag.label + "</b>"
+        : root.tag.label + ": <b>" + root.tag.value + "</b>"
+      color: Color.foreground
+      font.family: Style.font.family
+      font.pixelSize: Style.font.caption
     }
   }
 

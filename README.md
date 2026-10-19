@@ -50,9 +50,10 @@ by rank or suit, Shift+←/→ to move the selected card (or drag it), J to brin
 joker to the front when they overlap (or hover or click one), N for a new game, I for
 fastfetch (run info: hand levels, cards left), Ctrl+Q to quit. Before a blind: Enter to
 play it, S to skip it. Ctrl+1 and Ctrl+2 apply the consumables of the clipboard. In the
-shop: 1 to 6 to buy the cards then the packs, in order, M to merge the pull request, R
-to reroll, Enter for the next blind; the buttons under each joker sell it or move it
-left and right. Before a boss, B rerolls it (with Change Request). In an open pack: Install
+shop: 1 to 6 to buy the cards then the packs, in order (Use now buys a theme or command
+and uses it at once), M to merge the pull request, R to reroll, Enter for the next
+blind. The buttons under each joker sell it or move it left and right, in the shop and
+during a blind. Before a boss, B rerolls it (with Change Request). In an open pack: Install
 takes a card, Ctrl+C (or Escape) skips.
 
 ## How a game goes
@@ -127,6 +128,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"preview","cards":[0,2]}` | Hand the selection would make, without playing it |
 | `{"cmd":"cash_out"}` | Cashes out a won blind's reward and opens the shop |
 | `{"cmd":"buy","offer":0}` | Buys a shop offer |
+| `{"cmd":"buy_and_use","offer":0}` | Buys a theme or command of the shop and uses it at once (not those that need cards in hand) |
 | `{"cmd":"sell","joker":0}` | Sells a joker (in the shop, before or during a blind) |
 | `{"cmd":"move_joker","from":0,"to":2}` | Moves a joker within the row |
 | `{"cmd":"move_card","from":7,"to":0}` | Moves a card of the hand (the hand then keeps this order) |
@@ -155,10 +157,11 @@ Responses:
   jokers (`id`, `name`, `description`, `quip`, `rarity`, `edition`, `price`,
   `sell_value`, `bonus` for what a growing joker gives now, `current` for what a Fork
   copies), `max_jokers`, `jokers_hidden`, `disabled_joker`, `vouchers` merged, `vouchers_for_sale` (in
-  the shop), `tags` (badges won, waiting), `boss_reroll_cost` (when Change Request allows it now), `modifiers` (names and effects of every enhancement, seal and
+  the shop), `tags` (badges won, waiting; a blind's `tag` too, with `current` for what it would give now), `boss_reroll_cost` (when Change Request allows it now), `modifiers` (names and effects of every enhancement, seal and
   edition), `consumables` (`kind` = `theme` / `command` / `oligarchy`, `id`, `name`,
   `description`, `quip`, `price`, `sell_value`, `min_cards` / `max_cards` to select,
-  `needs_hand` when it works on the cards in hand, `transparent` when it takes no slot), `consumable_slots`, `unique_themes`, `money` (below $0 with Cloud Credits, down to `-credit`),
+  `needs_hand` when it works on the cards in hand, `transparent` when it takes no slot,
+  `current` for what it would do now: a theme's next level, money, what Up Arrow recalls), `consumable_slots`, `unique_themes`, `money` (below $0 with Cloud Credits, down to `-credit`),
   `reward` in the `won` phase (with `cards` for Enterprise cards held, `discards` for
   the Raspberry Pi's unused discards, and `notes` such
   as "Beta Release broke."), `shop` offers
@@ -167,14 +170,14 @@ Responses:
   `choices`: consumables, jokers or `{"kind":"card","card":…}`) and `reroll_cost` in the shop. Scores and
   targets are floats; an infinite target (from ante 39) is `null`.
 - `{"event":"scored","score":{…},"state":{…}}` after `play`: played cards, recognized
-  hand and its `hand_name`, scoring cards, base chips and mult, then `steps` (each
+  hand and its `hand_name` and `hand_level`, scoring cards, base chips and mult, then `steps` (each
   trigger, with chips and mult afterwards) to animate the calculation, and the `total`.
   A step's `source` is a played `card`, a `held` card or a `joker`; its `effect` is
   `{"chips":n}`, `{"mult":n}`, `{"x_mult":n}`, `{"money":n}`, `"again"` (a retrigger) or
   `"debuffed"` (the boss keeps the card from scoring) or `"balance"` (a `deck` source:
   Hyprland Dwindle evens out chips and mult).
   `money` is what the hand earned, `notes` what happened to the jokers.
-- `{"event":"preview","cards":[…],"hand":"pair","hand_name":"Pair","scoring":[…],"base_chips":10,"base_mult":2.0}`
+- `{"event":"preview","cards":[…],"hand":"pair","hand_name":"Pair","hand_level":1,"scoring":[…],"base_chips":10,"base_mult":2.0}`
   (`hand` is `null` when nothing is chosen, `scoring` holds hand indices), with
   `bonuses`: each joker's badge if this hand were played.
 - `{"event":"decks","decks":[…]}` after `decks`: each deck's `id`, `name`,

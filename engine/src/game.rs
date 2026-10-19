@@ -156,10 +156,12 @@ pub struct ConsumableInfo {
     pub transparent: bool,
     /// Works on the cards in hand: only during a blind, or in a pack with a hand.
     pub needs_hand: bool,
+    /// What it would do now, when that depends on the game ("+$12 now").
+    pub current: Option<String>,
 }
 
 impl ConsumableInfo {
-    fn new(consumable: Consumable, price: u32) -> Self {
+    fn new(consumable: Consumable, price: u32, current: Option<String>) -> Self {
         ConsumableInfo {
             consumable,
             name: consumable.name(),
@@ -171,6 +173,7 @@ impl ConsumableInfo {
             max_cards: consumable.targets().map_or(0, |t| t.1),
             transparent: false,
             needs_hand: consumable.needs_hand(),
+            current,
         }
     }
 }
@@ -279,10 +282,12 @@ pub struct TagInfo {
     pub name: String,
     pub description: &'static str,
     pub quip: &'static str,
+    /// What it would give now, when that depends on the game ("+$15 now").
+    pub current: Option<String>,
 }
 
-impl From<Tag> for TagInfo {
-    fn from(tag: Tag) -> Self {
+impl TagInfo {
+    fn new(tag: Tag, current: Option<String>) -> Self {
         TagInfo {
             id: tag,
             label: tag.label(),
@@ -290,6 +295,7 @@ impl From<Tag> for TagInfo {
             name: tag.name(),
             description: tag.description(),
             quip: tag.quip(),
+            current,
         }
     }
 }
@@ -926,6 +932,25 @@ impl Game {
         }
     }
 
+    /// A badge as the display shows it, with what it would give now: on a
+    /// blind still to skip (`skipping`, which counts as one more skip), or
+    /// waiting for its moment.
+    fn tag_info(&self, tag: Tag, skipping: bool) -> TagInfo {
+        let money = |n: i64| Some(format!("+${n} now"));
+        let current = match tag {
+            Tag::Sponsors2x => money(self.money.clamp(0, 40)),
+            Tag::Commits1k => money(self.hands_played as i64),
+            Tag::GcDone => money(self.unused_discards as i64),
+            Tag::SpeedBlazing => money(5 * (self.skips + skipping as u32) as i64),
+            Tag::Contributors2 => {
+                let room = self.joker_slots().saturating_sub(self.jokers.len()).min(2);
+                (room < 2).then(|| format!("room for {room} now"))
+            }
+            _ => None,
+        };
+        TagInfo::new(tag, current)
+    }
+
     fn apply_tag(&mut self, tag: Tag) {
         use crate::pack::PackSize;
         let pack = |kind, size| Pack { kind, size };
@@ -1089,6 +1114,10 @@ impl Game {
                 Voucher::MirrorList | Voucher::FastestMirror => 2,
                 _ => 0,
             });
+            // The new workspace opens right away.
+            if matches!(voucher, Voucher::MoreWorkspaces | Voucher::EvenMoreWorkspaces) {
+                self.add_offer();
+            }
         }
     }
 
@@ -1840,6 +1869,7 @@ impl Game {
         Breakdown {
             hand: evaluated.kind,
             hand_name: evaluated.kind.name(),
+            hand_level: self.levels.level(evaluated.kind),
             scoring: evaluated.scoring.clone(),
             cards: played,
             base_chips: 0,
@@ -2254,7 +2284,32 @@ impl Game {
     fn roll_offers(&mut self) {
         self.offers.clear();
         self.free_offers.clear();
+        let slots =
+            SHOP_OFFERS + self.merged(&[Voucher::MoreWorkspaces, Voucher::EvenMoreWorkspaces]);
+        for _ in 0..slots {
+            if !self.add_offer() {
+                break;
+            }
+        }
+    }
+
+    /// Draws one more offer for the shop; false when there was none to draw.
+    fn add_offer(&mut self) -> bool {
         let mut rng = self.shop_rng.clone();
+        let offer = self.roll_offer(&mut rng);
+        self.shop_rng = rng;
+        match offer {
+            Some(offer) => {
+                self.offers.push(offer);
+                self.free_offers.push(false);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// A joker, a theme, a command, a card or an oligarchy card, by weight.
+    fn roll_offer(&self, rng: &mut Rng) -> Option<Offer> {
         let factor = |base: Voucher, more: Voucher| {
             if self.has(more) {
                 4.0
@@ -2276,33 +2331,19 @@ impl Game {
         } else {
             0.0
         };
-        let slots =
-            SHOP_OFFERS + self.merged(&[Voucher::MoreWorkspaces, Voucher::EvenMoreWorkspaces]);
-        for _ in 0..slots {
-            let roll = rng.unit() * (20.0 + theme + command + card + oligarchy);
-            let offer = if roll < 20.0 {
-                self.roll_joker(&mut rng)
-            } else if roll < 20.0 + theme {
-                self.roll_theme(&mut rng)
-            } else if roll < 20.0 + theme + command {
-                let command = Command::ALL[rng.below(Command::ALL.len() as u64) as usize];
-                Some(Offer::Consumable(Consumable::Command(command)))
-            } else if roll < 20.0 + theme + command + card {
-                Some(Offer::Card(self.shop_card(&mut rng)))
-            } else {
-                Some(Offer::Consumable(Consumable::Oligarchy(roll_oligarchy(
-                    &mut rng,
-                ))))
-            };
-            match offer {
-                Some(offer) => {
-                    self.offers.push(offer);
-                    self.free_offers.push(false);
-                }
-                None => break,
-            }
+        let roll = rng.unit() * (20.0 + theme + command + card + oligarchy);
+        if roll < 20.0 {
+            self.roll_joker(rng)
+        } else if roll < 20.0 + theme {
+            self.roll_theme(rng)
+        } else if roll < 20.0 + theme + command {
+            let command = Command::ALL[rng.below(Command::ALL.len() as u64) as usize];
+            Some(Offer::Consumable(Consumable::Command(command)))
+        } else if roll < 20.0 + theme + command + card {
+            Some(Offer::Card(self.shop_card(rng)))
+        } else {
+            Some(Offer::Consumable(Consumable::Oligarchy(roll_oligarchy(rng))))
         }
-        self.shop_rng = rng;
     }
 
     /// A theme whose hand type is known (secret hands once played), not on
@@ -2460,6 +2501,29 @@ impl Game {
         }
         self.offers.remove(index);
         self.free_offers.remove(index);
+        Ok(())
+    }
+
+    /// Buys a theme or command of the shop and uses it at once, without
+    /// going through the clipboard: only those that need no cards in hand.
+    pub fn buy_and_use(&mut self, offer: usize) -> Result<(), GameError> {
+        self.in_shop()?;
+        let consumable = match self.offers.get(offer) {
+            Some(Offer::Consumable(consumable)) => *consumable,
+            _ => return Err(GameError::BadSelection(format!("no theme or command #{offer}"))),
+        };
+        if consumable.needs_hand() {
+            return Err(GameError::BadSelection(format!(
+                "{} needs cards in hand: use it during a blind",
+                consumable.name()
+            )));
+        }
+        self.check_usable(consumable)?;
+        self.spend(self.offer_price(offer))?;
+        self.offers.remove(offer);
+        self.free_offers.remove(offer);
+        self.update_luck();
+        self.apply_consumable(consumable, &[]);
         Ok(())
     }
 
@@ -2787,6 +2851,63 @@ impl Game {
     }
 
     /// Refuses a consumable that could do nothing.
+    /// What a consumable would do now, when that depends on the game: the
+    /// level a theme brings its hand to, money, what Up Arrow recalls, room
+    /// left for what it creates. `frees_slot`: it sits in the clipboard, and
+    /// using it makes room there.
+    fn consumable_current(&self, consumable: Consumable, frees_slot: bool) -> Option<String> {
+        let money = |n: i64| Some(format!("+${n} now"));
+        let clipboard_room = || {
+            let taken = self.consumables.iter().filter(|h| !h.transparent).count();
+            (self.consumable_slots() + usize::from(frees_slot)).saturating_sub(taken)
+        };
+        let creates_two = || {
+            let room = clipboard_room().min(2);
+            (room < 2).then(|| format!("room for {room} now"))
+        };
+        match consumable {
+            Consumable::Theme(theme) => {
+                let hand = theme.hand();
+                let level = self.levels.level(hand);
+                let mut next = self.levels.clone();
+                next.raise(hand, 1);
+                let (chips, mult) = next.values(hand);
+                Some(format!(
+                    "{}: level {level} → {} ({chips} × {mult})",
+                    hand.name(),
+                    level + 1
+                ))
+            }
+            Consumable::Command(command) => match command {
+                Command::UpArrow => Some(match self.last_used {
+                    Some(last) if clipboard_room() > 0 => format!("would create {}", last.name()),
+                    Some(_) => "no room in the clipboard".to_string(),
+                    None => "nothing to recall yet".to_string(),
+                }),
+                Command::Rsync => money(self.money.clamp(0, 20)),
+                Command::DuSh => money(
+                    self.jokers
+                        .iter()
+                        .map(OwnedJoker::sell_value)
+                        .sum::<u32>()
+                        .min(50) as i64,
+                ),
+                Command::ThemeInstall | Command::OmarchyMenu => creates_two(),
+                Command::YayS if !self.has_room(None) => Some("no free joker slot".to_string()),
+                _ => None,
+            },
+            Consumable::Oligarchy(oligarchy) => match oligarchy {
+                Oligarchy::LeveragedBuyout | Oligarchy::AspiringBillionaire
+                    if !self.has_room(None) =>
+                {
+                    Some("no free joker slot".to_string())
+                }
+                Oligarchy::LeveragedBuyout => Some(format!("−${} now", self.money.max(0))),
+                _ => None,
+            },
+        }
+    }
+
     fn check_usable(&self, consumable: Consumable) -> Result<(), GameError> {
         let refuse = |why: &str| Err(GameError::BadSelection(why.to_string()));
         match consumable {
@@ -3136,7 +3257,11 @@ impl Game {
                 .items
                 .iter()
                 .map(|&item| match item {
-                    PackItem::Consumable(c) => ChoiceInfo::Consumable(ConsumableInfo::new(c, 0)),
+                    PackItem::Consumable(c) => ChoiceInfo::Consumable(ConsumableInfo::new(
+                        c,
+                        0,
+                        self.consumable_current(c, false),
+                    )),
                     PackItem::Joker { joker, edition } => ChoiceInfo::Joker(JokerInfo::new(
                         &OwnedJoker::new(joker, edition),
                         None,
@@ -3353,8 +3478,8 @@ impl Game {
                         reward: boss.map_or(kind.reward(), Boss::reward),
                         status: self.blind_status(kind),
                         tag: match kind {
-                            BlindKind::Small => Some(self.blind_tags[0].into()),
-                            BlindKind::Big => Some(self.blind_tags[1].into()),
+                            BlindKind::Small => Some(self.tag_info(self.blind_tags[0], true)),
+                            BlindKind::Big => Some(self.tag_info(self.blind_tags[1], true)),
                             BlindKind::Boss => None,
                         },
                     }
@@ -3400,7 +3525,7 @@ impl Game {
                 Vec::new()
             },
             boss_reroll_cost: self.boss_reroll_cost(),
-            tags: self.tags.iter().map(|&t| t.into()).collect(),
+            tags: self.tags.iter().map(|&t| self.tag_info(t, false)).collect(),
             run_deck: self.run_deck.map(DeckInfo::from),
             hand_size: self.hand_size(),
             remaining: {
@@ -3439,7 +3564,11 @@ impl Game {
                 .map(|held| ConsumableInfo {
                     transparent: held.transparent,
                     sell_value: held.sell_value(),
-                    ..ConsumableInfo::new(held.consumable, held.consumable.price())
+                    ..ConsumableInfo::new(
+                        held.consumable,
+                        held.consumable.price(),
+                        self.consumable_current(held.consumable, !held.transparent),
+                    )
                 })
                 .collect(),
             consumable_slots: self.consumable_slots(),
@@ -3470,7 +3599,11 @@ impl Game {
                         })
                     }
                     Offer::Consumable(c) => {
-                        OfferInfo::Consumable(ConsumableInfo::new(c, self.offer_price(i)))
+                        OfferInfo::Consumable(ConsumableInfo::new(
+                            c,
+                            self.offer_price(i),
+                            self.consumable_current(c, false),
+                        ))
                     }
                     Offer::Card(card) => OfferInfo::Card(CardOffer {
                         kind: "card",
@@ -4801,6 +4934,66 @@ mod tests {
         assert_eq!(game.money, 42);
         merge(&mut game, &[Voucher::LifetimeDeal]);
         assert_eq!(game.discounted(10), 5);
+    }
+
+    #[test]
+    fn consumables_and_badges_tell_what_they_would_give() {
+        let mut game = with_command(48, Command::DuSh, vec![Joker::Fork, Joker::Hotwire]);
+        game.money = 15;
+        let state = game.state();
+        assert_eq!(state.consumables[0].current.as_deref(), Some("+$9 now"));
+        let current = |game: &Game, c| game.consumable_current(c, false);
+        assert_eq!(
+            current(&game, Consumable::Theme(Theme::Nord)).as_deref(),
+            Some("Straight: level 1 → 2 (60 × 7)")
+        );
+        assert_eq!(current(&game, Consumable::Command(Command::Rsync)).as_deref(), Some("+$15 now"));
+        assert_eq!(
+            current(&game, Consumable::Command(Command::UpArrow)).as_deref(),
+            Some("nothing to recall yet")
+        );
+        game.last_used = Some(Consumable::Theme(Theme::Nord));
+        assert_eq!(
+            current(&game, Consumable::Command(Command::UpArrow)).as_deref(),
+            Some("would create Nord")
+        );
+        game.skips = 2;
+        assert_eq!(game.tag_info(Tag::SpeedBlazing, true).current.as_deref(), Some("+$15 now"));
+        assert_eq!(game.tag_info(Tag::Version3, true).current, None);
+    }
+
+    #[test]
+    fn buy_and_use_skips_the_clipboard() {
+        let mut game = shopping(115, vec![]);
+        game.offers = vec![
+            Offer::Consumable(Consumable::Theme(Theme::Nord)),
+            Offer::Consumable(Consumable::Command(Command::RmRf)),
+            Offer::Consumable(Consumable::Command(Command::UpArrow)),
+        ];
+        game.free_offers = vec![false; 3];
+        // The clipboard may be full: the card never goes there.
+        game.consumables = vec![Consumable::Command(Command::DuSh).into(); 2];
+        let level = game.levels.level(HandKind::Straight);
+        game.buy_and_use(0).unwrap();
+        assert_eq!(game.levels.level(HandKind::Straight), level + 1);
+        assert_eq!(game.consumables.len(), 2);
+        assert!(game.buy_and_use(0).is_err(), "rm -rf needs cards in hand");
+        // Up Arrow recalls the theme just used, into the clipboard.
+        game.consumables.clear();
+        game.buy_and_use(1).unwrap();
+        assert_eq!(game.consumables[0].consumable, Consumable::Theme(Theme::Nord));
+        assert_eq!(game.offers.len(), 1);
+    }
+
+    #[test]
+    fn more_workspaces_opens_a_slot_right_away() {
+        let mut game = shopping(114, vec![]);
+        let before = game.offers.clone();
+        game.voucher_offers = vec![Voucher::MoreWorkspaces];
+        game.buy_voucher(0).unwrap();
+        assert_eq!(game.offers.len(), before.len() + 1);
+        assert_eq!(game.offers[..before.len()], before[..]);
+        assert_eq!(game.free_offers.len(), game.offers.len());
     }
 
     #[test]

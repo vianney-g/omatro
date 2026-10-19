@@ -97,8 +97,12 @@ it lists is a bug, in the engine or in the bot.
 `game.rs`: money, jokers, jump to an ante or blind, win the blind in progress); the app
 binds F5 / F6 / F7 / F8 / F9 / F10 to it (F8 raises every known hand one level, F9 adds a
 random joker, F10 a random theme). `OMATRO_JOKERS=uptime,fork` (debug only) sets the
-jokers new games start with, to screenshot specific jokers. To check the interface, run the app with it, float and size the
-window, drive it with `wtype` and capture it with `grim`. Hyprland 0.56 dispatchers use
+jokers new games start with, to screenshot specific jokers.
+`OMATRO_SCRIPT` (debug only) plays steps through the app's own key handling and saves
+screenshots, with no keyboard, pointer or focus, even with `QT_QPA_PLATFORM=offscreen`:
+`OMATRO_SCRIPT="size:1100,700;sleep:1500;key:Return;key:Shift+Left;key:F5;shot:/tmp/a.png;quit"`
+(see `runScript` in `Main.qml`). Give the run its own `XDG_STATE_HOME` and
+`XDG_CONFIG_HOME` so that the save and settings stay untouched. Hovers need a real window: float and size the window, drive it with `wtype` and capture it with `grim`. Hyprland 0.56 dispatchers use
 Lua: `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'`,
 `'hl.dsp.window.resize({ x = 1100, y = 800 })'`, `'hl.dsp.window.center()'`; the window
 geometry comes from `hyprctl clients -j`; `'hl.dsp.cursor.move({ x = …, y = … })'`
@@ -236,6 +240,10 @@ in the clipboard (`Game::consumables`, 2 slots; a `Held` entry may be Transparen
 take no slot) and used by `Game::use_consumable(index, cards)`: `targets()` says how
 many hand cards it needs selected, `needs_hand()` whether it works on the hand at all,
 `check_usable` refuses one that could do nothing, `run_command` / `run_oligarchy` apply it.
+`buy_and_use` applies a shop theme or command at once, without the clipboard (not
+those that need the hand). A consumable whose effect depends on the game says what
+it would do now in `current` (`Game::consumable_current`: a theme's next level, money,
+what Up Arrow recalls), as badges do (`Game::tag_info`); give new ones theirs there.
 Add things to the clipboard with `Game::create`, which respects the slots. Destroy cards
 with `Game::destroy_cards`, which keeps ThePrimeagen counting. Oligarchy cards (a running
 joke of DHH's, see oligarchy.fyi) never show up in the shop (`roll_oligarchy` draws
