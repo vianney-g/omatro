@@ -25,11 +25,23 @@ code only, not the names and trademarks the game mentions.
 
 ## Installation
 
-A ready-made binary for Linux x86_64 comes with each
-[release](https://github.com/vianney-g/omatro/releases): it needs Qt 6
-(`sudo pacman -S qt6-base qt6-declarative`).
+On Arch Linux and Omarchy, each [release](https://github.com/vianney-g/omatro/releases)
+comes with a pacman package, which brings Qt 6 along:
 
-To build it, you need Rust and Qt 6 (`qt6-base`, `qt6-declarative`).
+```sh
+sudo pacman -U https://github.com/vianney-g/omatro/releases/download/v0.1.0/omatro-0.1.0-1-x86_64.pkg.tar.zst
+```
+
+Or build the package from the latest release's source, with pacman tracking it:
+
+```sh
+git clone https://github.com/vianney-g/omatro && cd omatro/pkgbuild && makepkg -si
+```
+
+Releases also hold a plain archive (binary, launcher entry, icon) for other
+distributions, which needs Qt 6 installed.
+
+To build it by hand, you need Rust and Qt 6 (`qt6-base`, `qt6-declarative`).
 
 ```sh
 make install   # build and install into ~/.local (binary, launcher entry, icon)

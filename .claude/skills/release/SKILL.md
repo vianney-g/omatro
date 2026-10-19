@@ -7,7 +7,8 @@ description: Publishes a new version of omatro, end to end - checks, version bum
 
 A release goes out in two places: a **GitHub release** (built by
 `.github/workflows/release.yml` when a `v*` tag is pushed: Arch container, tests,
-archive with the binary, launcher entry, icon and a `.sha256`) and the **AUR package**
+archive with the binary, launcher entry, icon and a `.sha256`, and the pacman package
+built from `pkgbuild/PKGBUILD` set to the tag's version) and the **AUR package**
 `omatro`, which builds from the tag's source tarball (`pkgbuild/PKGBUILD` in this repo
 is the reference copy; the AUR repo is a separate git repo).
 
@@ -109,6 +110,13 @@ Account → SSH Public Key) or `~/.ssh/config` lacks the `Host aur.archlinux.org
 
 Why `options=('!lto')` stays in the PKGBUILD: makepkg's default LTO turns cxx-qt's C++
 objects into bitcode the Rust linker can't resolve (undefined `qstring_*` symbols).
+
+The README's `pacman -U` line names a version: point it at the new release's package
+in the same commit.
+
+AUR registration was closed in October 2026 (a wave of bot accounts); until the
+maintainer has an account, skip the AUR push, but still update `pkgbuild/PKGBUILD`
+with `scripts/aur.sh` (it is what `makepkg -si` from the repo builds).
 
 ## 6. Report
 

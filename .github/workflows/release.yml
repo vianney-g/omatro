@@ -1,5 +1,6 @@
 # Pushing a version tag (git tag v0.1.0 && git push --tags) builds omatro on
-# Arch Linux, runs the tests and publishes a GitHub release with the archive.
+# Arch Linux, runs the tests and publishes a GitHub release with the archive
+# and the pacman package (pkgbuild/PKGBUILD, set to this version).
 name: Release
 
 on:
@@ -15,7 +16,7 @@ jobs:
     container: archlinux:latest
     steps:
       - name: Install the build dependencies
-        run: pacman -Syu --noconfirm --needed base-devel git rust qt6-base qt6-declarative
+        run: pacman -Syu --noconfirm --needed base-devel git pacman-contrib rust qt6-base qt6-declarative
 
       - uses: actions/checkout@v4
 
@@ -35,15 +36,36 @@ jobs:
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
           echo "ARCHIVE=$name.tar.gz" >> "$GITHUB_ENV"
 
+      # The PKGBUILD in the tag still names the previous version: set this one
+      # and its checksum. makepkg refuses to run as root.
+      - name: Pacman package
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          useradd -m builder
+          mkdir /tmp/pkg && cp pkgbuild/PKGBUILD /tmp/pkg/ && chown -R builder /tmp/pkg
+          cd /tmp/pkg
+          sed -i -e "s/^pkgver=.*/pkgver=$version/" -e "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          su builder -c "updpkgsums && makepkg --nocheck --noconfirm"
+          package=omatro-$version-1-x86_64.pkg.tar.zst
+          cp "$package" "$GITHUB_WORKSPACE/"
+          echo "PACKAGE=$package" >> "$GITHUB_ENV"
+
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             ${{ env.ARCHIVE }}
             ${{ env.ARCHIVE }}.sha256
+            ${{ env.PACKAGE }}
           body: |
             omatro ${{ github.ref_name }} for Linux x86_64, built on Arch Linux.
 
-            It needs Qt 6: `sudo pacman -S qt6-base qt6-declarative`. Then, from
+            On Arch (and Omarchy), install the package, which brings Qt 6 along:
+
+            ```sh
+            sudo pacman -U https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ env.PACKAGE }}
+            ```
+
+            Elsewhere, the archive needs Qt 6: `sudo pacman -S qt6-base qt6-declarative`. Then, from
             the unpacked archive, run `./omatro`, or install it with its launcher
             entry and icon:
 
