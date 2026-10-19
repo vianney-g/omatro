@@ -12,7 +12,7 @@ Rectangle {
   signal resume()
   signal newGame()
 
-  color: Util.alpha(Color.background, 0.96)
+  color: Util.alpha(Colors.background, 0.96)
 
   MouseArea { anchors.fill: parent }
 
@@ -38,7 +38,7 @@ Rectangle {
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
       text: I18n.tr("Resume your game?")
-      color: Color.accent
+      color: Colors.accent
       font.family: Style.font.family
       font.pixelSize: Style.font.displayLarge
       font.bold: true
@@ -46,14 +46,14 @@ Rectangle {
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
       text: root.summary
-      color: Color.foreground
+      color: Colors.foreground
       font.family: Style.font.family
       font.pixelSize: Style.font.title
     }
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
       text: I18n.tr("A new game replaces it once started.")
-      color: Color.muted
+      color: Colors.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }

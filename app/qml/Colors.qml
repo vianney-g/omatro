@@ -2,7 +2,8 @@ pragma Singleton
 import QtQuick
 import omatro
 
-// Omarchy theme colors, under the same names as in the shell.
+// Omarchy theme colors, under the same names as in the shell (not "Color":
+// QtQuick has a type of that name since Qt 6.12).
 QtObject {
   readonly property color background: OmarchyTheme.background
   readonly property color foreground: OmarchyTheme.foreground

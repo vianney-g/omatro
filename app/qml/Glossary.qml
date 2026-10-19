@@ -25,9 +25,9 @@ Item {
     width: Style.space(220)
     height: entries.implicitHeight + 2 * Style.space(8)
     radius: Style.cornerRadius
-    color: Color.background
+    color: Colors.background
     border.width: Style.normalBorderWidth
-    border.color: Color.accent
+    border.color: Colors.accent
 
     Column {
       id: entries
@@ -42,7 +42,7 @@ Item {
             width: parent.width
             wrapMode: Text.WordWrap
             text: modelData.name
-            color: Color.accent
+            color: Colors.accent
             font.family: Style.font.family
             font.pixelSize: Style.font.body
             font.bold: true
@@ -50,7 +50,7 @@ Item {
           Text {
             width: parent.width
             text: modelData.category
-            color: Color.muted
+            color: Colors.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
             font.italic: true
@@ -59,7 +59,7 @@ Item {
             width: parent.width
             wrapMode: Text.WordWrap
             text: modelData.description
-            color: Color.foreground
+            color: Colors.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }

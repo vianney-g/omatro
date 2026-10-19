@@ -13,17 +13,17 @@ Item {
   ImageParticle {
     system: system; groups: ["chips"]
     source: "qrc:///particleresources/star.png"
-    color: Color.accent; colorVariation: 0.2
+    color: Colors.accent; colorVariation: 0.2
   }
   ImageParticle {
     system: system; groups: ["mult"]
     source: "qrc:///particleresources/star.png"
-    color: Color.urgent; colorVariation: 0.2
+    color: Colors.urgent; colorVariation: 0.2
   }
   ImageParticle {
     system: system; groups: ["warm"]
     source: "qrc:///particleresources/star.png"
-    color: Color.warm; colorVariation: 0.2
+    color: Colors.warm; colorVariation: 0.2
   }
 
   component Burst: Emitter {

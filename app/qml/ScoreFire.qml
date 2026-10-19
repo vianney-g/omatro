@@ -16,9 +16,9 @@ Item {
   // How high the flames rise (pixels per second for a given life).
   readonly property real rise: height * (0.35 + 0.2 * heat)
 
-  readonly property color outer: Color.urgent
-  readonly property color middle: Qt.tint(Color.urgent, Util.alpha(Color.warm, 0.6))
-  readonly property color core: Qt.lighter(Color.warm, 1.25)
+  readonly property color outer: Colors.urgent
+  readonly property color middle: Qt.tint(Colors.urgent, Util.alpha(Colors.warm, 0.6))
+  readonly property color core: Qt.lighter(Colors.warm, 1.25)
 
   // Always running: when the emitters stop, the flames still burn out.
   ParticleSystem { id: fire }

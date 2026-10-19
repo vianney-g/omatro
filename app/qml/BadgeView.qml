@@ -18,7 +18,7 @@ Item {
     anchors { top: pill.bottom; horizontalCenter: pill.horizontalCenter }
     visible: text !== ""
     text: root.tag && root.tag.current ? root.tag.current : ""
-    color: Color.accent
+    color: Colors.accent
     font.family: Style.font.family
     font.pixelSize: Style.font.caption
     font.bold: true
@@ -29,9 +29,9 @@ Item {
     id: pill
     width: labelText.implicitWidth + 2 * Style.space(6)
     height: labelText.implicitHeight + 2 * Style.space(3)
-    color: Util.alpha(Color.accent, 0.3)
+    color: Util.alpha(Colors.accent, 0.3)
     border.width: Style.normalBorderWidth
-    border.color: Util.alpha(Color.accent, 0.6)
+    border.color: Util.alpha(Colors.accent, 0.6)
     radius: Style.cornerRadius
     Text {
       id: labelText
@@ -39,7 +39,7 @@ Item {
       textFormat: Text.StyledText
       text: !root.tag ? "" : root.tag.value === "" ? "<b>" + root.tag.label + "</b>"
         : root.tag.label + ": <b>" + root.tag.value + "</b>"
-      color: Color.foreground
+      color: Colors.foreground
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
     }
@@ -60,16 +60,16 @@ Item {
     width: Math.min(Style.space(240), tip.implicitWidth + 2 * Style.space(8))
     height: tip.implicitHeight + 2 * Style.space(6)
     radius: Style.cornerRadius
-    color: Color.background
+    color: Colors.background
     border.width: Style.normalBorderWidth
-    border.color: Color.accent
+    border.color: Colors.accent
     Text {
       id: tip
       anchors { fill: parent; margins: Style.space(6) }
       wrapMode: Text.WordWrap
       textFormat: Text.StyledText
       text: root.tag ? Labels.highlight(root.tag.description, Hints.terms, root.tag.name) + "<br>" + root.tag.quip : ""
-      color: Color.foreground
+      color: Colors.foreground
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
     }

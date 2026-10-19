@@ -20,7 +20,7 @@ Column {
   Text {
     anchors.horizontalCenter: parent.horizontalCenter
     text: root.opened ? "pacman -S " + root.opened.name : ""
-    color: Color.urgent
+    color: Colors.urgent
     font.family: Style.font.family
     font.pixelSize: Style.font.displayLarge
     font.bold: true
@@ -32,7 +32,7 @@ Column {
       ? I18n.tr("{description} · {n} left", { description: root.opened.description, n: root.opened.picks_left })
         + (root.opened.with_hand ? " · " + I18n.tr("select cards below for the commands that need them") : "")
       : ""
-    color: Color.muted
+    color: Colors.muted
     font.family: Style.font.family
     font.pixelSize: Style.font.body
   }
@@ -58,7 +58,7 @@ Column {
           visible: modelData.max_cards > 0
           horizontalAlignment: Text.AlignHCenter
           text: visible ? I18n.tr("select {range}", { range: Labels.range(modelData.min_cards, modelData.max_cards) }) : ""
-          color: Color.muted
+          color: Colors.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }

@@ -12,7 +12,7 @@ Window {
 
   title: "omatro"
   visible: true
-  color: Color.background
+  color: Colors.background
   // Sizes from the theme scale alone: `Style.space` depends on the window size.
   width: 1100 * Style.themeScale
   height: 800 * Style.themeScale
@@ -477,9 +477,9 @@ Window {
       else if (e.x_mult !== undefined) { multCounter.pulse(); multCounter.shake(); sparks.burst(multCounter, "warm") }
       else if (e === "balance") { chipsCounter.pulse(); multCounter.pulse() }
       fireHeat = Math.max(fireHeat, heatFor(step.chips * step.mult))
-      var color = step.effect === "debuffed" ? Color.muted
-        : step.effect === "again" ? Color.foreground
-        : Labels.isChips(step.effect) || Labels.isMoney(step.effect) ? Color.accent : Color.urgent
+      var color = step.effect === "debuffed" ? Colors.muted
+        : step.effect === "again" ? Colors.foreground
+        : Labels.isChips(step.effect) || Labels.isMoney(step.effect) ? Colors.accent : Colors.urgent
       var view = step.source.kind === "card" ? tableRepeater.itemAt(step.source.index)
         : step.source.kind === "held" ? handRepeater.itemAt(step.source.index)
         : step.source.kind === "joker" ? jokerRepeater.itemAt(step.source.index)
@@ -581,13 +581,13 @@ Window {
   }
 
   component Caption: Text {
-    color: Color.muted
+    color: Colors.muted
     font.family: Style.font.family
     font.pixelSize: Style.font.caption
   }
 
   component Value: Text {
-    color: Color.foreground
+    color: Colors.foreground
     font.family: Style.font.family
     font.pixelSize: Style.font.display
     font.bold: true
@@ -745,7 +745,7 @@ Window {
         Column {
           Text {
             text: "omatro"
-            color: Color.accent
+            color: Colors.accent
             font.family: Style.font.family
             font.pixelSize: Style.font.displayLarge
             font.bold: true
@@ -782,7 +782,7 @@ Window {
               text: visible
                 ? "<b>" + I18n.tr("Boss: {name}", { name: root.game.boss.name }) + "</b><br>" + root.game.boss.description
                 : ""
-              color: root.bossName !== "" && root.game.phase === "playing" ? Color.urgent : Color.muted
+              color: root.bossName !== "" && root.game.phase === "playing" ? Colors.urgent : Colors.muted
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -809,7 +809,7 @@ Window {
             anchors { fill: parent; margins: Style.spacing.xxl }
             spacing: Style.spacing.xs
             Caption { text: I18n.tr("Money") }
-            Value { text: root.game ? Labels.money(root.game.money) : "–"; color: Color.accent }
+            Value { text: root.game ? Labels.money(root.game.money) : "–"; color: Colors.accent }
           }
         }
 
@@ -818,7 +818,7 @@ Window {
         Box {
           Layout.fillWidth: true
           implicitHeight: calcCol.implicitHeight + 2 * Style.spacing.xxl
-          border.color: root.fireHeat > 0 ? Color.warm : Style.normalBorderColor
+          border.color: root.fireHeat > 0 ? Colors.warm : Style.normalBorderColor
           Behavior on border.color { ColorAnimation { duration: 300 } }
           // Behind the hand name and the counters.
           ScoreFire {
@@ -836,7 +836,7 @@ Window {
               Text {
                 id: handNameText
                 text: root.handName || I18n.tr("Choose cards")
-                color: root.handName ? Color.foreground : Color.muted
+                color: root.handName ? Colors.foreground : Colors.muted
                 font.family: Style.font.family
                 font.pixelSize: Style.font.heading
                 font.bold: root.handName !== ""
@@ -845,7 +845,7 @@ Window {
                 anchors.baseline: handNameText.baseline
                 visible: root.handLevel > 0
                 text: I18n.tr("lvl.{n}", { n: root.handLevel })
-                color: Color.accent
+                color: Colors.accent
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
                 font.bold: true
@@ -855,19 +855,19 @@ Window {
               spacing: Style.spacing.md
               Counter {
                 id: chipsCounter
-                tint: Color.accent
+                tint: Colors.accent
                 value: Labels.number(root.liveChips)
               }
               Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "×"
-                color: Color.muted
+                color: Colors.muted
                 font.family: Style.font.family
                 font.pixelSize: Style.font.heading
               }
               Counter {
                 id: multCounter
-                tint: Color.urgent
+                tint: Colors.urgent
                 value: Labels.mult(root.liveMult)
               }
             }
@@ -884,7 +884,7 @@ Window {
               id: handsCol
               anchors { fill: parent; margins: Style.spacing.xl }
               Caption { text: I18n.tr("Hands") }
-              Value { text: root.game ? root.game.hands_left : "–"; color: Color.accent }
+              Value { text: root.game ? root.game.hands_left : "–"; color: Colors.accent }
             }
           }
           Box {
@@ -894,7 +894,7 @@ Window {
               id: discardsCol
               anchors { fill: parent; margins: Style.spacing.xl }
               Caption { text: I18n.tr("Discards") }
-              Value { text: root.game ? root.game.discards_left : "–"; color: Color.urgent }
+              Value { text: root.game ? root.game.discards_left : "–"; color: Colors.urgent }
             }
           }
         }
@@ -1282,7 +1282,7 @@ Window {
           Text {
             Layout.alignment: Qt.AlignHCenter
             text: root.notice
-            color: Color.muted
+            color: Colors.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.title
           }
@@ -1311,7 +1311,7 @@ Window {
           Text {
             Layout.alignment: Qt.AlignHCenter
             text: root.notice
-            color: Color.muted
+            color: Colors.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.title
           }
@@ -1336,7 +1336,7 @@ Window {
           Text {
             Layout.alignment: Qt.AlignHCenter
             text: root.notice
-            color: Color.muted
+            color: Colors.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.title
           }
@@ -1379,7 +1379,7 @@ Window {
               from: 1.6; to: 1; duration: 350; easing.type: Easing.OutBack
             }
             text: root.scoring ? "= " + Labels.number(root.scoring.total) : ""
-            color: Color.foreground
+            color: Colors.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.displayLarge
             font.bold: true
@@ -1392,7 +1392,7 @@ Window {
             wrapMode: Text.WordWrap
             visible: root.scoring === null
             text: root.notice
-            color: Color.muted
+            color: Colors.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.title
           }
@@ -1489,7 +1489,7 @@ Window {
     Rectangle {
       anchors.fill: parent
       visible: root.game !== null && (root.game.phase === "won" || root.game.phase === "lost") && !root.busy
-      color: Util.alpha(Color.background, 0.85)
+      color: Util.alpha(Colors.background, 0.85)
 
       MouseArea { anchors.fill: parent }
 
@@ -1497,8 +1497,8 @@ Window {
         anchors.centerIn: parent
         width: Style.space(420)
         height: endCol.implicitHeight + 2 * Style.spacing.huge
-        color: Color.background
-        border.color: root.game && root.game.phase === "won" ? Color.accent : Color.urgent
+        color: Colors.background
+        border.color: root.game && root.game.phase === "won" ? Colors.accent : Colors.urgent
 
         Column {
           id: endCol
@@ -1510,7 +1510,7 @@ Window {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: I18n.tr(endCol.victory ? "Omarchy achieved!" : endCol.won ? "Blind won!" : "Game over")
-            color: endCol.won ? Color.accent : Color.urgent
+            color: endCol.won ? Colors.accent : Colors.urgent
             font.family: Style.font.family
             font.pixelSize: Style.font.displayLarge
             font.bold: true
@@ -1523,7 +1523,7 @@ Window {
             text: endCol.victory
               ? I18n.tr("Ante {n} beaten. Go post your setup on r/unixporn.", { n: root.game.winning_ante })
               : I18n.tr("Have you tried rebooting?")
-            color: Color.muted
+            color: Colors.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.body
             font.italic: true
@@ -1532,7 +1532,7 @@ Window {
             anchors.horizontalCenter: parent.horizontalCenter
             text: root.game ? Labels.number(root.game.score) + " / " + Labels.number(root.game.target)
               + (endCol.won ? "" : " · ante " + root.game.ante) : ""
-            color: Color.foreground
+            color: Colors.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.title
           }
@@ -1543,7 +1543,7 @@ Window {
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
             text: visible ? root.game.reward.notes.join(" ") : ""
-            color: Color.urgent
+            color: Colors.urgent
             font.family: Style.font.family
             font.pixelSize: Style.font.body
           }
@@ -1573,7 +1573,7 @@ Window {
               }
               Text {
                 text: modelData.text
-                color: modelData.value ? Color.accent : (modelData.last ? Color.foreground : Color.muted)
+                color: modelData.value ? Colors.accent : (modelData.last ? Colors.foreground : Colors.muted)
                 font.family: Style.font.family
                 font.pixelSize: Style.font.subtitle
                 font.bold: modelData.last
@@ -1649,9 +1649,9 @@ Window {
           width: newsText.implicitWidth + 2 * Style.spacing.xl
           height: newsText.implicitHeight + 2 * Style.spacing.lg
           radius: Style.cornerRadius
-          color: Qt.tint(Color.background, Util.alpha(feat ? Color.warm : Color.accent, 0.15))
+          color: Qt.tint(Colors.background, Util.alpha(feat ? Colors.warm : Colors.accent, 0.15))
           border.width: Style.space(2)
-          border.color: feat ? Color.warm : Color.accent
+          border.color: feat ? Colors.warm : Colors.accent
           Column {
             id: newsText
             anchors.centerIn: parent
@@ -1659,13 +1659,13 @@ Window {
             Text {
               text: I18n.tr(modelData.kind === "achievement" ? "Achievement unlocked"
                 : modelData.kind === "unlocked" ? "Now in your games" : "New in the collection")
-              color: Color.muted
+              color: Colors.muted
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
             Text {
               text: modelData.name + (modelData.text ? " · " + modelData.text : "")
-              color: feat ? Color.warm : Color.foreground
+              color: feat ? Colors.warm : Colors.foreground
               font.family: Style.font.family
               font.pixelSize: Style.font.body
               font.bold: true

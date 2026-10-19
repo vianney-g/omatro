@@ -27,9 +27,9 @@ Row {
       width: Style.space(210)
       height: col.implicitHeight + 2 * Style.spacing.huge
       radius: Style.cornerRadius
-      color: next ? Qt.tint(Color.background, Util.alpha(Color.accent, 0.10)) : Style.normalFill
+      color: next ? Qt.tint(Colors.background, Util.alpha(Colors.accent, 0.10)) : Style.normalFill
       border.width: next ? Style.space(2) : Style.normalBorderWidth
-      border.color: next ? Color.accent : Style.normalBorderColor
+      border.color: next ? Colors.accent : Style.normalBorderColor
       opacity: done ? 0.5 : 1
 
       Column {
@@ -42,7 +42,7 @@ Row {
           horizontalAlignment: Text.AlignHCenter
           wrapMode: Text.WordWrap
           text: modelData.name
-          color: panel.next ? Color.accent : Color.foreground
+          color: panel.next ? Colors.accent : Colors.foreground
           font.family: Style.font.family
           font.pixelSize: Style.font.heading
           font.bold: true
@@ -54,7 +54,7 @@ Row {
           horizontalAlignment: Text.AlignHCenter
           wrapMode: Text.WordWrap
           text: modelData.description
-          color: Color.urgent
+          color: Colors.urgent
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           font.bold: true
@@ -65,7 +65,7 @@ Row {
           horizontalAlignment: Text.AlignHCenter
           wrapMode: Text.WordWrap
           text: modelData.quip
-          color: Color.muted
+          color: Colors.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
           font.italic: true
@@ -75,14 +75,14 @@ Row {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: I18n.tr("Target")
-            color: Color.muted
+            color: Colors.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: Labels.number(modelData.target)
-            color: Color.foreground
+            color: Colors.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.display
             font.bold: true
@@ -91,7 +91,7 @@ Row {
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
           text: I18n.tr("Reward: {money}", { money: Labels.money(modelData.reward) })
-          color: Color.accent
+          color: Colors.accent
           font.family: Style.font.family
           font.pixelSize: Style.font.body
         }
@@ -108,7 +108,7 @@ Row {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: Labels.blindStatus(modelData.status)
-            color: Color.muted
+            color: Colors.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.subtitle
           }

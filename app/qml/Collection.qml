@@ -12,7 +12,7 @@ Rectangle {
   property int tab: 0
   signal close()
 
-  color: Util.alpha(Color.background, 0.96)
+  color: Util.alpha(Colors.background, 0.96)
 
   readonly property var families: collection ? collection.families : []
   // The last tab is the achievements.
@@ -30,7 +30,7 @@ Rectangle {
   MouseArea { anchors.fill: parent; onClicked: root.close() }
 
   component Header: Text {
-    color: Color.muted
+    color: Colors.muted
     font.family: Style.font.family
     font.pixelSize: Style.font.caption
   }
@@ -38,9 +38,9 @@ Rectangle {
   Rectangle {
     anchors { fill: parent; margins: Style.spacing.huge }
     radius: Style.cornerRadius
-    color: Color.background
+    color: Colors.background
     border.width: Style.normalBorderWidth
-    border.color: Color.accent
+    border.color: Colors.accent
 
     // Clicks inside the panel do not close it.
     MouseArea { anchors.fill: parent }
@@ -55,7 +55,7 @@ Rectangle {
         Text {
           id: title
           text: I18n.tr("collection")
-          color: Color.accent
+          color: Colors.accent
           font.family: Style.font.family
           font.pixelSize: Style.font.displayLarge
           font.bold: true
@@ -85,14 +85,14 @@ Rectangle {
             width: tabLabel.implicitWidth + 2 * Style.spacing.lg
             height: tabLabel.implicitHeight + 2 * Style.spacing.sm
             radius: Style.cornerRadius
-            color: chosen ? Qt.tint(Color.background, Util.alpha(Color.accent, 0.15)) : Style.normalFill
+            color: chosen ? Qt.tint(Colors.background, Util.alpha(Colors.accent, 0.15)) : Style.normalFill
             border.width: chosen ? Style.space(2) : Style.normalBorderWidth
-            border.color: chosen ? Color.accent : Style.normalBorderColor
+            border.color: chosen ? Colors.accent : Style.normalBorderColor
             Text {
               id: tabLabel
               anchors.centerIn: parent
               text: (achievements ? I18n.tr("Achievements") : family.name) + "  " + done + "/" + total
-              color: chosen ? Color.accent : Color.foreground
+              color: chosen ? Colors.accent : Colors.foreground
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -138,13 +138,13 @@ Rectangle {
     Rectangle {
       readonly property var e: parent.entry
       readonly property bool found: e.state === "found"
-      readonly property color tint: !e.rarity ? Color.foreground
-        : e.rarity === "extra" ? Color.accent
-        : e.rarity === "core" ? Color.foreground : Color.urgent
+      readonly property color tint: !e.rarity ? Colors.foreground
+        : e.rarity === "extra" ? Colors.accent
+        : e.rarity === "core" ? Colors.foreground : Colors.urgent
       radius: Style.cornerRadius
       color: found ? Style.normalFill : "transparent"
       border.width: Style.normalBorderWidth
-      border.color: e.state === "locked" ? Color.urgent : Style.normalBorderColor
+      border.color: e.state === "locked" ? Colors.urgent : Style.normalBorderColor
       opacity: found ? 1 : 0.7
 
       Column {
@@ -167,7 +167,7 @@ Rectangle {
           elide: Text.ElideRight
           textFormat: Text.StyledText
           text: e.description ? Labels.highlight(e.description, Hints.terms, e.name) : ""
-          color: Color.foreground
+          color: Colors.foreground
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -177,7 +177,7 @@ Rectangle {
           maximumLineCount: 2
           elide: Text.ElideRight
           text: e.quip || ""
-          color: Color.muted
+          color: Colors.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
           font.italic: true
@@ -192,7 +192,7 @@ Rectangle {
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
           text: e.secret ? "?????" : "?"
-          color: e.state === "locked" ? Color.urgent : Color.muted
+          color: e.state === "locked" ? Colors.urgent : Colors.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.display
           font.bold: true
@@ -204,7 +204,7 @@ Rectangle {
           text: e.state === "locked"
             ? I18n.tr("Hidden: {achievement}", { achievement: e.achievement }) + "\n" + I18n.tr(e.condition)
             : I18n.tr("Not found yet")
-          color: Color.muted
+          color: Colors.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -226,9 +226,9 @@ Rectangle {
     Rectangle {
       readonly property var e: parent.entry
       radius: Style.cornerRadius
-      color: e.done ? Qt.tint(Color.background, Util.alpha(Color.accent, 0.12)) : Style.normalFill
+      color: e.done ? Qt.tint(Colors.background, Util.alpha(Colors.accent, 0.12)) : Style.normalFill
       border.width: e.done ? Style.space(2) : Style.normalBorderWidth
-      border.color: e.done ? Color.accent : Style.normalBorderColor
+      border.color: e.done ? Colors.accent : Style.normalBorderColor
 
       Column {
         anchors { fill: parent; margins: Style.spacing.lg }
@@ -237,7 +237,7 @@ Rectangle {
           width: parent.width
           elide: Text.ElideRight
           text: (e.done ? "✓ " : "") + e.name
-          color: e.done ? Color.accent : Color.foreground
+          color: e.done ? Colors.accent : Colors.foreground
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           font.bold: true
@@ -248,7 +248,7 @@ Rectangle {
           maximumLineCount: 2
           elide: Text.ElideRight
           text: e.description
-          color: Color.foreground
+          color: Colors.foreground
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -257,7 +257,7 @@ Rectangle {
           elide: Text.ElideRight
           visible: text !== ""
           text: e.goal !== null && !e.done ? Labels.number(e.progress) + " / " + Labels.number(e.goal) : ""
-          color: Color.muted
+          color: Colors.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -267,7 +267,7 @@ Rectangle {
           visible: text !== ""
           text: e.unlocks ? I18n.tr("Unlocked: {name}", { name: e.unlocks })
             : e.unlocks_family ? I18n.tr("Unlocks a hidden {family}", { family: I18n.tr(e.unlocks_family) }) : ""
-          color: Color.urgent
+          color: Colors.urgent
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -277,7 +277,7 @@ Rectangle {
           maximumLineCount: 2
           elide: Text.ElideRight
           text: e.quip
-          color: Color.muted
+          color: Colors.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
           font.italic: true

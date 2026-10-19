@@ -17,9 +17,9 @@ Rectangle {
   height: Style.space(150)
   radius: Style.cornerRadius
   clip: true
-  color: Qt.tint(Color.background, Util.alpha(Color.accent, 0.14))
+  color: Qt.tint(Colors.background, Util.alpha(Colors.accent, 0.14))
   border.width: Style.space(2)
-  border.color: Color.accent
+  border.color: Colors.accent
 
   Column {
     anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(8) }
@@ -29,7 +29,7 @@ Rectangle {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       text: I18n.tr("pull request")
-      color: Color.muted
+      color: Colors.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
     }
@@ -38,7 +38,7 @@ Rectangle {
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
       text: root.voucher ? root.voucher.name : ""
-      color: Color.accent
+      color: Colors.accent
       font.family: Style.font.family
       font.pixelSize: Style.font.subtitle
       font.bold: true
@@ -49,7 +49,7 @@ Rectangle {
       wrapMode: Text.WordWrap
       textFormat: Text.StyledText
       text: root.voucher ? Labels.highlight(root.voucher.description, Hints.terms, root.voucher.name) : ""
-      color: Color.foreground
+      color: Colors.foreground
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
     }
@@ -58,7 +58,7 @@ Rectangle {
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
       text: root.voucher ? root.voucher.quip : ""
-      color: Color.muted
+      color: Colors.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
       font.italic: true

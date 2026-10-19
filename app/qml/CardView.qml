@@ -28,8 +28,8 @@ Item {
   height: Math.round(width * 1.4)
 
   readonly property bool blob: card !== null && card.enhancement === "binary_blob"
-  readonly property color ink: blob ? Color.muted
-    : card && Labels.isRed(card.suit) ? Color.urgent : Color.foreground
+  readonly property color ink: blob ? Colors.muted
+    : card && Labels.isRed(card.suit) ? Colors.urgent : Colors.foreground
   readonly property string suitText: card && !blob ? Labels.suit(card.suit) : ""
   readonly property string rankText: card && !blob ? Labels.rank(card.rank) : ""
 
@@ -74,11 +74,11 @@ Item {
     y: root.selected ? -Style.space(20) : 0
     Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
     radius: Style.cornerRadius
-    color: Qt.tint(Color.background, Util.alpha(root.edition ? Color.accent : Color.foreground,
+    color: Qt.tint(Colors.background, Util.alpha(root.edition ? Colors.accent : Colors.foreground,
       (mouse.containsMouse && root.interactive ? 0.12 : 0.06) + (root.edition ? 0.08 : 0)))
     border.width: root.selected || root.edition ? Style.space(2) : Style.normalBorderWidth
-    border.color: root.selected ? Color.accent
-      : root.edition ? Util.alpha(Color.accent, 0.6) : Style.normalBorderColor
+    border.color: root.selected ? Colors.accent
+      : root.edition ? Util.alpha(Colors.accent, 0.6) : Style.normalBorderColor
     opacity: root.dimmed || (root.disabledBy && !root.faceDown) ? 0.45 : 1
     Behavior on opacity { NumberAnimation { duration: 150 } }
 
@@ -107,7 +107,7 @@ Item {
       anchors { right: parent.right; top: parent.top; rightMargin: Style.space(6); topMargin: Style.space(4) }
       visible: root.sealSymbol !== ""
       text: root.sealSymbol
-      color: root.card && root.card.seal === "retry" ? Color.urgent : Color.accent
+      color: root.card && root.card.seal === "retry" ? Colors.urgent : Colors.accent
       font.family: Style.font.family
       font.pixelSize: Style.font.heading
       font.bold: true
@@ -155,7 +155,7 @@ Item {
         fontSizeMode: Text.HorizontalFit
         minimumPixelSize: Style.fontPx(0.6)
         text: root.edition ? root.edition.name : ""
-        color: Color.accent
+        color: Colors.accent
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
         font.bold: true
@@ -166,7 +166,7 @@ Item {
         visible: band.text !== ""
         height: band.implicitHeight + Style.space(4)
         radius: Style.cornerRadius
-        color: Util.alpha(Color.accent, 0.22)
+        color: Util.alpha(Colors.accent, 0.22)
         Text {
           id: band
           anchors { fill: parent; leftMargin: Style.space(2); rightMargin: Style.space(2) }
@@ -176,7 +176,7 @@ Item {
           minimumPixelSize: Style.fontPx(0.6)
           text: (root.enhancement ? root.enhancement.name : "")
             + (root.bonusChips ? (root.enhancement ? " " : "") + "+" + root.bonusChips : "")
-          color: Color.foreground
+          color: Colors.foreground
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
           font.bold: true
@@ -189,7 +189,7 @@ Item {
       anchors.centerIn: parent
       visible: root.disabledBy !== "" && !root.faceDown
       text: "✕"
-      color: Color.urgent
+      color: Colors.urgent
       font.family: Style.font.family
       font.pixelSize: Math.round(root.width * 0.6)
       font.bold: true
@@ -200,20 +200,20 @@ Item {
       anchors.fill: parent
       visible: root.faceDown
       radius: Style.cornerRadius
-      color: Qt.tint(Color.background, Util.alpha(Color.accent, 0.25))
+      color: Qt.tint(Colors.background, Util.alpha(Colors.accent, 0.25))
       border.width: Style.space(2)
-      border.color: Util.alpha(Color.accent, 0.6)
+      border.color: Util.alpha(Colors.accent, 0.6)
       Rectangle {
         anchors { fill: parent; margins: Style.space(6) }
         radius: Style.cornerRadius
         color: "transparent"
         border.width: Style.normalBorderWidth
-        border.color: Util.alpha(Color.accent, 0.5)
+        border.color: Util.alpha(Colors.accent, 0.5)
       }
       Text {
         anchors.centerIn: parent
         text: "?"
-        color: Color.accent
+        color: Colors.accent
         font.family: Style.font.family
         font.pixelSize: Math.round(root.width * 0.5)
         font.bold: true
@@ -225,7 +225,7 @@ Item {
     anchors { horizontalCenter: parent.horizontalCenter; top: parent.bottom; topMargin: Style.space(6) }
     visible: root.shortcut !== ""
     text: root.shortcut
-    color: Color.muted
+    color: Colors.muted
     font.family: Style.font.family
     font.pixelSize: Style.font.caption
   }
@@ -267,15 +267,15 @@ Item {
     width: Math.min(Style.space(260), tip.implicitWidth + 2 * Style.space(8))
     height: tip.implicitHeight + 2 * Style.space(6)
     radius: Style.cornerRadius
-    color: Color.background
+    color: Colors.background
     border.width: Style.normalBorderWidth
-    border.color: Color.accent
+    border.color: Colors.accent
     Text {
       id: tip
       anchors { fill: parent; margins: Style.space(6) }
       wrapMode: Text.WordWrap
       text: root.details
-      color: Color.foreground
+      color: Colors.foreground
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
     }

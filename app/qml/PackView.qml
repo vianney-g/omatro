@@ -10,9 +10,9 @@ Rectangle {
   width: Style.space(120)
   height: Style.space(150)
   radius: Style.cornerRadius
-  color: Qt.tint(Color.background, Util.alpha(Color.urgent, 0.10))
+  color: Qt.tint(Colors.background, Util.alpha(Colors.urgent, 0.10))
   border.width: Style.space(2)
-  border.color: Util.alpha(Color.urgent, 0.6)
+  border.color: Util.alpha(Colors.urgent, 0.6)
 
   Column {
     anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(8) }
@@ -22,7 +22,7 @@ Rectangle {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       text: I18n.tr("package")
-      color: Color.muted
+      color: Colors.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
     }
@@ -31,7 +31,7 @@ Rectangle {
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WrapAnywhere
       text: root.pack ? root.pack.name : ""
-      color: Color.urgent
+      color: Colors.urgent
       font.family: Style.font.family
       font.pixelSize: Style.font.subtitle
       font.bold: true
@@ -41,7 +41,7 @@ Rectangle {
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
       text: root.pack ? root.pack.description : ""
-      color: Color.foreground
+      color: Colors.foreground
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
     }
@@ -50,7 +50,7 @@ Rectangle {
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
       text: root.pack ? root.pack.quip : ""
-      color: Color.muted
+      color: Colors.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
       font.italic: true

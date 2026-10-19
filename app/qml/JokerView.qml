@@ -23,9 +23,9 @@ Item {
   height: Style.space(230)
 
   readonly property var edition: joker ? joker.edition : null
-  readonly property color rarityColor: !joker ? Color.muted
-    : joker.rarity === "extra" ? Color.accent
-    : joker.rarity === "core" ? Color.muted : Color.urgent
+  readonly property color rarityColor: !joker ? Colors.muted
+    : joker.rarity === "extra" ? Colors.accent
+    : joker.rarity === "core" ? Colors.muted : Colors.urgent
 
   function flash(text, color) {
     popup.text = text
@@ -37,9 +37,9 @@ Item {
     id: face
     anchors.fill: parent
     radius: Style.cornerRadius
-    color: Qt.tint(Color.background, Util.alpha(Color.accent, root.edition ? 0.20 : 0.10))
+    color: Qt.tint(Colors.background, Util.alpha(Colors.accent, root.edition ? 0.20 : 0.10))
     border.width: root.edition ? Style.space(2) : Style.normalBorderWidth
-    border.color: root.edition ? Color.accent : Util.alpha(Color.accent, Style.normalBorderAlpha)
+    border.color: root.edition ? Colors.accent : Util.alpha(Colors.accent, Style.normalBorderAlpha)
     opacity: root.disabled && !root.hidden ? 0.4 : 1
 
     Column {
@@ -59,7 +59,7 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         text: root.joker ? root.joker.name : ""
-        color: Color.accent
+        color: Colors.accent
         font.family: Style.font.family
         font.pixelSize: Style.font.subtitle
         font.bold: true
@@ -70,7 +70,7 @@ Item {
         wrapMode: Text.WordWrap
         textFormat: Text.StyledText
         text: root.joker ? Labels.highlight(root.joker.description, Hints.terms, root.joker.name) : ""
-        color: Color.foreground
+        color: Colors.foreground
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
       }
@@ -81,7 +81,7 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         text: root.joker && root.joker.current ? root.joker.current : ""
-        color: Color.accent
+        color: Colors.accent
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
         font.bold: true
@@ -91,8 +91,8 @@ Item {
         id: badge
         anchors.horizontalCenter: parent.horizontalCenter
         visible: root.bonus !== null && root.bonus !== undefined
-        readonly property color tint: !visible ? Color.accent
-          : root.bonus.kind === "mult" || root.bonus.kind === "x_mult" ? Color.urgent : Color.accent
+        readonly property color tint: !visible ? Colors.accent
+          : root.bonus.kind === "mult" || root.bonus.kind === "x_mult" ? Colors.urgent : Colors.accent
         width: badgeText.implicitWidth + 2 * Style.space(8)
         height: badgeText.implicitHeight + 2 * Style.space(3)
         radius: height / 2
@@ -120,7 +120,7 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         text: root.joker ? root.joker.quip : ""
-        color: Color.muted
+        color: Colors.muted
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
         font.italic: true
@@ -134,7 +134,7 @@ Item {
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
       text: root.edition ? root.edition.name + " · " + root.edition.description : ""
-      color: Color.accent
+      color: Colors.accent
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
       font.bold: true
@@ -145,13 +145,13 @@ Item {
       anchors.fill: parent
       visible: root.hidden
       radius: Style.cornerRadius
-      color: Qt.tint(Color.background, Util.alpha(Color.urgent, 0.25))
+      color: Qt.tint(Colors.background, Util.alpha(Colors.urgent, 0.25))
       border.width: Style.space(2)
-      border.color: Util.alpha(Color.urgent, 0.6)
+      border.color: Util.alpha(Colors.urgent, 0.6)
       Text {
         anchors.centerIn: parent
         text: "?"
-        color: Color.urgent
+        color: Colors.urgent
         font.family: Style.font.family
         font.pixelSize: Style.font.displayLarge
         font.bold: true
@@ -164,7 +164,7 @@ Item {
     anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: Style.space(40) }
     visible: root.disabled && !root.hidden
     text: I18n.tr("disabled")
-    color: Color.urgent
+    color: Colors.urgent
     font.family: Style.font.family
     font.pixelSize: Style.font.subtitle
     font.bold: true

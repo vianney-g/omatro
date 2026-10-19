@@ -105,7 +105,8 @@ jokers new games start with, to screenshot specific jokers.
 `OMATRO_SCRIPT` (debug only) plays steps through the app's own key handling and saves
 screenshots, with no keyboard, pointer or focus, even with `QT_QPA_PLATFORM=offscreen`:
 `OMATRO_SCRIPT="size:1100,700;sleep:1500;key:Return;key:Shift+Left;key:F5;shot:/tmp/a.png;quit"`
-(see `runScript` in `Main.qml`). Give the run its own `XDG_STATE_HOME` and
+(see `runScript` in `Main.qml`); since Qt 6.12 the offscreen window's own background
+comes out white or black, so check colours in a real window. Give the run its own `XDG_STATE_HOME` and
 `XDG_CONFIG_HOME` so that the save and settings stay untouched. Hovers need a real window: float and size the window, drive it with `wtype` and capture it with `grim`. Hyprland 0.56 dispatchers use
 Lua: `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'`,
 `'hl.dsp.window.resize({ x = 1100, y = 800 })'`, `'hl.dsp.window.center()'`; the window

@@ -19,10 +19,10 @@ QtObject {
 
   readonly property int normalBorderWidth: 1
   readonly property real normalBorderAlpha: 0.4
-  readonly property color normalFill: Util.alpha(Color.foreground, 0.04)
-  readonly property color hoverFill: Util.alpha(Color.foreground, 0.08)
-  readonly property color pressedFill: Util.alpha(Color.foreground, 0.22)
-  readonly property color normalBorderColor: Util.alpha(Color.foreground, normalBorderAlpha)
+  readonly property color normalFill: Util.alpha(Colors.foreground, 0.04)
+  readonly property color hoverFill: Util.alpha(Colors.foreground, 0.08)
+  readonly property color pressedFill: Util.alpha(Colors.foreground, 0.22)
+  readonly property color normalBorderColor: Util.alpha(Colors.foreground, normalBorderAlpha)
 
   readonly property QtObject spacing: QtObject {
     readonly property int xs: root.space(3)

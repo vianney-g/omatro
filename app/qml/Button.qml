@@ -18,13 +18,13 @@ Rectangle {
     : mouse.pressed ? Style.pressedFill
     : mouse.containsMouse ? Style.hoverFill : Style.normalFill
   border.width: bordered ? Style.normalBorderWidth : 0
-  border.color: mouse.containsMouse && enabled ? Color.accent : Style.normalBorderColor
+  border.color: mouse.containsMouse && enabled ? Colors.accent : Style.normalBorderColor
 
   Text {
     id: label
     anchors.centerIn: parent
     text: root.text
-    color: Color.foreground
+    color: Colors.foreground
     font.family: Style.font.family
     font.pixelSize: Style.font.body
   }

@@ -17,7 +17,7 @@ Rectangle {
   signal language(string lang)
   signal collection()
 
-  color: Util.alpha(Color.background, 0.96)
+  color: Util.alpha(Colors.background, 0.96)
 
   function move(step) {
     if (decks.length > 0) current = (current + step + decks.length) % decks.length
@@ -32,7 +32,7 @@ Rectangle {
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
       text: I18n.tr("New game")
-      color: Color.accent
+      color: Colors.accent
       font.family: Style.font.family
       font.pixelSize: Style.font.displayLarge
       font.bold: true
@@ -41,7 +41,7 @@ Rectangle {
       anchors.horizontalCenter: parent.horizontalCenter
       text: I18n.tr("Pick your machine · arrows to choose · Enter to start") + (root.canCancel ? I18n.tr(" · Escape to go back") : "")
         + I18n.tr(" · C: collection")
-      color: Color.muted
+      color: Colors.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }
@@ -49,7 +49,7 @@ Rectangle {
       anchors.horizontalCenter: parent.horizontalCenter
       visible: root.message !== ""
       text: root.message
-      color: Color.urgent
+      color: Colors.urgent
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }
@@ -67,16 +67,16 @@ Rectangle {
           width: Style.space(285)
           height: Style.space(88)
           radius: Style.cornerRadius
-          color: chosen ? Qt.tint(Color.background, Util.alpha(Color.accent, 0.15)) : Style.normalFill
+          color: chosen ? Qt.tint(Colors.background, Util.alpha(Colors.accent, 0.15)) : Style.normalFill
           border.width: chosen ? Style.space(2) : Style.normalBorderWidth
-          border.color: chosen ? Color.accent : Style.normalBorderColor
+          border.color: chosen ? Colors.accent : Style.normalBorderColor
           Column {
             visible: locked
             anchors { fill: parent; margins: Style.space(8) }
             spacing: Style.space(3)
             Text {
               text: "?????"
-              color: Color.urgent
+              color: Colors.urgent
               font.family: Style.font.family
               font.pixelSize: Style.font.subtitle
               font.bold: true
@@ -88,7 +88,7 @@ Rectangle {
               elide: Text.ElideRight
               text: locked ? I18n.tr("Hidden: {achievement}", { achievement: modelData.achievement })
                 + " · " + I18n.tr(modelData.condition) : ""
-              color: Color.muted
+              color: Colors.muted
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -99,7 +99,7 @@ Rectangle {
             spacing: Style.space(3)
             Text {
               text: modelData.name
-              color: chosen ? Color.accent : Color.foreground
+              color: chosen ? Colors.accent : Colors.foreground
               font.family: Style.font.family
               font.pixelSize: Style.font.subtitle
               font.bold: true
@@ -111,7 +111,7 @@ Rectangle {
               elide: Text.ElideRight
               textFormat: Text.StyledText
               text: Labels.highlight(modelData.description, Hints.terms, modelData.name)
-              color: Color.foreground
+              color: Colors.foreground
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -119,7 +119,7 @@ Rectangle {
               width: parent.width
               elide: Text.ElideRight
               text: modelData.quip
-              color: Color.muted
+              color: Colors.muted
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
               font.italic: true
@@ -145,7 +145,7 @@ Rectangle {
       Text {
         anchors.verticalCenter: parent.verticalCenter
         text: I18n.tr("Language (L)")
-        color: Color.muted
+        color: Colors.muted
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
