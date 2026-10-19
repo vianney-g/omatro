@@ -1,0 +1,41 @@
+# Maintainer: Vianney Gremmel <vianneygremmel@gmail.com>
+pkgname=omatro
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="A Balatro-like card game for Omarchy, in the colors of your theme"
+arch=('x86_64')
+url="https://github.com/vianney-g/omatro"
+license=('MIT')
+depends=('qt6-base' 'qt6-declarative' 'gcc-libs' 'glibc')
+makedepends=('cargo')
+# cxx-qt's C++ objects can't link with LTO.
+options=('!lto')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('c31f08a9ce0e5826388156c81354308d217624ac1d1a18fdac92956bc34c0d5b')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release -p omatro
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen -p omatro-engine
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/omatro "$pkgdir/usr/bin/omatro"
+  install -Dm644 pkgbuild/omatro.desktop "$pkgdir/usr/share/applications/omatro.desktop"
+  install -Dm644 pkgbuild/omatro.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/omatro.svg"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
