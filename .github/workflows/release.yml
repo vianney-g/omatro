@@ -1,0 +1,54 @@
+# Pushing a version tag (git tag v0.1.0 && git push --tags) builds omatro on
+# Arch Linux, runs the tests and publishes a GitHub release with the archive.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install the build dependencies
+        run: pacman -Syu --noconfirm --needed base-devel git rust qt6-base qt6-declarative
+
+      - uses: actions/checkout@v4
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Build
+        run: cargo build --release --locked -p omatro
+
+      - name: Package
+        run: |
+          name=omatro-${GITHUB_REF_NAME#v}-x86_64-linux
+          mkdir "$name"
+          install -m755 target/release/omatro "$name/"
+          cp pkgbuild/omatro.desktop pkgbuild/omatro.svg LICENSE README.md "$name/"
+          tar czf "$name.tar.gz" "$name"
+          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+          echo "ARCHIVE=$name.tar.gz" >> "$GITHUB_ENV"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256
+          body: |
+            omatro ${{ github.ref_name }} for Linux x86_64, built on Arch Linux.
+
+            It needs Qt 6: `sudo pacman -S qt6-base qt6-declarative`. Then, from
+            the unpacked archive, run `./omatro`, or install it with its launcher
+            entry and icon:
+
+            ```sh
+            install -Dm755 omatro ~/.local/bin/omatro
+            install -Dm644 omatro.desktop ~/.local/share/applications/omatro.desktop
+            install -Dm644 omatro.svg ~/.local/share/icons/hicolor/scalable/apps/omatro.svg
+            ```

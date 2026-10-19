@@ -34,6 +34,10 @@ cargo run -p omatro-engine         # engine alone: JSON commands on stdin, one p
 To poke at the engine by hand:
 `printf '%s\n' '{"cmd":"new_game","seed":42}' '{"cmd":"play","cards":[0,1]}' | cargo run -q -p omatro-engine`
 
+Releases: bump `version` in `app/Cargo.toml` and `engine/Cargo.toml`, then push a
+`v<version>` tag; `.github/workflows/release.yml` builds on Arch Linux, runs the tests
+and publishes the archive (binary, launcher entry, icon) with its checksum.
+
 ## Architecture
 
 A Cargo workspace with two crates:

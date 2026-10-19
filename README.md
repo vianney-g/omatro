@@ -25,7 +25,11 @@ code only, not the names and trademarks the game mentions.
 
 ## Installation
 
-Requires Rust and Qt 6 (`qt6-base`, `qt6-declarative`).
+A ready-made binary for Linux x86_64 comes with each
+[release](https://github.com/vianney-g/omatro/releases): it needs Qt 6
+(`sudo pacman -S qt6-base qt6-declarative`).
+
+To build it, you need Rust and Qt 6 (`qt6-base`, `qt6-declarative`).
 
 ```sh
 make install   # build and install into ~/.local (binary, launcher entry, icon)
