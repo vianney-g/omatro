@@ -9,10 +9,17 @@ Rectangle {
 
   property var decks: []
   property int current: 0
+  // The difficulty levels, and the one chosen (Shift+←/→), within what the
+  // chosen deck has unlocked.
+  property var stakes: []
+  property int stake: 0
+  readonly property var deck: decks.length ? decks[current] : null
+  readonly property int topStake: deck ? stakeIndex(deck.top_stake) : 0
+  readonly property int chosenStake: Math.min(stake, topStake)
   property bool canCancel: false
   // A problem to report (a saved game that could not be resumed).
   property string message: ""
-  signal start(string deck)
+  signal start(string deck, string stake)
   signal cancel()
   signal language(string lang)
   signal collection()
@@ -21,6 +28,16 @@ Rectangle {
 
   function move(step) {
     if (decks.length > 0) current = (current + step + decks.length) % decks.length
+  }
+  function stakeIndex(id) {
+    var i = stakes.findIndex(function(s) { return s.id === id })
+    return Math.max(0, i)
+  }
+  function moveStake(step) {
+    stake = Math.max(0, Math.min(topStake, chosenStake + step))
+  }
+  function startChosen() {
+    if (deck && !deck.achievement && stakes.length) start(deck.id, stakes[chosenStake].id)
   }
 
   MouseArea { anchors.fill: parent }
@@ -40,7 +57,7 @@ Rectangle {
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
       text: I18n.tr("Pick your machine · arrows to choose · Enter to start") + (root.canCancel ? I18n.tr(" · Escape to go back") : "")
-        + I18n.tr(" · C: collection")
+        + I18n.tr(" · Shift+←/→: level · C: collection")
       color: Colors.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
@@ -97,12 +114,27 @@ Rectangle {
             visible: !locked
             anchors { fill: parent; margins: Style.space(8) }
             spacing: Style.space(3)
-            Text {
-              text: modelData.name
-              color: chosen ? Colors.accent : Colors.foreground
-              font.family: Style.font.family
-              font.pixelSize: Style.font.subtitle
-              font.bold: true
+            Row {
+              width: parent.width
+              Text {
+                width: parent.width - bestText.width
+                elide: Text.ElideRight
+                text: modelData.name
+                color: chosen ? Colors.accent : Colors.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.subtitle
+                font.bold: true
+              }
+              // The highest level won with it.
+              Text {
+                id: bestText
+                anchors.baseline: parent.children[0].baseline
+                text: modelData.best_stake ? root.stakes[root.stakeIndex(modelData.best_stake)].name : ""
+                color: Colors.warm
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
             }
             Text {
               width: parent.width
@@ -129,12 +161,73 @@ Rectangle {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.current === index && !parent.locked ? root.start(modelData.id) : root.current = index
+            onClicked: root.current === index && !parent.locked ? root.startChosen() : root.current = index
             // Its terms explained beside it (Glossary).
             onContainsMouseChanged: containsMouse && !parent.locked
               ? Hints.show(parent, modelData.description, modelData.name) : Hints.hide(parent)
           }
         }
+      }
+    }
+
+    // The difficulty level: those the deck unlocked, then locked ones.
+    Column {
+      anchors.horizontalCenter: parent.horizontalCenter
+      spacing: Style.spacing.md
+      visible: root.stakes.length > 0
+      Row {
+        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: Style.spacing.sm
+        Repeater {
+          model: root.stakes
+          Rectangle {
+            readonly property bool chosen: index === root.chosenStake
+            readonly property bool open: index <= root.topStake
+            width: stakeLabel.implicitWidth + 2 * Style.spacing.lg
+            height: stakeLabel.implicitHeight + 2 * Style.spacing.sm
+            radius: Style.cornerRadius
+            color: chosen ? Qt.tint(Colors.background, Util.alpha(Colors.warm, 0.18)) : Style.normalFill
+            border.width: chosen ? Style.space(2) : Style.normalBorderWidth
+            border.color: chosen ? Colors.warm : Style.normalBorderColor
+            opacity: open ? 1 : 0.45
+            Text {
+              id: stakeLabel
+              anchors.centerIn: parent
+              text: open ? modelData.name : (index + 1) + " · ?"
+              color: chosen ? Colors.warm : Colors.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              font.bold: chosen
+            }
+            MouseArea {
+              anchors.fill: parent
+              enabled: parent.open
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.stake = index
+            }
+          }
+        }
+      }
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: 3 * Style.space(285) + 2 * Style.spacing.lg
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        readonly property var s: root.stakes.length ? root.stakes[root.chosenStake] : null
+        text: s ? (s.rules.length ? s.rules.map(function(r) { return I18n.tr(r) }).join(" · ") : I18n.tr(s.description))
+          + "  —  " + s.quip : ""
+        color: Colors.muted
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+      }
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: root.topStake < root.stakes.length - 1
+        text: I18n.tr("Win with this deck to unlock the next level.")
+        color: Colors.muted
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+        font.italic: true
       }
     }
 
@@ -166,7 +259,7 @@ Rectangle {
       Button {
         text: I18n.tr("Start (Enter)")
         enabled: root.decks.length > 0 && !root.decks[root.current].achievement
-        onClicked: root.start(root.decks[root.current].id)
+        onClicked: root.startChosen()
       }
       Button {
         text: I18n.tr("Collection (C)")

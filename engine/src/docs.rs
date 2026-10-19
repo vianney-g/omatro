@@ -10,6 +10,7 @@ use crate::joker::{Edition, Joker};
 use crate::modifier::{Enhancement, Seal};
 use crate::pack::{Pack, PackKind, PackSize};
 use crate::run_deck::Deck;
+use crate::stake::{LEASE_FEE, LEASE_PRICE, STICKER_ODDS, Stake, Sticker, WORN_BLINDS};
 use crate::tag::Tag;
 use crate::voucher::{VOUCHER_PRICE, Voucher};
 
@@ -394,9 +395,58 @@ fn achievements() -> String {
     doc
 }
 
+fn stakes() -> String {
+    let mut doc = header(
+        "Difficulty levels",
+        "Chosen on the new game screen with the deck (stakes, in the original): each\n\
+         level adds its rule to those of the levels below it. Each deck starts at the\n\
+         first level only; winning a game with a deck unlocks the next level for\n\
+         that deck.",
+    );
+    doc += "| Level | Id | Name | Adds | Quip |\n|---|---|---|---|---|\n";
+    for stake in Stake::ALL {
+        doc += &format!(
+            "| {} | `{}` | {} | {} | *{}* |\n",
+            stake.level() + 1,
+            id(stake),
+            stake.name(),
+            stake.description(),
+            cell(stake.quip())
+        );
+    }
+    doc += &format!(
+        "\nTargets grow with the ante along three tables: levels 1 and 2 use the\n\
+         first, from {} the second, from {} the third.\n\n\
+         ## Stickers\n\n\
+         From the levels that allow them, each shop joker has a {}% chance to be\n\
+         Welded, then (from {}) a {}% chance to be Worn instead; from {}, a\n\
+         {}% chance to be Leased as well. Jokers that run out, break or are sold to\n\
+         work never get one. A Worn joker lasts {WORN_BLINDS} blinds; a Leased one costs\n\
+         ${LEASE_PRICE}, then ${LEASE_FEE} at the end of each blind, and sells for $1.\n\n\
+         | Id | Sticker | Effect |\n|---|---|---|\n",
+        Stake::ClubRacing.name(),
+        Stake::LeMans.name(),
+        STICKER_ODDS * 100.0,
+        Stake::Endurance.name(),
+        STICKER_ODDS * 100.0,
+        Stake::Hypercar.name(),
+        STICKER_ODDS * 100.0,
+    );
+    for sticker in Sticker::ALL {
+        doc += &format!(
+            "| `{}` | {} | {} |\n",
+            id(sticker),
+            sticker.name(),
+            sticker.description()
+        );
+    }
+    doc
+}
+
 #[test]
 fn docs_are_up_to_date() {
-    let docs: [(&str, fn() -> String); 13] = [
+    let docs: [(&str, fn() -> String); 14] = [
+        ("stakes.md", stakes),
         ("achievements.md", achievements),
         ("jokers.md", jokers),
         ("editions.md", editions),

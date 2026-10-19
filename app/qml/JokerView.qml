@@ -10,9 +10,16 @@ Item {
   // The Kernel Panic: jokers face down.
   property bool hidden: false
   // Hovered, its terms are explained beside it (Glossary).
+  // Its stickers are explained too.
   HoverHandler {
-    onHoveredChanged: hovered && !root.hidden ? Hints.show(root, root.joker ? root.joker.description : "", root.joker ? root.joker.name : "") : Hints.hide(root)
+    onHoveredChanged: hovered && !root.hidden ? Hints.show(root, root.joker ? root.joker.description
+      + root.stickers.map(function(s) { return " " + s.name }).join("") : "", root.joker ? root.joker.name : "") : Hints.hide(root)
   }
+
+  // Welded, Worn, Leased (the higher difficulty levels).
+  readonly property var stickers: joker && joker.stickers ? joker.stickers : []
+  // A Worn joker past its blinds does nothing.
+  readonly property bool wornOut: stickers.some(function(s) { return s.id === "worn" && s.blinds_left === 0 })
 
   // The Windows Update: this joker does nothing this hand.
   property bool disabled: false
@@ -40,7 +47,7 @@ Item {
     color: Qt.tint(Colors.background, Util.alpha(Colors.accent, root.edition ? 0.20 : 0.10))
     border.width: root.edition ? Style.space(2) : Style.normalBorderWidth
     border.color: root.edition ? Colors.accent : Util.alpha(Colors.accent, Style.normalBorderAlpha)
-    opacity: root.disabled && !root.hidden ? 0.4 : 1
+    opacity: (root.disabled || root.wornOut) && !root.hidden ? 0.4 : 1
 
     Column {
       anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(8) }
@@ -127,8 +134,36 @@ Item {
       }
     }
 
+    // Stickers, above the edition.
+    Flow {
+      anchors { left: parent.left; right: parent.right; bottom: editionText.visible ? editionText.top : parent.bottom; margins: Style.space(6) }
+      spacing: Style.space(3)
+      Repeater {
+        model: root.stickers
+        Rectangle {
+          readonly property color tint: modelData.id === "welded" ? Colors.accent : Colors.urgent
+          width: stickerText.implicitWidth + 2 * Style.space(5)
+          height: stickerText.implicitHeight + 2 * Style.space(2)
+          radius: Style.cornerRadius
+          color: Util.alpha(tint, 0.18)
+          border.width: Style.normalBorderWidth
+          border.color: tint
+          Text {
+            id: stickerText
+            anchors.centerIn: parent
+            text: modelData.name + (modelData.blinds_left !== null ? " · " + modelData.blinds_left : "")
+            color: parent.tint
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.bold: true
+          }
+        }
+      }
+    }
+
     // Edition, at the bottom.
     Text {
+      id: editionText
       anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: Style.space(6) }
       visible: root.edition !== null
       horizontalAlignment: Text.AlignHCenter
@@ -162,8 +197,8 @@ Item {
   // The Windows Update: disabled this hand.
   Text {
     anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: Style.space(40) }
-    visible: root.disabled && !root.hidden
-    text: I18n.tr("disabled")
+    visible: (root.disabled || root.wornOut) && !root.hidden
+    text: I18n.tr(root.wornOut ? "worn out" : "disabled")
     color: Colors.urgent
     font.family: Style.font.family
     font.pixelSize: Style.font.subtitle

@@ -30,6 +30,8 @@ const ENDLESS_LIMIT: u64 = 14;
 struct Outcome {
     seed: u64,
     deck: String,
+    /// The difficulty level.
+    stake: String,
     won: bool,
     ante: u64,
     /// The boss of the ante the game was lost at, when lost at a boss blind.
@@ -484,10 +486,15 @@ impl Bot {
                     && o["rarity"] == "aur"
                     && self.money() >= o["price"].as_i64().unwrap_or(0)
             });
-            if let (Some(_), true) = (rare, jokers >= slots && jokers > 0) {
-                let cheapest = (0..jokers)
-                    .min_by_key(|&i| self.state["jokers"][i]["sell_value"].as_u64())
-                    .unwrap_or(0);
+            // Welded jokers can't be sold.
+            let cheapest = (0..jokers)
+                .filter(|&i| {
+                    !self.state["jokers"][i]["stickers"]
+                        .as_array()
+                        .is_some_and(|s| s.iter().any(|s| s["id"] == "welded"))
+                })
+                .min_by_key(|&i| self.state["jokers"][i]["sell_value"].as_u64());
+            if let (Some(_), true, Some(cheapest)) = (rare, jokers >= slots, cheapest) {
                 self.send(json!({"cmd": "sell", "joker": cheapest}));
                 continue;
             }
@@ -520,7 +527,15 @@ impl Bot {
 
     fn play(mut self, deck: Option<&str>) -> Outcome {
         let seed = self.out.seed;
-        self.send(json!({"cmd": "new_game", "seed": seed, "deck": deck}));
+        // Every level in turn; a new profile only opens the first.
+        let stakes = omatro_engine::stake::Stake::ALL;
+        let stake = if with_profile() {
+            stakes[0]
+        } else {
+            stakes[(seed as usize / 16) % stakes.len()]
+        };
+        self.out.stake = stake.name().to_string();
+        self.send(json!({"cmd": "new_game", "seed": seed, "deck": deck, "stake": stake}));
         while self.out.steps < MAX_STEPS {
             match self.phase() {
                 "blind_select" => {
@@ -732,6 +747,21 @@ fn main() {
             percent(*wins, *games),
             *antes as f64 / *games as f64
         );
+    }
+
+    println!("\nDifficulty levels (games, wins):");
+    for stake in omatro_engine::stake::Stake::ALL {
+        let games: Vec<&Outcome> = outcomes.iter().filter(|o| o.stake == stake.name()).collect();
+        if !games.is_empty() {
+            let won = games.iter().filter(|o| o.won).count();
+            println!(
+                "  {:<14} {:>4} games  {:>4} won  ante {:.1}",
+                stake.name(),
+                games.len(),
+                percent(won, games.len()),
+                games.iter().map(|o| o.ante as f64).sum::<f64>() / games.len() as f64
+            );
+        }
     }
 
     let mut bosses: BTreeMap<&str, usize> = BTreeMap::new();

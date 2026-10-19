@@ -319,6 +319,9 @@ mod tests {
         for a in crate::achievement::Achievement::ALL {
             texts.push(a.description().to_string());
         }
+        for s in crate::stake::Stake::ALL {
+            texts.push(s.description().to_string());
+        }
         for f in crate::collection::Family::ALL {
             texts.push(f.name().to_string());
             texts.push(f.singular().to_string());

@@ -61,6 +61,11 @@ The game in progress is saved after every move, in `~/.local/state/omatro/save.j
 (`$XDG_STATE_HOME` if set): quit whenever you like, the next start offers to resume it.
 A lost game is removed.
 
+Each deck is played at a difficulty level (Shift+←/→ on the new game screen): eight
+levels, from Daily Commute to Hypercar, each adding its rule to those below it (see
+[docs/stakes.md](docs/stakes.md)). A deck starts at the first level only; winning a
+game with it unlocks its next level, and its card shows the highest level won.
+
 The collection (C, in game or on the new game screen) lists every joker, deck,
 consumable, pull request, badge, boss, package, modifier and hand type: each one shows
 up once you have obtained it in a game (a joker bought, a badge won, a boss beaten…).
@@ -129,7 +134,7 @@ F5 (win the blind in progress), F6 (+$100), F7 (jump to the boss of ante 8), F8 
 every known hand type one level), F9 (add a random joker with a random edition), F10
 (add a random theme to the clipboard) and F11 (give the cards in hand random
 enhancements, seals and editions), F12 (add a random command to the clipboard) and F3 (open a random pack, in the
-shop), F2 (add a random oligarchy card), F4 (switch this ante's boss to the next one). `OMATRO_JOKERS=uptime,fork` sets the jokers
+shop), F2 (add a random oligarchy card), F4 (switch this ante's boss to the next one), F1 (make every joker Welded, Worn and Leased). `OMATRO_JOKERS=uptime,fork` sets the jokers
 every new game starts with.
 
 ## Protocol
@@ -138,7 +143,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 
 | Command | Effect |
 |---|---|
-| `{"cmd":"new_game","seed":42,"jokers":["dotfiles"],"deck":"thinkpad"}` | New game (`seed`, `jokers` and `deck` optional) |
+| `{"cmd":"new_game","seed":42,"jokers":["dotfiles"],"deck":"thinkpad","stake":"quattro"}` | New game (`seed`, `jokers`, `deck` and `stake` optional; a level the deck hasn't unlocked is refused) |
 | `{"cmd":"decks"}` | Lists the decks a new game may start with |
 | `{"cmd":"glossary"}` | Lists the terms card texts mention, with what they mean |
 | `{"cmd":"collection"}` | The collection and the achievements, as the profile has them (the app only) |
@@ -207,7 +212,12 @@ Responses:
   `bonuses`: each joker's badge if this hand were played.
 - `{"event":"decks","decks":[…]}` after `decks`: each deck's `id`, `name`,
   `description` and `quip`; a hidden deck not unlocked yet has the `achievement` it
-  waits for and its `condition` (otherwise `null`), and `new_game` refuses it.
+  waits for and its `condition` (otherwise `null`), and `new_game` refuses it; its
+  `best_stake` (highest level won, or `null`) and `top_stake` (highest level it may
+  be played at). Then the `stakes`: each level's `id`, `level`, `name`,
+  `description`, `quip` and `rules` (what applies at it). The state's `stake` is the
+  game's level, in the same form; jokers carry their `stickers` (`id`, `name`,
+  `description`, and a Worn joker's `blinds_left`).
 - `{"event":"collection","collection":{…}}` after `collection`: `found` and `total`,
   the `families` (each with its `id`, `name`, `found`, `total` and `items`: `id`,
   `state` (`found`, `unknown`, or `locked` until an achievement), `secret`, and once

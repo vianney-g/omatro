@@ -26,6 +26,7 @@ Rectangle {
       : blind ? blind.name : ""
     var parts = [I18n.tr("Ante {a} / {b}", { a: s.ante, b: s.winning_ante }), where]
     if (s.run_deck) parts.push(I18n.tr("on {deck}", { deck: s.run_deck.name }))
+    if (s.stake) parts.push(s.stake.name)
     parts.push(Labels.money(s.money))
     parts.push(I18n.tr(s.jokers.length === 1 ? "{n} joker" : "{n} jokers", { n: s.jokers.length }))
     return parts.join(" · ")

@@ -57,6 +57,7 @@ Rectangle {
         Header {
           anchors.baseline: parent.children[0].baseline
           text: (root.game && root.game.run_deck ? I18n.tr("on {deck}", { deck: root.game.run_deck.name }) + " · " : "")
+            + (root.game && root.game.stake ? root.game.stake.name + " · " : "")
             + I18n.tr("Your run, beautifully over-reported. · I or Esc: close")
           font.italic: true
         }

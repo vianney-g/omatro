@@ -12,6 +12,9 @@ use crate::pack::{Pack, PackKind, SHOP_PACKS};
 use crate::rng::Rng;
 use crate::run_deck::Deck;
 use crate::score::{Breakdown, Table, copy_target, score};
+use crate::stake::{
+    LEASE_FEE, LEASE_PRICE, STICKER_ODDS, Stake, StakeInfo, StickerInfo, Stickers, WORN_BLINDS,
+};
 use crate::tag::Tag;
 use crate::voucher::{VOUCHER_PRICE, Voucher};
 use serde::{Deserialize, Serialize};
@@ -117,6 +120,8 @@ pub struct JokerInfo {
     pub current: Option<String>,
     /// What a growing joker gives right now, for its badge.
     pub bonus: Option<Bonus>,
+    /// Welded, Worn, Leased.
+    pub stickers: Vec<StickerInfo>,
 }
 
 impl JokerInfo {
@@ -135,6 +140,7 @@ impl JokerInfo {
             sell_value: owned.sell_value(),
             current,
             bonus,
+            stickers: owned.stickers.info(),
         }
     }
 }
@@ -265,6 +271,10 @@ pub struct DeckInfo {
     /// what that takes.
     pub achievement: Option<&'static str>,
     pub condition: Option<&'static str>,
+    /// The highest difficulty level won with it, and the highest it may be
+    /// played at.
+    pub best_stake: Option<Stake>,
+    pub top_stake: Stake,
 }
 
 impl From<Deck> for DeckInfo {
@@ -276,6 +286,8 @@ impl From<Deck> for DeckInfo {
             quip: deck.quip(),
             achievement: None,
             condition: None,
+            best_stake: None,
+            top_stake: Stake::Hypercar,
         }
     }
 }
@@ -478,6 +490,8 @@ pub struct State {
     pub tags: Vec<TagInfo>,
     /// The deck the game is played with.
     pub run_deck: Option<DeckInfo>,
+    /// The difficulty level, with its rules.
+    pub stake: StakeInfo,
     /// Change Request: what rerolling the boss costs, when allowed now.
     pub boss_reroll_cost: Option<u32>,
     pub hand_size: usize,
@@ -559,6 +573,9 @@ pub struct Cheat {
     /// Gives the cards in hand random enhancements, seals and editions.
     #[serde(default)]
     pub enhance_hand: bool,
+    /// Gives the jokers these stickers.
+    #[serde(default)]
+    pub stickers: Vec<crate::stake::Sticker>,
 }
 
 /// Why cards are drawn (some bosses deal them face down).
@@ -651,6 +668,9 @@ enum Offer {
     Joker {
         joker: Joker,
         edition: Option<Edition>,
+        /// From the higher difficulty levels.
+        #[serde(default)]
+        stickers: Stickers,
     },
     Consumable(Consumable),
     /// A playing card for the deck (Card Marketplace); it gets its id once bought.
@@ -799,6 +819,9 @@ pub struct Game {
     /// What happened since the session last looked.
     #[serde(skip)]
     events: Vec<Event>,
+    /// The difficulty level.
+    #[serde(default)]
+    stake: Stake,
 }
 
 impl Game {
@@ -807,6 +830,11 @@ impl Game {
     }
 
     pub fn with_deck(seed: u64, jokers: Vec<Joker>, deck: Option<Deck>) -> Self {
+        Self::with_stake(seed, jokers, deck, Stake::default())
+    }
+
+    /// A game at a difficulty level.
+    pub fn with_stake(seed: u64, jokers: Vec<Joker>, deck: Option<Deck>, stake: Stake) -> Self {
         let mut game = Game {
             seed,
             deck_rng: Rng::stream(seed, "deck"),
@@ -884,6 +912,7 @@ impl Game {
             most_jokers: 0,
             shop_rerolls: 0,
             events: Vec::new(),
+            stake,
         };
         game.set_up_deck();
         game.starting_deck = game.deck.len();
@@ -924,6 +953,40 @@ impl Game {
 
     pub fn ante(&self) -> u32 {
         self.ante
+    }
+
+    pub fn stake(&self) -> Stake {
+        self.stake
+    }
+
+    /// The deck the game is played with (none: the plain one).
+    pub fn run_deck(&self) -> Option<Deck> {
+        self.run_deck
+    }
+
+    /// Stickers for a shop joker, as the difficulty level allows: Welded or
+    /// Worn (not both), and Leased. Lower levels draw nothing, so that their
+    /// shops stay as they were.
+    fn roll_stickers(&self, joker: Joker, rng: &mut Rng) -> Stickers {
+        let mut stickers = Stickers::default();
+        if self.stake < Stake::Quattro || !joker.sticker_compat() {
+            return stickers;
+        }
+        let roll = rng.unit();
+        if roll < STICKER_ODDS {
+            stickers.welded = true;
+        } else if roll < 2.0 * STICKER_ODDS && self.stake >= Stake::Endurance {
+            stickers.worn = Some(WORN_BLINDS);
+        }
+        if self.stake >= Stake::Hypercar && rng.unit() < STICKER_ODDS {
+            stickers.leased = true;
+        }
+        stickers
+    }
+
+    /// Jokers that can be destroyed (not Welded ones).
+    fn destructible(&self, index: usize) -> bool {
+        !self.jokers[index].stickers.welded
     }
 
     /// Most jokers held at once so far.
@@ -1150,6 +1213,7 @@ impl Game {
                         self.offers.push(Offer::Joker {
                             joker,
                             edition: None,
+                            stickers: Stickers::default(),
                         });
                         self.free_offers.push(true);
                     }
@@ -1177,6 +1241,7 @@ impl Game {
                                 self.offers.push(Offer::Joker {
                                     joker,
                                     edition: Some(edition),
+                                    stickers: Stickers::default(),
                                 });
                                 self.free_offers.push(true);
                             }
@@ -1292,7 +1357,7 @@ impl Game {
             + 3 * self.count(Joker::Backspace)
             + self.merged(&[Voucher::RmI, Voucher::EmptyTrash])
             + usize::from(self.deck_is(Deck::ThinkPad));
-        let less = self.merged(&[Voucher::GitResetHard]);
+        let less = self.merged(&[Voucher::GitResetHard]) + usize::from(self.stake >= Stake::GroupB);
         (DISCARDS_PER_BLIND + more as u32).saturating_sub(less as u32)
     }
 
@@ -1354,8 +1419,10 @@ impl Game {
     /// The boss blind's target follows the boss (The Kubernetes Cluster ×4…).
     fn target_of(&self, kind: BlindKind) -> f64 {
         let base = match kind {
-            BlindKind::Boss => blind::ante_base(self.ante) * self.boss.multiplier(),
-            _ => blind::target(self.ante, kind),
+            BlindKind::Boss => {
+                blind::ante_base_scaled(self.ante, self.stake.scaling()) * self.boss.multiplier()
+            }
+            _ => blind::ante_base_scaled(self.ante, self.stake.scaling()) * kind.multiplier(),
         };
         // Hyprland Dwindle: blinds are twice as big.
         if self.deck_is(Deck::HyprlandDwindle) {
@@ -1453,7 +1520,10 @@ impl Game {
     }
 
     fn count(&self, joker: Joker) -> usize {
-        self.jokers.iter().filter(|j| j.joker == joker).count()
+        self.jokers
+            .iter()
+            .filter(|j| j.joker == joker && !j.worn_out())
+            .count()
     }
 
     /// How many jokers use this ability, Forks copying it included.
@@ -1696,7 +1766,10 @@ impl Game {
         }
         let mut i = 0;
         while i < self.jokers.len() {
-            if self.jokers[i].joker == Joker::RmRfNodeModules && i + 1 < self.jokers.len() {
+            if self.jokers[i].joker == Joker::RmRfNodeModules
+                && i + 1 < self.jokers.len()
+                && self.destructible(i + 1)
+            {
                 let eaten = self.jokers.remove(i + 1);
                 self.jokers[i].counter += 2.0 * eaten.sell_value() as f64;
             }
@@ -1709,7 +1782,9 @@ impl Game {
         while i < self.jokers.len() {
             if self.jokers[i].joker == Joker::DistroHopping {
                 self.jokers[i].counter += 0.5;
-                let others: Vec<usize> = (0..self.jokers.len()).filter(|&j| j != i).collect();
+                let others: Vec<usize> = (0..self.jokers.len())
+                    .filter(|&j| j != i && self.destructible(j))
+                    .collect();
                 if !others.is_empty() {
                     let gone = others[self.command_rng.below(others.len() as u64) as usize];
                     self.jokers.remove(gone);
@@ -2219,6 +2294,19 @@ impl Game {
             kept
         });
         self.beta_broken |= broke_beta;
+        let mut leased = 0;
+        for joker in &mut self.jokers {
+            if let Some(left) = &mut joker.stickers.worn {
+                *left = left.saturating_sub(1);
+            }
+            leased += i64::from(joker.stickers.leased);
+        }
+        if leased > 0 {
+            self.money = (self.money - LEASE_FEE * leased).max(-self.credit());
+            reward
+                .notes
+                .push(format!("Leased jokers: −${}.", LEASE_FEE * leased));
+        }
         let inflation = self.abilities(Joker::SemverInflation) as u32;
         if inflation > 0 {
             for joker in &mut self.jokers {
@@ -2351,6 +2439,8 @@ impl Game {
         let cards = 3 * enterprise * cron_jobs;
         let blind = match self.blind {
             BlindKind::Boss => self.boss.reward(),
+            // Track Day: the small blind pays nothing.
+            BlindKind::Small if self.stake >= Stake::TrackDay => 0,
             kind => kind.reward(),
         };
         // Raspberry Pi: $2 per hand and $1 per discard left, but no interest.
@@ -2534,7 +2624,12 @@ impl Game {
         }
         let joker = pool[rng.below(pool.len() as u64) as usize];
         let edition = self.roll_edition(rng);
-        Some(Offer::Joker { joker, edition })
+        let stickers = self.roll_stickers(joker, rng);
+        Some(Offer::Joker {
+            joker,
+            edition,
+            stickers,
+        })
     }
 
     /// A playing card for the shop (Card Marketplace); with Premium Cards, it
@@ -2566,7 +2661,8 @@ impl Game {
             return 0;
         }
         match self.offers[index] {
-            Offer::Joker { joker, edition } => {
+            Offer::Joker { stickers, .. } if stickers.leased => LEASE_PRICE,
+            Offer::Joker { joker, edition, .. } => {
                 self.discounted(OwnedJoker::new(joker, edition).price())
             }
             Offer::Consumable(c) => self.consumable_price(c),
@@ -2620,11 +2716,18 @@ impl Game {
             .get(index)
             .ok_or_else(|| GameError::BadSelection(format!("no offer #{index}")))?;
         match offer {
-            Offer::Joker { joker, edition } => {
+            Offer::Joker {
+                joker,
+                edition,
+                stickers,
+            } => {
                 if !self.has_room(edition) {
                     return Err(GameError::JokerSlotsFull);
                 }
-                let owned = OwnedJoker::new(joker, edition);
+                let owned = OwnedJoker {
+                    stickers,
+                    ..OwnedJoker::new(joker, edition)
+                };
                 self.spend(self.offer_price(index))?;
                 self.jokers.push(owned);
             }
@@ -2682,6 +2785,12 @@ impl Game {
         if index >= self.jokers.len() {
             return Err(GameError::BadSelection(format!("no joker #{index}")));
         }
+        if !self.destructible(index) {
+            return Err(GameError::BadSelection(format!(
+                "{} is Welded: it can't be sold",
+                self.jokers[index].joker.name()
+            )));
+        }
         let sold = self.jokers.remove(index);
         self.money += sold.sell_value() as i64;
         self.events.push(Event::JokerSold);
@@ -2693,7 +2802,10 @@ impl Game {
                 if copy.edition == Some(Edition::Transparent) {
                     copy.edition = None;
                 }
-                self.jokers.push(copy);
+                // A Transparent Syncthing took its extra slot with it.
+                if self.has_room(copy.edition) {
+                    self.jokers.push(copy);
+                }
             }
             _ => {}
         }
@@ -2871,7 +2983,13 @@ impl Game {
                     self.hand_size_penalty += 1;
                 } else {
                     self.jokers[j].edition = Some(Edition::Animated);
-                    self.jokers = vec![self.jokers[j].clone()];
+                    // Welded jokers stay.
+                    let kept = self.jokers[j].clone();
+                    self.jokers = (0..self.jokers.len())
+                        .filter(|&i| i != j && !self.destructible(i))
+                        .map(|i| self.jokers[i].clone())
+                        .collect();
+                    self.jokers.insert(0, kept);
                 }
             }
             Oligarchy::MassLayoffs => {
@@ -2885,7 +3003,16 @@ impl Game {
                 if copy.edition == Some(Edition::Transparent) {
                     copy.edition = None;
                 }
-                self.jokers = vec![original, copy];
+                // Welded jokers stay; then the copy, if there is room left.
+                let welded: Vec<OwnedJoker> = (0..self.jokers.len())
+                    .filter(|&i| i != j && !self.destructible(i))
+                    .map(|i| self.jokers[i].clone())
+                    .collect();
+                self.jokers = vec![original];
+                self.jokers.extend(welded);
+                if self.has_room(copy.edition) {
+                    self.jokers.insert(1, copy);
+                }
             }
             Oligarchy::StockSplit => {
                 if let Some(card) = self.hand.iter().find(|c| Some(c.id) == target).copied() {
@@ -3285,7 +3412,7 @@ impl Game {
                     _ => None,
                 },
                 PackKind::JokersGit => match self.roll_joker(&mut rng) {
-                    Some(Offer::Joker { joker, edition }) => {
+                    Some(Offer::Joker { joker, edition, .. }) => {
                         Some(PackItem::Joker { joker, edition })
                     }
                     _ => None,
@@ -3499,6 +3626,15 @@ impl Game {
             }
             self.jokers.push(OwnedJoker::new(joker, edition));
         }
+        for sticker in &cheat.stickers {
+            for joker in &mut self.jokers {
+                match sticker {
+                    crate::stake::Sticker::Welded => joker.stickers.welded = true,
+                    crate::stake::Sticker::Worn => joker.stickers.worn = Some(WORN_BLINDS),
+                    crate::stake::Sticker::Leased => joker.stickers.leased = true,
+                }
+            }
+        }
         if cheat.enhance_hand {
             let ids: Vec<u32> = self.hand.iter().map(|c| c.id).collect();
             for id in ids {
@@ -3678,6 +3814,7 @@ impl Game {
             boss_reroll_cost: self.boss_reroll_cost(),
             tags: self.tags.iter().map(|&t| self.tag_info(t, false)).collect(),
             run_deck: self.run_deck.map(DeckInfo::from),
+            stake: self.stake.into(),
             hand_size: self.hand_size(),
             remaining: {
                 let mut cards = match self.phase {
@@ -3742,8 +3879,15 @@ impl Game {
                 .iter()
                 .enumerate()
                 .map(|(i, &o)| match o {
-                    Offer::Joker { joker, edition } => {
-                        let owned = OwnedJoker::new(joker, edition);
+                    Offer::Joker {
+                        joker,
+                        edition,
+                        stickers,
+                    } => {
+                        let owned = OwnedJoker {
+                            stickers,
+                            ..OwnedJoker::new(joker, edition)
+                        };
                         OfferInfo::Joker(JokerInfo {
                             price: self.offer_price(i),
                             ..JokerInfo::new(&owned, None, None)
@@ -4138,6 +4282,7 @@ mod tests {
             Offer::Joker {
                 joker: Joker::Hotwire,
                 edition: None,
+                stickers: Stickers::default(),
             },
             Offer::Consumable(Consumable::Theme(Theme::Nord)),
         ];
@@ -4167,12 +4312,14 @@ mod tests {
         game.offers = vec![Offer::Joker {
             joker: Joker::Fork,
             edition: None,
+            stickers: Stickers::default(),
         }];
         assert_eq!(game.buy(0), Err(GameError::JokerSlotsFull));
         // A transparent joker brings its own slot.
         game.offers = vec![Offer::Joker {
             joker: Joker::Fork,
             edition: Some(Edition::Transparent),
+            stickers: Stickers::default(),
         }];
         game.buy(0).unwrap();
         assert_eq!(game.state().max_jokers, MAX_JOKERS + 1);
@@ -5074,6 +5221,7 @@ mod tests {
         game.offers = vec![Offer::Joker {
             joker: Joker::Fork,
             edition: None,
+            stickers: Stickers::default(),
         }];
         assert_eq!(game.reroll_cost, REROLL_COST - 2);
         let s = game.state();
@@ -5690,5 +5838,119 @@ mod tests {
         );
         assert_eq!(game.most_jokers(), 1);
         assert!(game.owned_items().iter().all(|i| !matches!(i, Item::Joker(_))));
+    }
+
+    #[test]
+    fn levels_add_their_rules() {
+        let base = Game::with_stake(1, vec![], None, Stake::DailyCommute);
+        let group_b = Game::with_stake(1, vec![], None, Stake::GroupB);
+        assert_eq!(group_b.discards_left, base.discards_left - 1);
+        let mut le_mans = Game::with_stake(1, vec![], None, Stake::LeMans);
+        le_mans.ante = 8;
+        assert_eq!(le_mans.target_of(BlindKind::Small), 200_000.0);
+
+        let mut track = Game::with_stake(1, vec![], None, Stake::TrackDay);
+        track.select_blind().unwrap();
+        track.score = track.target();
+        track.win_blind();
+        assert_eq!(track.reward.as_ref().unwrap().blind, 0);
+        // The same seed draws the same shops below Quattro.
+        let shop = |stake| {
+            let mut g = Game::with_stake(4, vec![], None, stake);
+            g.select_blind().unwrap();
+            g.score = g.target();
+            g.win_blind();
+            g.cash_out().unwrap();
+            g.offers.clone()
+        };
+        assert!(!shop(Stake::DailyCommute).is_empty());
+        assert_eq!(shop(Stake::DailyCommute), shop(Stake::ClubRacing));
+    }
+
+    #[test]
+    fn shop_jokers_get_stickers_at_the_higher_levels() {
+        let mut seen = (0, 0, 0);
+        for seed in 0..60 {
+            let mut game = Game::with_stake(seed, vec![], None, Stake::Hypercar);
+            game.select_blind().unwrap();
+            game.score = game.target();
+            game.win_blind();
+            game.cash_out().unwrap();
+            for offer in &game.offers {
+                if let Offer::Joker { joker, stickers, .. } = offer {
+                    assert!(!(stickers.welded && stickers.worn.is_some()));
+                    assert!(joker.sticker_compat() || stickers.is_empty());
+                    seen.0 += usize::from(stickers.welded);
+                    seen.1 += usize::from(stickers.worn.is_some());
+                    seen.2 += usize::from(stickers.leased);
+                }
+            }
+        }
+        assert!(seen.0 > 0 && seen.1 > 0 && seen.2 > 0, "{seen:?}");
+    }
+
+    #[test]
+    fn welded_worn_and_leased() {
+        let mut game = shopping(2, vec![Joker::Dotfiles, Joker::Omakase]);
+        game.jokers[0].stickers.welded = true;
+        assert!(game.sell(0).is_err());
+        game.sell(1).unwrap();
+        assert_eq!(game.jokers.len(), 1);
+
+        // Worn: works for 5 blinds, then does nothing.
+        let mut game = playing(3, vec![Joker::Omakase]);
+        game.jokers[0].stickers.worn = Some(1);
+        game.hand = cards("KH QD 9S 7C 5H 4D 3S 2C");
+        assert_eq!(game.play(&[0]).unwrap().mult, 6.0);
+        game.score = game.target();
+        game.win_blind();
+        assert!(game.jokers[0].worn_out());
+        game.cash_out().unwrap();
+        game.next_blind().unwrap();
+        game.select_blind().unwrap();
+        game.hand = cards("KH QD 9S 7C 5H 4D 3S 2C");
+        assert_eq!(game.play(&[0]).unwrap().mult, 1.0);
+
+        // Leased: $3 at the end of each blind, sells for $1.
+        let mut game = playing(3, vec![Joker::Omakase]);
+        game.jokers[0].stickers.leased = true;
+        assert_eq!(game.jokers[0].sell_value(), 1);
+        let money = game.money;
+        game.score = game.target();
+        game.win_blind();
+        assert_eq!(game.money, money - LEASE_FEE);
+    }
+
+    #[test]
+    fn welded_jokers_survive_the_jokers_that_destroy() {
+        let mut game = Game::new(5, vec![Joker::RmRfNodeModules, Joker::Dotfiles, Joker::DistroHopping]);
+        game.jokers[1].stickers.welded = true;
+        game.select_blind().unwrap();
+        assert!(game.jokers.iter().any(|j| j.joker == Joker::Dotfiles));
+    }
+
+    #[test]
+    fn merger_keeps_welded_jokers_within_the_slots() {
+        let mut game = with_oligarchy(
+            7,
+            Oligarchy::Merger,
+            vec![Joker::Dotfiles, Joker::Omakase, Joker::Uptime, Joker::Paru, Joker::Pipeline],
+        );
+        for joker in &mut game.jokers[1..] {
+            joker.stickers.welded = true;
+        }
+        game.use_consumable(0, &[]).unwrap();
+        assert!(game.jokers.len() <= game.joker_slots());
+        assert_eq!(game.jokers.iter().filter(|j| j.stickers.welded).count(), 4);
+    }
+
+    #[test]
+    fn a_transparent_syncthing_copies_only_with_room() {
+        let mut game = shopping(3, vec![Joker::Syncthing, Joker::Dotfiles, Joker::Omakase, Joker::Uptime, Joker::Paru, Joker::Pipeline]);
+        game.jokers[0].edition = Some(Edition::Transparent);
+        game.jokers[0].counter = SYNCTHING_BLINDS;
+        game.sell(0).unwrap();
+        assert_eq!(game.jokers.len(), 5);
+        assert!(game.jokers.len() <= game.joker_slots());
     }
 }

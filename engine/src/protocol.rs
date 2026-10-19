@@ -11,6 +11,7 @@ use crate::joker::{Bonus, Joker};
 use crate::profile::{News, Profile};
 use crate::run_deck::Deck;
 use crate::score::Breakdown;
+use crate::stake::{Stake, StakeInfo};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -24,6 +25,9 @@ pub enum Command {
         jokers: Vec<Joker>,
         /// The starting deck (none: the plain one).
         deck: Option<Deck>,
+        /// The difficulty level (none: the first).
+        #[serde(default)]
+        stake: Option<Stake>,
     },
     /// Lists the starting decks, for the new game screen.
     Decks,
@@ -132,6 +136,8 @@ pub enum Response {
     },
     Decks {
         decks: Vec<DeckInfo>,
+        /// The difficulty levels, first to last.
+        stakes: Vec<StakeInfo>,
     },
     Glossary {
         terms: Vec<Term>,
@@ -352,8 +358,18 @@ impl Session {
             seed,
             mut jokers,
             deck,
+            stake,
         } = command
         {
+            let stake = stake.unwrap_or_default();
+            if let Some(profile) = &self.profile
+                && stake > profile.top_stake(deck)
+            {
+                return Err(format!(
+                    "{} is locked: win at the level below with this deck first",
+                    stake.name()
+                ));
+            }
             if let (Some(profile), Some(deck)) = (&self.profile, deck)
                 && !profile.deck_unlocked(deck)
             {
@@ -365,7 +381,7 @@ impl Session {
             }
             let helped = !jokers.is_empty();
             let seed = seed.unwrap_or_else(random_seed);
-            let mut game = Game::with_deck(seed, jokers, deck);
+            let mut game = Game::with_stake(seed, jokers, deck, stake);
             if helped {
                 game.mark_cheated();
             }
@@ -382,17 +398,22 @@ impl Session {
                 .iter()
                 .map(|&d| {
                     let mut info = DeckInfo::from(d);
-                    if let Some(profile) = &self.profile
-                        && !profile.deck_unlocked(d)
-                    {
-                        let a = Achievement::unlocking(Item::Deck(d));
-                        info.achievement = a.map(Achievement::name);
-                        info.condition = a.map(Achievement::description);
+                    if let Some(profile) = &self.profile {
+                        if !profile.deck_unlocked(d) {
+                            let a = Achievement::unlocking(Item::Deck(d));
+                            info.achievement = a.map(Achievement::name);
+                            info.condition = a.map(Achievement::description);
+                        }
+                        info.best_stake = profile.best_stake(Some(d));
+                        info.top_stake = profile.top_stake(Some(d));
                     }
                     info
                 })
                 .collect();
-            return Ok(Response::Decks { decks });
+            return Ok(Response::Decks {
+                decks,
+                stakes: Stake::ALL.iter().map(|&s| s.into()).collect(),
+            });
         }
         if let Command::Glossary = command {
             return Ok(Response::Glossary { terms: glossary() });
@@ -553,6 +574,7 @@ mod tests {
                 seed: Some(3),
                 jokers: vec![Joker::Dotfiles],
                 deck: None,
+                stake: None,
             }
         );
         assert_eq!(
@@ -762,5 +784,21 @@ mod tests {
         send(&mut plain, r#"{"cmd":"new_game","seed":1,"deck":"raid1"}"#);
         assert!(plain.game.as_ref().unwrap().locked().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn levels_unlock_deck_by_deck() {
+        let mut session = Session::default().with_new_profile();
+        let r = send(&mut session, r#"{"cmd":"decks"}"#);
+        assert_eq!(r["stakes"].as_array().unwrap().len(), Stake::ALL.len());
+        assert_eq!(r["decks"][0]["top_stake"], "daily_commute");
+        let r = send(&mut session, r#"{"cmd":"new_game","seed":1,"deck":"think_pad","stake":"track_day"}"#);
+        assert_eq!(r["message"], "Track Day is locked: win at the level below with this deck first");
+        let r = send(&mut session, r#"{"cmd":"new_game","seed":1,"deck":"think_pad"}"#);
+        assert_eq!(r["state"]["stake"]["name"], "Daily Commute");
+        // Without a profile, every level is open.
+        let mut plain = Session::default();
+        let r = send(&mut plain, r#"{"cmd":"new_game","seed":1,"stake":"hypercar"}"#);
+        assert_eq!(r["state"]["stake"]["rules"].as_array().unwrap().len(), 7);
     }
 }

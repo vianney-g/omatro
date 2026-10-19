@@ -113,7 +113,8 @@ Lua: `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'`,
 geometry comes from `hyprctl clients -j`; `'hl.dsp.cursor.move({ x = …, y = … })'`
 moves the pointer, to check hover tooltips. F11 gives the cards in hand random
 modifiers, F12 adds a random command, F2 a random oligarchy card, F3 opens a random pack (in
-the shop), F4 switches this ante's boss to the next one. Check that the app logs no QML
+the shop), F4 switches this ante's boss to the next one, F1 makes every joker Welded, Worn
+and Leased. Check that the app logs no QML
 warnings: when stderr is not a terminal, Qt writes them to the journal, so read
 `journalctl --user _PID=<pid> -o cat` (a QML error can keep the window from showing
 at all). A simulated pointer only reaches the window when it enters it: move it out
@@ -273,6 +274,20 @@ in the game. `achievement.rs` lists the achievements; `unlocks` names a hidden i
 which `Game::lock` keeps out of `on_sale` (jokers) and `Session` out of the decks
 until it is done. A game with `cheated` set (cheats, `OMATRO_JOKERS`) fills the
 collection but counts for no achievement.
+
+## Difficulty levels
+
+`stake.rs` lists the levels (`Stake`, each adding its rule to those below) and the
+joker stickers (`Sticker`, kept in `OwnedJoker::stickers`). `Game::with_stake` starts
+a game at a level; rules ask `self.stake >= Stake::…` where they apply (`reward`,
+`discards_per_blind`, `target_of` through `Stake::scaling` and
+`blind::ante_base_scaled`, `roll_stickers` for shop jokers, which draws nothing below
+Quattro so that lower levels keep their shops). Welded jokers are left alone by
+everything that destroys jokers (`Game::destructible`); a Worn joker past its blinds
+is skipped by `copy_target`, `count` and the scoring loop. `Profile` keeps the
+highest level won per deck (`best_stake`, `top_stake`); `Session` refuses a level
+the deck hasn't unlocked. `Joker::sticker_compat` keeps stickers off jokers that run
+out, break or are sold to work.
 
 ## Generated references
 

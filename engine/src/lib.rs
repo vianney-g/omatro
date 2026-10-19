@@ -20,5 +20,6 @@ pub mod protocol;
 pub mod rng;
 pub mod run_deck;
 pub mod score;
+pub mod stake;
 pub mod tag;
 pub mod voucher;

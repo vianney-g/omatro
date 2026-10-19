@@ -6,6 +6,7 @@ use crate::hand::HandKind;
 use crate::joker::Joker;
 use crate::modifier::{Edition, Enhancement, Seal};
 use crate::pack::PackKind;
+use crate::stake::Sticker;
 use crate::tag::Tag;
 use crate::voucher::Voucher;
 use serde::Serialize;
@@ -39,6 +40,9 @@ pub fn glossary() -> Vec<Term> {
     }
     for e in Edition::ALL {
         terms.push(term(e.name(), "edition", e.description()));
+    }
+    for s in Sticker::ALL {
+        terms.push(term(s.name(), "sticker", s.description()));
     }
     for t in Tag::ALL {
         terms.push(term(t.name(), "badge", t.description()));

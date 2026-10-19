@@ -9,8 +9,9 @@ use crate::game::{Event, Game};
 use crate::hand::HandKind;
 use crate::joker::Joker;
 use crate::run_deck::Deck;
+use crate::stake::Stake;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::OnceLock;
 use std::path::{Path, PathBuf};
 
@@ -45,6 +46,9 @@ pub struct Profile {
     achievements: BTreeSet<String>,
     #[serde(default)]
     pub stats: Stats,
+    /// The highest difficulty level won with each deck (`plain` for none).
+    #[serde(default)]
+    stakes: BTreeMap<String, Stake>,
 }
 
 /// Something new for the player: an item found, an achievement done, or what
@@ -61,6 +65,12 @@ pub struct News {
 /// Where the app keeps the profile: next to the save.
 pub fn default_profile_path() -> Option<PathBuf> {
     crate::protocol::default_save_path().map(|p| p.with_file_name("profile.json"))
+}
+
+fn deck_id(deck: Option<Deck>) -> String {
+    deck.and_then(|d| serde_json::to_value(d).ok())
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_else(|| "plain".into())
 }
 
 fn achievement_id(a: Achievement) -> String {
@@ -136,6 +146,27 @@ impl Profile {
 
     pub fn deck_unlocked(&self, deck: Deck) -> bool {
         self.unlocked(Item::Deck(deck))
+    }
+
+    /// The highest difficulty level won with a deck.
+    pub fn best_stake(&self, deck: Option<Deck>) -> Option<Stake> {
+        self.stakes.get(&deck_id(deck)).copied()
+    }
+
+    /// The highest difficulty level a deck may be played at: the one after
+    /// the highest won.
+    pub fn top_stake(&self, deck: Option<Deck>) -> Stake {
+        self.best_stake(deck)
+            .map_or(Stake::DailyCommute, |best| best.next().unwrap_or(best))
+    }
+
+    /// A game was won with a deck at a level; true when it is the deck's
+    /// best so far.
+    fn won_at(&mut self, deck: Option<Deck>, stake: Stake) -> bool {
+        let best = self.stakes.entry(deck_id(deck)).or_insert(stake);
+        let better = *best <= stake;
+        *best = (*best).max(stake);
+        better
     }
 
     /// Where a counting achievement stands, and its goal.
@@ -226,6 +257,20 @@ impl Profile {
                 Event::Rerolled { .. } => {}
                 Event::GameOver { won: true } => {
                     self.stats.games_won += 1;
+                    let (deck, stake) = (game.run_deck(), game.stake());
+                    let before = self.top_stake(deck);
+                    self.won_at(deck, stake);
+                    let after = self.top_stake(deck);
+                    if after > before {
+                        news.push(News {
+                            kind: "unlocked",
+                            name: after.name().into(),
+                            text: format!(
+                                "level for {}",
+                                deck.map_or("the plain deck", Deck::name)
+                            ),
+                        });
+                    }
                     self.achieve(Achievement::ItsNotAPhase, &mut news);
                     if game.most_jokers() <= BARE_METAL_JOKERS {
                         self.achieve(Achievement::BareMetal, &mut news);
@@ -328,6 +373,27 @@ mod tests {
         let news = profile.observe(&mut game);
         assert!(profile.is_done(Achievement::CoreDump));
         assert!(news.iter().any(|n| n.kind == "unlocked" && n.name == "Postmortem"));
+    }
+
+    #[test]
+    fn winning_unlocks_the_next_level_of_the_deck() {
+        let mut profile = Profile::default();
+        assert_eq!(profile.top_stake(Some(Deck::ThinkPad)), Stake::DailyCommute);
+        let mut game = Game::with_stake(1, vec![], Some(Deck::ThinkPad), Stake::TrackDay);
+        game.events_for_tests(vec![Event::GameOver { won: true }]);
+        let news = profile.observe(&mut game);
+        assert_eq!(profile.best_stake(Some(Deck::ThinkPad)), Some(Stake::TrackDay));
+        assert_eq!(profile.top_stake(Some(Deck::ThinkPad)), Stake::ClubRacing);
+        assert_eq!(profile.top_stake(Some(Deck::Basecamp)), Stake::DailyCommute);
+        assert!(news.iter().any(|n| n.kind == "unlocked" && n.name == "Club Racing"));
+        // A lower level never lowers the best.
+        let mut game = Game::with_stake(1, vec![], Some(Deck::ThinkPad), Stake::DailyCommute);
+        game.events_for_tests(vec![Event::GameOver { won: true }]);
+        assert!(profile.observe(&mut game).iter().all(|n| n.kind != "unlocked"));
+        assert_eq!(profile.best_stake(Some(Deck::ThinkPad)), Some(Stake::TrackDay));
+        // The last level unlocks nothing more.
+        profile.won_at(None, Stake::Hypercar);
+        assert_eq!(profile.top_stake(None), Stake::Hypercar);
     }
 
     #[test]

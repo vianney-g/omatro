@@ -69,6 +69,8 @@ Window {
     }
     else if (r.event === "decks") {
       decks = r.decks
+      stakes = r.stakes
+      newGameScreen.stake = Math.max(0, stakes.findIndex(function(s) { return s.id === settings.lastStake }))
       var last = decks.findIndex(function(d) { return d.id === settings.lastDeck })
       newGameScreen.current = Math.max(0, last)
     }
@@ -186,11 +188,13 @@ Window {
 
   // ---- new game: pick the deck first ------------------------------------
   property var decks: []
+  property var stakes: []
   property bool choosingDeck: false
   Settings {
     id: settings
     category: "omatro"
     property string lastDeck: ""
+    property string lastStake: ""
     // The language chosen in the game ("": the system's).
     property string language: ""
   }
@@ -235,11 +239,12 @@ Window {
     newGameScreen.current = Math.max(0, last)
     choosingDeck = true
   }
-  function startGame(deck) {
+  function startGame(deck, stake) {
     settings.lastDeck = deck
+    settings.lastStake = stake
     choosingDeck = false
     notice = ""
-    send({ cmd: "new_game", deck: deck })
+    send({ cmd: "new_game", deck: deck, stake: stake })
   }
 
   function applyState(s) {
@@ -619,14 +624,13 @@ Window {
       }
       else if (k === Qt.Key_C && !(event.modifiers & Qt.ControlModifier)) root.openCollection()
       else if (root.choosingDeck) {
-        if (k === Qt.Key_Left) newGameScreen.move(-1)
+        if ((k === Qt.Key_Left || k === Qt.Key_Right) && (event.modifiers & Qt.ShiftModifier))
+          newGameScreen.moveStake(k === Qt.Key_Left ? -1 : 1)
+        else if (k === Qt.Key_Left) newGameScreen.move(-1)
         else if (k === Qt.Key_Right) newGameScreen.move(1)
         else if (k === Qt.Key_Up) newGameScreen.move(-3)
         else if (k === Qt.Key_Down) newGameScreen.move(3)
-        else if (k === Qt.Key_Return || k === Qt.Key_Enter) {
-          var chosen = root.decks[newGameScreen.current]
-          if (chosen && !chosen.achievement) root.startGame(chosen.id)
-        }
+        else if (k === Qt.Key_Return || k === Qt.Key_Enter) newGameScreen.startChosen()
         else if (k === Qt.Key_Escape && root.game !== null) root.choosingDeck = false
         else return
       }
@@ -659,6 +663,7 @@ Window {
       else if (k === Qt.Key_S) root.skipBlind()
       else if (k === Qt.Key_M) root.buyVoucher(0)
       else if (k === Qt.Key_B) root.rerollBoss()
+      else if (k === Qt.Key_F1) root.cheat({ stickers: ["welded", "worn", "leased"] })
       else if (k === Qt.Key_F5) root.cheat({ win: true })
       else if (k === Qt.Key_F6) root.cheat({ money: root.game.money + 100 })
       else if (k === Qt.Key_F7) root.cheat({ ante: root.game.winning_ante, blind: "boss" })
@@ -753,7 +758,7 @@ Window {
           // The machine the game is played on.
           Caption {
             visible: root.game !== null && root.game.run_deck !== null
-            text: visible ? I18n.tr("on {deck}", { deck: root.game.run_deck.name }) : ""
+            text: visible ? I18n.tr("on {deck}", { deck: root.game.run_deck.name }) + " · " + root.game.stake.name : ""
           }
         }
 
@@ -1620,10 +1625,11 @@ Window {
       anchors.fill: parent
       visible: root.choosingDeck
       decks: root.decks
+      stakes: root.stakes
       message: root.saveProblem
       onLanguage: function(lang) { root.setLanguage(lang) }
       canCancel: root.game !== null
-      onStart: function(deck) { root.startGame(deck) }
+      onStart: function(deck, stake) { root.startGame(deck, stake) }
       onCancel: root.choosingDeck = false
       onCollection: root.openCollection()
     }

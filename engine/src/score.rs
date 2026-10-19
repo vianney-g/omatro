@@ -91,6 +91,10 @@ pub struct Table<'a> {
 pub fn copy_target(jokers: &[OwnedJoker], index: usize) -> Option<usize> {
     let mut target = index;
     for _ in 0..=jokers.len() {
+        // A Worn joker past its blinds does nothing, nor can it be copied.
+        if jokers[target].worn_out() {
+            return None;
+        }
         target = match jokers[target].joker {
             Joker::Fork => target + 1,
             Joker::Upstream => 0,
@@ -276,7 +280,7 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
         board,
     };
     for (j, owned) in jokers.iter().enumerate() {
-        if table.disabled_joker == Some(j) {
+        if table.disabled_joker == Some(j) || owned.worn_out() {
             continue;
         }
         let source = Source::Joker { index: j };

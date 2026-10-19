@@ -6,6 +6,7 @@ use crate::hand::{Evaluated, HandKind};
 pub use crate::modifier::Edition;
 use crate::modifier::Enhancement;
 use crate::rng::Rng;
+use crate::stake::Stickers;
 use serde::{Deserialize, Serialize};
 
 /// How often a joker shows up in the shop, named after Arch's repositories.
@@ -1398,6 +1399,25 @@ impl Joker {
         )
     }
 
+    /// Whether a shop joker may get a sticker: not those that run out, break,
+    /// or are sold to work.
+    pub fn sticker_compat(self) -> bool {
+        !matches!(
+            self,
+            Joker::FreeTrial
+                | Joker::EspressoShot
+                | Joker::HypeCycle
+                | Joker::SwapFile
+                | Joker::EnergyDrink
+                | Joker::BetaRelease
+                | Joker::StableRelease
+                | Joker::BtrfsSnapshot
+                | Joker::Syncthing
+                | Joker::StickerPack
+                | Joker::Rollback
+        )
+    }
+
     /// Starting value of the joker's counter, for jokers that grow or shrink.
     fn initial_counter(self) -> f64 {
         match self {
@@ -1660,6 +1680,9 @@ pub struct OwnedJoker {
     pub sell_bonus: u32,
     /// Progress towards the next gain (Mailing List: cards discarded).
     pub progress: u32,
+    /// Welded, Worn, Leased (the higher difficulty levels).
+    #[serde(default)]
+    pub stickers: Stickers,
 }
 
 /// How a won blind went, for the jokers that care.
@@ -1689,16 +1712,28 @@ impl OwnedJoker {
             counter: joker.initial_counter(),
             sell_bonus: 0,
             progress: 0,
+            stickers: Stickers::default(),
         }
+    }
+
+    /// A Worn joker past its blinds: it does nothing.
+    pub fn worn_out(&self) -> bool {
+        self.stickers.worn_out()
     }
 
     pub fn price(&self) -> u32 {
         self.joker.price() + self.edition.map_or(0, Edition::price)
     }
 
-    /// Half the price, at least $1, plus what it gained.
+    /// Half the price, at least $1, plus what it gained; a Leased joker
+    /// sells for $1.
     pub fn sell_value(&self) -> u32 {
-        (self.price() / 2).max(1) + self.sell_bonus
+        let base = if self.stickers.leased {
+            1
+        } else {
+            (self.price() / 2).max(1)
+        };
+        base + self.sell_bonus
     }
 
     /// What a joker that grows, shrinks or depends on the game gives right now,
