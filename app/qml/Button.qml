@@ -12,9 +12,12 @@ Rectangle {
   // Items after the text, part of the button (Skip and its badge).
   default property alias extra: extraRow.data
   readonly property bool hovered: mouse.containsMouse
+  // The width it may take: past it, the extra items go under the text.
+  property real maxWidth: Infinity
+  readonly property real padding: 2 * Style.space(compact ? 6 : 14)
   signal clicked()
 
-  implicitWidth: content.implicitWidth + 2 * Style.space(compact ? 6 : 14)
+  implicitWidth: content.implicitWidth + padding
   implicitHeight: content.implicitHeight + 2 * Style.space(compact ? 5 : 8)
   radius: Style.cornerRadius
   color: !enabled ? Style.normalFill
@@ -23,12 +26,17 @@ Rectangle {
   border.width: bordered ? Style.normalBorderWidth : 0
   border.color: mouse.containsMouse && enabled ? Colors.accent : Style.normalBorderColor
 
-  Row {
+  Grid {
     id: content
     anchors.centerIn: parent
-    spacing: Style.spacing.md
+    columns: extraRow.visible
+      && label.implicitWidth + columnSpacing + extraRow.implicitWidth + root.padding > root.maxWidth ? 1 : 2
+    columnSpacing: Style.spacing.md
+    rowSpacing: Style.spacing.sm
+    horizontalItemAlignment: Grid.AlignHCenter
+    verticalItemAlignment: Grid.AlignVCenter
     Text {
-      anchors.verticalCenter: parent.verticalCenter
+      id: label
       text: root.text
       color: Colors.foreground
       font.family: Style.font.family
@@ -36,7 +44,6 @@ Rectangle {
     }
     Row {
       id: extraRow
-      anchors.verticalCenter: parent.verticalCenter
       visible: visibleChildren.length > 0
     }
   }

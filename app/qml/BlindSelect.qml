@@ -132,6 +132,7 @@ Row {
               id: skipButton
               anchors.horizontalCenter: parent.horizontalCenter
               visible: modelData.kind !== "boss"
+              maxWidth: col.width
               text: I18n.tr("Skip (S)")
               onClicked: root.skip()
               BadgeView {
