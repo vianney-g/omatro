@@ -107,6 +107,22 @@ Window {
   property real liveChips: 0
   property real liveMult: 0
   property real shownScore: 0
+  // Money as shown: it counts up as it is earned (scoring steps, cash-out)
+  // and drops at once when spent; each change floats beside it.
+  property real shownMoney: 0
+  property bool moneyCounts: true
+  Behavior on shownMoney {
+    enabled: root.moneyCounts
+    NumberAnimation { duration: 500; easing.type: Easing.OutCubic }
+  }
+  function showMoney(money) {
+    var delta = money - Math.round(shownMoney)
+    if (delta === 0) return
+    moneyCounts = delta > 0
+    shownMoney = money
+    moneyCounts = true
+    moneyDelta.show(delta)
+  }
   property string notice: ""
   property bool infoOpen: false   // fastfetch panel
 
@@ -248,6 +264,12 @@ Window {
   }
 
   function applyState(s) {
+    // Another game (new or resumed): its money shows as it is.
+    if (game === null || game.seed !== s.seed) {
+      moneyCounts = false
+      shownMoney = s.money
+      moneyCounts = true
+    }
     game = s
     hand = s.hand
     // The Clippy's card stays selected.
@@ -256,6 +278,7 @@ Window {
     liveChips = 0
     liveMult = 0
     shownScore = s.score
+    showMoney(s.money)
   }
 
   function toggleCard(i) {
@@ -418,6 +441,28 @@ Window {
     notice = ""
     send({ cmd: "pick", choice: i, cards: choice.max_cards > 0 ? selected : [] })
   }
+  // Digit keys pick the item with that number: cards of the hand; in the
+  // shop, offers, then packs, then pull requests; in a pack, its choices.
+  // With Shift, the other action where there is one: Use now for a shop
+  // offer, a choice of a pack drawn with a hand (whose digits select cards).
+  function pressDigit(i, shifted) {
+    if (shopping) {
+      var offers = game.shop.length, packs = game.packs.length
+      if (i < offers) {
+        if (shifted && canBuyAndUse(game.shop[i])) buyAndUse(i)
+        else buy(i)
+      }
+      else if (i < offers + packs) buyPack(i - offers)
+      else buyVoucher(i - offers - packs)
+    }
+    else if (inPack && (!packHand || shifted)) pickChoice(i)
+    else toggleCard(i)
+  }
+  // The key of item i in pressDigit's order: 1-9, then 0.
+  function keyName(i) {
+    return i < 9 ? String(i + 1) : i === 9 ? "0" : ""
+  }
+
   function skipPack() {
     if (inPack && !busy) send({ cmd: "skip_pack" })
   }
@@ -436,8 +481,14 @@ Window {
   function sellConsumable(i) {
     if (!busy) send({ cmd: "sell_consumable", index: i })
   }
+  // Moves a joker (Fork copies its right neighbour); a pinned joker stays
+  // pinned.
   function moveJoker(from, to) {
-    if (jokersEditable) keepingSelection({ cmd: "move_joker", from: from, to: to })
+    if (!jokersEditable) return
+    to = Math.max(0, Math.min(game.jokers.length - 1, to))
+    if (from === to) return
+    keepingSelection({ cmd: "move_joker", from: from, to: to })
+    if (jokerRow.pinned === from) jokerRow.pinned = to
   }
   function reroll() {
     if (!shopping) return
@@ -475,6 +526,7 @@ Window {
       var step = steps[stepIndex]
       liveChips = step.chips
       liveMult = step.mult
+      if (Labels.isMoney(step.effect)) showMoney(Math.round(shownMoney) + step.effect.money)
       // The counters react: chips and mult pulse with sparks, ×mult shakes.
       var e = step.effect
       if (Labels.isChips(e)) { chipsCounter.pulse(); sparks.burst(chipsCounter, "chips") }
@@ -493,6 +545,8 @@ Window {
       if (view) view.flash(Labels.effect(step.effect), color)
     } else if (stepIndex === steps.length) {
       showTotal = true
+      // The blind score counts up with the total, not after it.
+      shownScore = pendingState.score
       fireHeat = Math.max(fireHeat, heatFor(scoring.total))
       stepTimer.interval = 900
     } else {
@@ -605,8 +659,19 @@ Window {
 
     Keys.onPressed: function(event) { pressKey(event) }
 
+    // The digit row by place (0 for key 1, 9 for key 0), whatever the layout
+    // types there (AZERTY and BÉPO give symbols without Shift); the keypad
+    // and scripted keys by their key. -1 for any other key.
+    function digitOf(event) {
+      var code = event.nativeScanCode
+      if (code >= 10 && code <= 19) return code - 10
+      var k = event.key
+      return k >= Qt.Key_1 && k <= Qt.Key_9 ? k - Qt.Key_1 : k === Qt.Key_0 ? 9 : -1
+    }
+
     function pressKey(event) {
       var k = event.key
+      var digit = digitOf(event)
       if (k === Qt.Key_Q && (event.modifiers & Qt.ControlModifier)) Qt.quit()
       else if (k === Qt.Key_L) root.nextLanguage()
       else if (root.resuming) {
@@ -639,29 +704,22 @@ Window {
         if (k === Qt.Key_Escape) root.infoOpen = false
         else return
       }
-      else if (k >= Qt.Key_1 && k <= Qt.Key_9 && (event.modifiers & Qt.ControlModifier))
-        root.useConsumable(k - Qt.Key_1)
+      else if (digit >= 0 && (event.modifiers & Qt.ControlModifier))
+        root.useConsumable(digit)
       else if ((k === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) || (k === Qt.Key_Escape && root.inPack))
         root.skipPack()
-      else if (k >= Qt.Key_0 && k <= Qt.Key_9) {
-        var i = k === Qt.Key_0 ? 9 : k - Qt.Key_1
-        if (root.shopping) {
-          if (i < root.game.shop.length) root.buy(i)
-          else root.buyPack(i - root.game.shop.length)
-        }
-        else if (root.inPack && !root.packHand) root.pickChoice(i)
-        else root.toggleCard(i)
-      }
+      else if (digit >= 0)
+        root.pressDigit(digit, (event.modifiers & Qt.ShiftModifier) !== 0)
       else if ((k === Qt.Key_Left || k === Qt.Key_Right) && (event.modifiers & Qt.ShiftModifier)) {
-        if (root.selected.length === 1)
-          root.moveCard(root.selected[0], root.selected[0] + (k === Qt.Key_Left ? -1 : 1))
+        var step = k === Qt.Key_Left ? -1 : 1
+        if (root.selected.length === 1) root.moveCard(root.selected[0], root.selected[0] + step)
+        else if (jokerRow.pinned >= 0) root.moveJoker(jokerRow.pinned, jokerRow.pinned + step)
       }
       else if (k === Qt.Key_Tab || k === Qt.Key_Backtab)
         root.sortHand(root.game && root.game.sort_by === "rank" ? "suit" : "rank")
       else if (k === Qt.Key_J) jokerRow.cycle()
       else if (k === Qt.Key_R) root.reroll()
       else if (k === Qt.Key_S) root.skipBlind()
-      else if (k === Qt.Key_M) root.buyVoucher(0)
       else if (k === Qt.Key_B) root.rerollBoss()
       else if (k === Qt.Key_F1) root.cheat({ stickers: ["welded", "worn", "leased"] })
       else if (k === Qt.Key_F5) root.cheat({ win: true })
@@ -814,7 +872,30 @@ Window {
             anchors { fill: parent; margins: Style.spacing.xxl }
             spacing: Style.spacing.xs
             Caption { text: I18n.tr("Money") }
-            Value { text: root.game ? Labels.money(root.game.money) : "–"; color: Colors.accent }
+            Row {
+              spacing: Style.spacing.lg
+              Value { text: root.game ? Labels.money(Math.round(root.shownMoney)) : "–"; color: Colors.accent }
+              // The last change, rising and fading.
+              Text {
+                id: moneyDelta
+                anchors.baseline: parent.children[0].baseline
+                opacity: 0
+                font.family: Style.font.family
+                font.pixelSize: Style.font.title
+                font.bold: true
+                transform: Translate { id: moneyRise }
+                function show(delta) {
+                  text = (delta > 0 ? "+" : "−") + Labels.money(Math.abs(delta))
+                  color = delta > 0 ? Colors.accent : Colors.urgent
+                  moneyFloat.restart()
+                }
+                ParallelAnimation {
+                  id: moneyFloat
+                  NumberAnimation { target: moneyDelta; property: "opacity"; from: 1; to: 0; duration: 1200; easing.type: Easing.InQuad }
+                  NumberAnimation { target: moneyRise; property: "y"; from: 0; to: -Style.space(14); duration: 1200; easing.type: Easing.OutCubic }
+                }
+              }
+            }
           }
         }
 
@@ -1001,13 +1082,13 @@ Window {
           Layout.fillWidth: true
           wrapMode: Text.WordWrap
           text: root.shopping
-            ? I18n.tr("1-6: buy · M: merge · R: reroll\nEnter: next blind · I: fastfetch · C: collection\nCtrl+Q: quit")
+            ? I18n.tr("1-9: buy · Shift+1-9: use now\nR: reroll · Enter: next blind\nJ, Shift+←/→: move a joker\nI: fastfetch · C: collection · Ctrl+Q: quit")
             : root.inPack
-            ? I18n.tr(root.packHand ? "1-9, 0: select cards\n" : "1-5: install\n") + I18n.tr("Ctrl+C: skip · I: fastfetch\nC: collection · Ctrl+Q: quit")
+            ? I18n.tr(root.packHand ? "1-9, 0: select cards · Shift+1-5: install\n" : "1-5: install\n") + I18n.tr("Ctrl+C: skip · I: fastfetch\nC: collection · Ctrl+Q: quit")
             : root.choosing
             ? I18n.tr("Enter: play the blind · S: skip it\n") + (root.game.boss_reroll_cost !== null ? I18n.tr("B: reroll the boss · ") : "")
               + I18n.tr("N: new game · C: collection\nI: fastfetch · Ctrl+Q: quit")
-            : I18n.tr("1-9, 0: choose · Enter: play\nD: discard · Tab: sort\nShift+←/→: move a card\nN: new game · I: fastfetch\nC: collection · Ctrl+Q: quit")
+            : I18n.tr("1-9, 0: choose · Enter: play\nD: discard · Tab: sort\nShift+←/→: move a card\nJ, Shift+←/→: move a joker\nN: new game · I: fastfetch\nC: collection · Ctrl+Q: quit")
         }
       }
 
@@ -1040,11 +1121,26 @@ Window {
             Column {
               x: jokerRow.xOf(index)
               y: jokerRow.liftOf(index)
-              z: jokerRow.zOf(index)
+              z: jokerDragger.active ? jokerRow.count + 2 : jokerRow.zOf(index)
               Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
               Behavior on y { NumberAnimation { duration: 100 } }
               width: jokerRow.itemWidth
               spacing: Style.spacing.md
+              // Dragged sideways, the joker moves in the row.
+              transform: Translate { x: jokerDragger.active ? jokerDragger.activeTranslation.x : 0 }
+              DragHandler {
+                id: jokerDragger
+                target: null
+                enabled: root.jokersEditable
+                yAxis.enabled: false
+                cursorShape: Qt.ClosedHandCursor
+                property real dragX: 0
+                onActiveTranslationChanged: if (active) dragX = activeTranslation.x
+                onActiveChanged: if (!active) {
+                  root.moveJoker(index, index + Math.round(dragX / jokerRow.step))
+                  dragX = 0
+                }
+              }
               // A joker that triggers comes to the front while it flashes.
               function flash(text, color) {
                 jokerRow.flash(index)
@@ -1065,31 +1161,15 @@ Window {
                 bonus: root.preview && root.preview.bonuses.length > index
                   ? root.preview.bonuses[index] : modelData.bonus
               }
-              // Sell, and move left or right (Fork copies its right neighbour);
-              // only in front when the jokers overlap.
-              Row {
+              // Sell; only in front when the jokers overlap.
+              Button {
                 anchors.horizontalCenter: parent.horizontalCenter
                 visible: root.jokerControls
                 opacity: jokerRow.showsControls(index) ? 1 : 0
                 enabled: root.jokersEditable && jokerRow.showsControls(index)
-                spacing: Style.spacing.xs
-                Button {
-                  compact: true
-                  visible: index > 0
-                  text: "<"
-                  onClicked: root.moveJoker(index, index - 1)
-                }
-                Button {
-                  compact: true
-                  text: I18n.tr("Sell {money}", { money: Labels.money(modelData.sell_value) })
-                  onClicked: root.sell(index)
-                }
-                Button {
-                  compact: true
-                  visible: index < root.game.jokers.length - 1
-                  text: ">"
-                  onClicked: root.moveJoker(index, index + 1)
-                }
+                compact: true
+                text: I18n.tr("Sell {money}", { money: Labels.money(modelData.sell_value) })
+                onClicked: root.sell(index)
               }
             }
           }
@@ -1188,12 +1268,13 @@ Window {
                       opacity: root.canBuy(modelData) ? 1 : 0.5
                     }
                     }
-                    Row {
+                    Column {
                       anchors.horizontalCenter: parent.horizontalCenter
                       spacing: Style.spacing.xs
                       Button {
+                        anchors.horizontalCenter: parent.horizontalCenter
                         compact: true
-                        text: (index + 1) + " · " + Labels.money(modelData.price)
+                        text: root.keyName(index) + " · " + Labels.money(modelData.price)
                         bordered: true
                         enabled: root.canBuy(modelData)
                         opacity: enabled ? 1 : 0.5
@@ -1201,9 +1282,10 @@ Window {
                       }
                       // Bought and used at once, without the clipboard.
                       Button {
+                        anchors.horizontalCenter: parent.horizontalCenter
                         compact: true
                         visible: (modelData.kind === "theme" || modelData.kind === "command") && !modelData.needs_hand
-                        text: I18n.tr("Use now")
+                        text: "⇧" + root.keyName(index) + " · " + I18n.tr("Use now")
                         enabled: root.canBuyAndUse(modelData)
                         opacity: enabled ? 1 : 0.5
                         onClicked: root.buyAndUse(index)
@@ -1222,7 +1304,7 @@ Window {
                 }
             }
 
-            // The pull requests of the ante (key M merges the first). The cell
+            // The pull requests of the ante (numbered after the packs). The cell
             // stays when there are none, so the packs stay under the offers
             // (1 pixel: positioners skip empty items).
             Item {
@@ -1245,7 +1327,8 @@ Window {
                       Button {
                         anchors.horizontalCenter: parent.horizontalCenter
                         compact: true
-                        text: "M · " + Labels.money(modelData.price)
+                        text: root.keyName(root.game.shop.length + root.game.packs.length + index)
+                          + " · " + Labels.money(modelData.price)
                         bordered: true
                         enabled: root.canMerge(index)
                         opacity: enabled ? 1 : 0.5
@@ -1273,7 +1356,7 @@ Window {
                     Button {
                       anchors.horizontalCenter: parent.horizontalCenter
                       compact: true
-                      text: (root.game.shop.length + index + 1) + " · " + Labels.money(modelData.price)
+                      text: root.keyName(root.game.shop.length + index) + " · " + Labels.money(modelData.price)
                       bordered: true
                       enabled: root.canBuyPack(modelData)
                       opacity: enabled ? 1 : 0.5
@@ -1335,6 +1418,7 @@ Window {
             opened: root.inPack ? root.game.opened : null
             modifiers: root.game ? root.game.modifiers : null
             canPick: root.canPick
+            keyName: function(i) { return (root.packHand ? "⇧" : "") + root.keyName(i) }
             onPick: function(index) { root.pickChoice(index) }
             onSkip: root.skipPack()
           }
@@ -1425,7 +1509,7 @@ Window {
               faceDown: root.faceDownIds.indexOf(modelData.id) >= 0
               disabledBy: root.debuffedIds.indexOf(modelData.id) >= 0 ? root.bossName : ""
               forced: modelData.id === root.forcedId
-              shortcut: index < 9 ? String(index + 1) : index === 9 ? "0" : ""
+              shortcut: root.keyName(index)
               onClicked: root.toggleCard(index)
               // Dragged sideways, the card moves in the hand.
               property real dragX: 0

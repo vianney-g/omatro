@@ -259,6 +259,24 @@ impl Bot {
         if s["phase"] == "playing" && s["hand"].as_array().is_some_and(Vec::is_empty) {
             broken.push("playing with an empty hand".into());
         }
+        // A boss only acts while its blind is played (a lost game stays as
+        // it ended).
+        if s["phase"] != "playing" && s["phase"] != "lost" {
+            let marked = |key: &str| {
+                s[key]
+                    .as_array()
+                    .is_some_and(|a| a.iter().any(|v| v == true))
+            };
+            if s["boss_active"] == true
+                || s["jokers_hidden"] == true
+                || !s["disabled_joker"].is_null()
+            {
+                broken.push("boss still at work outside its blind".into());
+            }
+            if marked("debuffed") || marked("face_down") || !s["forced"].is_null() {
+                broken.push("boss still marking cards outside its blind".into());
+            }
+        }
         if with_profile() {
             let mut seen = Vec::new();
             jokers_in(s, &mut seen);

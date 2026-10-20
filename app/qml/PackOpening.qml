@@ -12,6 +12,8 @@ Column {
   property var modifiers: null
   // Whether a choice can be taken now (selection, joker slots).
   property var canPick: function(choice) { return true }
+  // The key that picks choice i.
+  property var keyName: function(i) { return "" }
   signal pick(int index)
   signal skip()
 
@@ -71,7 +73,7 @@ Column {
         }
         Button {
           anchors.horizontalCenter: parent.horizontalCenter
-          text: I18n.tr("Install")
+          text: root.keyName(index) + " · " + I18n.tr("Install")
           enabled: root.canPick(modelData)
           opacity: enabled ? 1 : 0.5
           onClicked: root.pick(index)

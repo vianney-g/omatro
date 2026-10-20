@@ -40,8 +40,9 @@ Item {
   function xOf(i) { return i * step }
   // Later cards lie on earlier ones; the front card on all of them.
   function zOf(i) { return i === front ? count + 1 : i }
-  // Only a card brought forward lifts, not the last one lying on top.
-  function liftOf(i) { return stacked && i === chosen ? -Style.space(8) : 0 }
+  // Only a card brought forward lifts, not the last one lying on top; a
+  // pinned card always does, to show which one keys move.
+  function liftOf(i) { return (stacked && i === chosen) || i === pinned ? -Style.space(8) : 0 }
   // Whether the card's own buttons show: always side by side, only the front
   // card's when stacked (they would overlap).
   function showsControls(i) { return !stacked || i === front }

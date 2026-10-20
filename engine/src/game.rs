@@ -775,6 +775,9 @@ pub struct Game {
     /// The badges the small and big blinds give if skipped, and the badges won
     /// but not used yet.
     blind_tags: [Tag; 2],
+    /// The hand type a version: 3.0 among `blind_tags` raises, drawn with it.
+    #[serde(default)]
+    version_hands: [Option<HandKind>; 2],
     tags: Vec<Tag>,
     tag_rng: Rng,
     /// For the money badges: blinds skipped, hands played, discards left unused.
@@ -801,7 +804,7 @@ pub struct Game {
     /// paru: free rerolls left in this shop.
     free_rerolls: u32,
     /// How the hand is sorted, and whether the player rearranged it since
-    /// (then it keeps its order, and drawn cards go to the right).
+    /// (then it keeps its order until the next draw, which sorts it again).
     sort_by: SortBy,
     arranged: bool,
     /// Hidden jokers the player has not unlocked: never offered.
@@ -890,6 +893,7 @@ impl Game {
             voucher_rng: Rng::stream(seed, "vouchers"),
             boss_rerolled: false,
             blind_tags: [Tag::Stars100, Tag::Stars100],
+            version_hands: [None; 2],
             tags: Vec::new(),
             tag_rng: Rng::stream(seed, "tags"),
             skips: 0,
@@ -1097,12 +1101,29 @@ impl Game {
             .collect();
         for i in 0..2 {
             self.blind_tags[i] = pool[self.tag_rng.below(pool.len() as u64) as usize];
+            self.version_hands[i] =
+                (self.blind_tags[i] == Tag::Version3).then(|| self.roll_version_hand());
         }
+    }
+
+    /// The hand type version: 3.0 raises: any the player knows of.
+    fn roll_version_hand(&mut self) -> HandKind {
+        let known: Vec<HandKind> = HandKind::ALL
+            .into_iter()
+            .filter(|&k| !k.secret() || self.plays.get(k) > 0)
+            .collect();
+        known[self.tag_rng.below(known.len() as u64) as usize]
     }
 
     /// Wins a badge: badges: 2x waits to copy the next one; the others act
     /// right away or wait for the next shop, blind or boss.
     fn gain_tag(&mut self, tag: Tag) {
+        self.gain_tag_for(tag, None);
+    }
+
+    /// Wins a badge, with the hand type it raises if it was drawn already
+    /// (version: 3.0 on a blind); its copies raise the same one.
+    fn gain_tag_for(&mut self, tag: Tag, hand: Option<HandKind>) {
         self.events.push(Event::Obtained(Item::Tag(tag)));
         if tag == Tag::Badges2x {
             self.tags.push(tag);
@@ -1110,9 +1131,23 @@ impl Game {
         }
         let doubles = self.tags.iter().filter(|&&t| t == Tag::Badges2x).count();
         self.tags.retain(|&t| t != Tag::Badges2x);
+        let hand = match tag {
+            Tag::Version3 => Some(hand.unwrap_or_else(|| self.roll_version_hand())),
+            _ => None,
+        };
         for _ in 0..=doubles {
-            self.apply_tag(tag);
+            self.apply_tag(tag, hand);
         }
+    }
+
+    /// The badge skipping a blind gives (0: small, 1: big), as the display
+    /// shows it: version: 3.0 tells the hand type it raises.
+    fn blind_tag_info(&self, i: usize) -> TagInfo {
+        let mut info = self.tag_info(self.blind_tags[i], true);
+        if let Some(hand) = self.version_hands[i] {
+            info.current = Some(format!("{}: +3 levels", hand.name()));
+        }
+        info
     }
 
     /// A badge as the display shows it, with what it would give now: on a
@@ -1134,7 +1169,7 @@ impl Game {
         TagInfo::new(tag, current)
     }
 
-    fn apply_tag(&mut self, tag: Tag) {
+    fn apply_tag(&mut self, tag: Tag, hand: Option<HandKind>) {
         use crate::pack::PackSize;
         let pack = |kind, size| Pack { kind, size };
         match tag {
@@ -1152,12 +1187,9 @@ impl Game {
                 }
             }
             Tag::Version3 => {
-                let known: Vec<HandKind> = HandKind::ALL
-                    .into_iter()
-                    .filter(|&k| !k.secret() || self.plays.get(k) > 0)
-                    .collect();
-                let kind = known[self.tag_rng.below(known.len() as u64) as usize];
-                self.levels.raise(kind, 3);
+                if let Some(hand) = hand {
+                    self.levels.raise(hand, 3);
+                }
             }
             Tag::Wontfix => self.roll_boss(),
             Tag::BuildPassing => self.open_free_pack(pack(PackKind::BaseDevel, PackSize::Meta)),
@@ -1455,12 +1487,24 @@ impl Game {
         self.bosses_seen.push(self.boss);
     }
 
-    /// The boss whose effect applies now: in the boss blind, unless kill -9
-    /// is owned or Rollback was sold.
+    /// The boss whose effect applies now: while the boss blind is played,
+    /// unless kill -9 is owned or Rollback was sold. Not once it is won: a
+    /// pack opened in the shop deals cards the boss no longer touches.
     fn boss_effect(&self) -> Option<Boss> {
-        let on =
-            self.blind == BlindKind::Boss && !self.boss_disabled && self.count(Joker::Kill9) == 0;
+        let on = self.phase == Phase::Playing
+            && self.blind == BlindKind::Boss
+            && !self.boss_disabled
+            && self.count(Joker::Kill9) == 0;
         on.then_some(self.boss)
+    }
+
+    /// Undoes what the boss did to the hand and the jokers (won, or
+    /// Rollback sold).
+    fn lift_boss(&mut self) {
+        self.face_down.clear();
+        self.jokers_hidden = false;
+        self.forced = None;
+        self.disabled_joker = None;
     }
 
     fn boss_is(&self, boss: Boss) -> bool {
@@ -1733,7 +1777,6 @@ impl Game {
             self.discards_left = 0;
         }
         self.jokers_at_blind_start();
-        self.arranged = false;
         self.draw(Draw::Deal);
         self.pick_disabled_joker();
         for _ in 0..self.abilities(Joker::AliasCollection) {
@@ -1802,20 +1845,23 @@ impl Game {
         if !self.blind.skippable() {
             return Err(GameError::CannotSkipBoss);
         }
-        let tag = self.blind_tags[if self.blind == BlindKind::Small { 0 } else { 1 }];
+        let i = if self.blind == BlindKind::Small { 0 } else { 1 };
+        let (tag, hand) = (self.blind_tags[i], self.version_hands[i]);
         self.skipped.push(self.blind);
         self.skips += 1;
         for joker in &mut self.jokers {
             joker.on_blind_skipped();
         }
         self.advance();
-        self.gain_tag(tag);
+        self.gain_tag_for(tag, hand);
         Ok(())
     }
 
     /// Fills the hand up (The Rate Limiter: 3 cards after a hand or discard);
-    /// some bosses deal cards face down.
+    /// some bosses deal cards face down. The hand is sorted again: an order
+    /// the player arranged was for the hand just played or discarded.
     fn draw(&mut self, cause: Draw) {
+        self.arranged = false;
         let limit = if self.boss_is(Boss::RateLimiter) && cause != Draw::Deal {
             self.hand.len() + 3
         } else {
@@ -1841,7 +1887,7 @@ impl Game {
 
     /// Hand sorted as the player chose: descending rank then suit, or suit
     /// then descending rank; Binary Blobs last. A hand the player rearranged
-    /// keeps its order.
+    /// keeps its order until the next draw.
     fn sort_hand(&mut self) {
         if self.arranged {
             return;
@@ -2261,6 +2307,7 @@ impl Game {
 
     fn win_blind(&mut self) {
         self.phase = Phase::Won;
+        self.lift_boss();
         self.unused_discards += self.discards_left;
         let mut reward = self.reward();
         if self.blind == BlindKind::Boss && self.deck_is(Deck::GithubProfile) {
@@ -2813,9 +2860,7 @@ impl Game {
             self.vendor_unlocked = true;
             if sold.joker == Joker::Rollback && self.blind == BlindKind::Boss {
                 self.boss_disabled = true;
-                self.face_down.clear();
-                self.jokers_hidden = false;
-                self.forced = None;
+                self.lift_boss();
             }
             self.pick_disabled_joker();
         }
@@ -3765,8 +3810,8 @@ impl Game {
                         reward: boss.map_or(kind.reward(), Boss::reward),
                         status: self.blind_status(kind),
                         tag: match kind {
-                            BlindKind::Small => Some(self.tag_info(self.blind_tags[0], true)),
-                            BlindKind::Big => Some(self.tag_info(self.blind_tags[1], true)),
+                            BlindKind::Small => Some(self.blind_tag_info(0)),
+                            BlindKind::Big => Some(self.blind_tag_info(1)),
                             BlindKind::Boss => None,
                         },
                     }
@@ -5164,6 +5209,32 @@ mod tests {
         assert_eq!(game.play(&[0, 1]).unwrap().total, 60.0);
     }
 
+    #[test]
+    fn a_won_boss_leaves_the_next_cards_alone() {
+        let mut game = boss_game(107, Boss::KernelPanic, vec![Joker::Omakase]);
+        assert!(game.state().jokers_hidden);
+        game.cheat(Cheat {
+            win: true,
+            ..Cheat::default()
+        })
+        .unwrap();
+        let state = game.state();
+        assert!(!state.boss_active && !state.jokers_hidden);
+        assert_eq!(state.disabled_joker, None);
+
+        // A coreutils pack opened in the shop deals cards no boss touches.
+        let mut game = boss_game(108, Boss::Paywall, vec![]);
+        game.cheat(Cheat {
+            win: true,
+            ..Cheat::default()
+        })
+        .unwrap();
+        game.cash_out().unwrap();
+        game.open_pack(pack(PackKind::Coreutils, crate::pack::PackSize::Normal));
+        assert!(game.hand.iter().any(|c| c.is_suit(Suit::Diamonds)));
+        assert!(game.state().debuffed.iter().all(|&d| !d));
+    }
+
     fn merge(game: &mut Game, vouchers: &[Voucher]) {
         game.cheat(Cheat {
             vouchers: vouchers.to_vec(),
@@ -5259,6 +5330,19 @@ mod tests {
         game.skips = 2;
         assert_eq!(game.tag_info(Tag::SpeedBlazing, true).current.as_deref(), Some("+$15 now"));
         assert_eq!(game.tag_info(Tag::Version3, true).current, None);
+    }
+
+    #[test]
+    fn version_3_tells_the_hand_it_raises() {
+        let mut game = Game::new(5, vec![]);
+        game.blind_tags[0] = Tag::Version3;
+        game.version_hands[0] = Some(HandKind::Flush);
+        assert_eq!(
+            game.blind_tag_info(0).current.as_deref(),
+            Some("Flush: +3 levels")
+        );
+        game.skip_blind().unwrap();
+        assert_eq!(game.levels.level(HandKind::Flush), 4);
     }
 
     #[test]
@@ -5631,9 +5715,9 @@ mod tests {
         assert_eq!(ranks(&game), [14, 13, 9, 5, 2]);
         game.move_card(4, 0).unwrap();
         assert_eq!(ranks(&game), [2, 14, 13, 9, 5]);
-        // Drawn cards go to the right of a rearranged hand.
+        // The next draw sorts a rearranged hand again.
         game.discard(&[1]).unwrap();
-        assert_eq!(ranks(&game)[..4], [2, 13, 9, 5]);
+        assert!(ranks(&game).is_sorted_by(|a, b| a >= b));
         assert!(game.move_card(0, 99).is_err());
         // cp -f copies the right card onto the left one.
         let mut game = with_command(1, Command::CpF, vec![]);

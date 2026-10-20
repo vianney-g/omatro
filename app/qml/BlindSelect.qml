@@ -127,17 +127,19 @@ Row {
               text: I18n.tr("Play (Enter)")
               onClicked: root.play()
             }
+            // Skipping, with what it gives.
             Button {
+              id: skipButton
               anchors.horizontalCenter: parent.horizontalCenter
               visible: modelData.kind !== "boss"
               text: I18n.tr("Skip (S)")
               onClicked: root.skip()
-            }
-            // What skipping gives.
-            BadgeView {
-              anchors.horizontalCenter: parent.horizontalCenter
-              visible: modelData.tag !== null
-              tag: modelData.tag
+              BadgeView {
+                visible: modelData.tag !== null
+                tag: modelData.tag
+                hoverable: false
+                hovered: skipButton.hovered
+              }
             }
             Button {
               anchors.horizontalCenter: parent.horizontalCenter

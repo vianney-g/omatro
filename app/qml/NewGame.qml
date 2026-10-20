@@ -57,7 +57,7 @@ Rectangle {
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
       text: I18n.tr("Pick your machine · arrows to choose · Enter to start") + (root.canCancel ? I18n.tr(" · Escape to go back") : "")
-        + I18n.tr(" · Shift+←/→: level · C: collection")
+        + I18n.tr(" · C: collection")
       color: Colors.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
@@ -178,6 +178,14 @@ Rectangle {
       Row {
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: Style.spacing.sm
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          rightPadding: Style.spacing.md
+          text: I18n.tr("Level (Shift+←/→)")
+          color: Colors.muted
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
         Repeater {
           model: root.stakes
           Rectangle {
@@ -208,17 +216,34 @@ Rectangle {
           }
         }
       }
-      Text {
+      // The level's own rule, then those it keeps from the levels below.
+      Column {
+        id: stakeRules
         anchors.horizontalCenter: parent.horizontalCenter
         width: 3 * Style.space(285) + 2 * Style.spacing.lg
-        horizontalAlignment: Text.AlignHCenter
-        wrapMode: Text.WordWrap
+        spacing: Style.spacing.xs
         readonly property var s: root.stakes.length ? root.stakes[root.chosenStake] : null
-        text: s ? (s.rules.length ? s.rules.map(function(r) { return I18n.tr(r) }).join(" · ") : I18n.tr(s.description))
-          + "  —  " + s.quip : ""
-        color: Colors.muted
-        font.family: Style.font.family
-        font.pixelSize: Style.font.caption
+        Text {
+          width: parent.width
+          horizontalAlignment: Text.AlignHCenter
+          wrapMode: Text.WordWrap
+          text: stakeRules.s ? I18n.tr(stakeRules.s.description) + "  —  " + stakeRules.s.quip : ""
+          color: Colors.foreground
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
+        Text {
+          width: parent.width
+          visible: stakeRules.s !== null && stakeRules.s.rules.length > 1
+          horizontalAlignment: Text.AlignHCenter
+          wrapMode: Text.WordWrap
+          text: visible ? I18n.tr("Plus the levels below: {rules}", {
+            rules: stakeRules.s.rules.slice(0, -1).map(function(r) { return I18n.tr(r) }).join(" · ")
+          }) : ""
+          color: Colors.muted
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+        }
       }
       Text {
         anchors.horizontalCenter: parent.horizontalCenter

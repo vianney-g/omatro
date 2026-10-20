@@ -56,9 +56,7 @@ Rectangle {
         }
         Header {
           anchors.baseline: parent.children[0].baseline
-          text: (root.game && root.game.run_deck ? I18n.tr("on {deck}", { deck: root.game.run_deck.name }) + " · " : "")
-            + (root.game && root.game.stake ? root.game.stake.name + " · " : "")
-            + I18n.tr("Your run, beautifully over-reported. · I or Esc: close")
+          text: I18n.tr("Your run, beautifully over-reported. · I or Esc: close")
           font.italic: true
         }
       }
@@ -107,7 +105,35 @@ Rectangle {
         // Cards left to draw, by suit.
         Column {
           spacing: Style.spacing.md
+
+          // The machine and the difficulty level, with every rule in force.
           Text {
+            text: "uname -a"
+            color: Colors.accent
+            font.family: Style.font.family
+            font.pixelSize: Style.font.heading
+            font.bold: true
+          }
+          Label {
+            width: Style.space(280)
+            visible: root.game !== null && root.game.run_deck !== null
+            wrapMode: Text.WordWrap
+            textFormat: Text.StyledText
+            text: visible ? "<b>" + root.game.run_deck.name + "</b>: " + root.game.run_deck.description : ""
+          }
+          Label {
+            width: Style.space(280)
+            visible: root.game !== null && root.game.stake !== null
+            wrapMode: Text.WordWrap
+            textFormat: Text.StyledText
+            readonly property var stake: visible ? root.game.stake : null
+            text: !stake ? "" : "<b>" + stake.name + "</b>: " + (stake.rules.length
+              ? stake.rules.map(function(r) { return "<br>· " + I18n.tr(r) }).join("")
+              : I18n.tr(stake.description))
+          }
+
+          Text {
+            topPadding: Style.spacing.lg
             text: "ls ~/deck"
             color: Colors.accent
             font.family: Style.font.family

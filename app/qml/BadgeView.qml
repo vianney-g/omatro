@@ -8,6 +8,12 @@ Item {
   id: root
 
   property var tag: null
+  // Hovered from outside: the button it belongs to (Skip), which takes the
+  // clicks.
+  property bool hovered: false
+  property bool hoverable: true
+  readonly property bool showTip: (mouse.containsMouse || hovered) && tag !== null
+  onShowTipChanged: showTip ? Hints.show(root, tag.description, tag.name) : Hints.hide(root)
 
   implicitWidth: Math.max(pill.width, currentText.visible ? currentText.implicitWidth : 0)
   implicitHeight: pill.height + (currentText.visible ? currentText.implicitHeight : 0)
@@ -48,14 +54,13 @@ Item {
   MouseArea {
     id: mouse
     anchors.fill: pill
+    enabled: root.hoverable
     hoverEnabled: true
-    onContainsMouseChanged: containsMouse && root.tag
-      ? Hints.show(root, root.tag.description, root.tag.name) : Hints.hide(root)
   }
 
   Rectangle {
     z: 10
-    visible: mouse.containsMouse && root.tag !== null
+    visible: root.showTip
     anchors { horizontalCenter: pill.horizontalCenter; bottom: pill.top; bottomMargin: Style.space(6) }
     width: Math.min(Style.space(240), tip.implicitWidth + 2 * Style.space(8))
     height: tip.implicitHeight + 2 * Style.space(6)
