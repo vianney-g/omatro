@@ -167,9 +167,11 @@ pub fn score(table: &Table, rng: &mut Rng) -> Breakdown {
     // (Retry seal, jokers).
     let mut lucky_hits = 0;
     let mut broken = Vec::new();
-    let first_face = evaluated.scoring.iter().copied().find(|&i| {
-        played[i].is_face() && !table.debuffed.contains(&played[i].id)
-    });
+    let first_face = evaluated
+        .scoring
+        .iter()
+        .copied()
+        .find(|&i| played[i].is_face() && !table.debuffed.contains(&played[i].id));
     let final_hand = board.hands_left == 1;
     for (position, &index) in evaluated.scoring.iter().enumerate() {
         let card = played[index];
@@ -622,7 +624,10 @@ mod tests {
 
     #[test]
     fn upstream_copies_the_leftmost_joker() {
-        assert_eq!(setup(&[Joker::Omakase, Joker::Upstream]).play("KH KD").mult, 12.0);
+        assert_eq!(
+            setup(&[Joker::Omakase, Joker::Upstream]).play("KH KD").mult,
+            12.0
+        );
         assert_eq!(setup(&[Joker::Upstream]).play("KH KD").mult, 2.0);
         // Fork copies Upstream, which copies Omakase.
         let b = setup(&[Joker::Omakase, Joker::Fork, Joker::Upstream]).play("KH KD");
@@ -636,7 +641,10 @@ mod tests {
     fn suit_mixes_and_held_suits() {
         assert_eq!(setup(&[Joker::SplitBrain]).play("2C 2H").mult, 4.0);
         assert_eq!(setup(&[Joker::SplitBrain]).play("2C 2C").mult, 2.0);
-        assert_eq!(setup(&[Joker::RainbowPrompt]).play("2C 3H 4S 5D 6C").mult, 12.0);
+        assert_eq!(
+            setup(&[Joker::RainbowPrompt]).play("2C 3H 4S 5D 6C").mult,
+            12.0
+        );
         let mut s = setup(&[Joker::PitchBlack]);
         s.held = cards("KS 2C");
         assert_eq!(s.play("AS").mult, 3.0);

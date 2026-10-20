@@ -131,7 +131,9 @@ impl Achievement {
 
     /// The achievement that unlocks a hidden item.
     pub fn unlocking(item: Item) -> Option<Achievement> {
-        Achievement::ALL.into_iter().find(|a| a.unlocks() == Some(item))
+        Achievement::ALL
+            .into_iter()
+            .find(|a| a.unlocks() == Some(item))
     }
 
     /// What a counting achievement counts, and how far (none: the whole

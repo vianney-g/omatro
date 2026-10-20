@@ -71,7 +71,9 @@ fn parse_template(key: &str) -> Vec<Part> {
     let mut parts = Vec::new();
     let mut rest = key;
     while let Some(open) = rest.find('{') {
-        let Some(close) = rest[open..].find('}') else { break };
+        let Some(close) = rest[open..].find('}') else {
+            break;
+        };
         if open > 0 {
             parts.push(Part::Text(rest[..open].to_string()));
         }
@@ -95,7 +97,9 @@ fn capture(parts: &[Part], text: &str, slots: &mut Vec<(String, String)>) -> boo
         Some((Part::Slot(name), rest)) => {
             let ends: Vec<usize> = match rest.first() {
                 None => vec![text.len()],
-                Some(Part::Text(next)) => text.match_indices(next.as_str()).map(|(i, _)| i).collect(),
+                Some(Part::Text(next)) => {
+                    text.match_indices(next.as_str()).map(|(i, _)| i).collect()
+                }
                 Some(Part::Slot(_)) => return false,
             };
             for end in ends.into_iter().filter(|&e| e > 0) {
@@ -209,7 +213,12 @@ pub fn record_misses() {
 
 /// The texts missed since `record_misses`.
 pub fn take_misses() -> BTreeSet<String> {
-    MISSES.with(|m| m.borrow_mut().as_mut().map(std::mem::take).unwrap_or_default())
+    MISSES.with(|m| {
+        m.borrow_mut()
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
+    })
 }
 
 fn missed(text: &str) {
@@ -277,7 +286,10 @@ mod tests {
         let parts = parse_template("+{n} mult per {what}");
         let mut slots = Vec::new();
         assert!(capture(&parts, "+3 mult per joker", &mut slots));
-        assert_eq!(slots, [("n".into(), "3".into()), ("what".into(), "joker".into())]);
+        assert_eq!(
+            slots,
+            [("n".into(), "3".into()), ("what".into(), "joker".into())]
+        );
         assert!(!capture(&parts, "+3 chips per joker", &mut Vec::new()));
     }
 
@@ -313,9 +325,21 @@ mod tests {
                 texts.push(term.description);
             }
         }
-        texts.extend(crate::run_deck::Deck::ALL.iter().map(|d| d.description().to_string()));
-        texts.extend(crate::boss::Boss::ALL.iter().map(|b| b.description().to_string()));
-        texts.extend(crate::hand::HandKind::ALL.iter().map(|h| h.name().to_string()));
+        texts.extend(
+            crate::run_deck::Deck::ALL
+                .iter()
+                .map(|d| d.description().to_string()),
+        );
+        texts.extend(
+            crate::boss::Boss::ALL
+                .iter()
+                .map(|b| b.description().to_string()),
+        );
+        texts.extend(
+            crate::hand::HandKind::ALL
+                .iter()
+                .map(|h| h.name().to_string()),
+        );
         for a in crate::achievement::Achievement::ALL {
             texts.push(a.description().to_string());
         }

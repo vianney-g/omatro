@@ -438,13 +438,19 @@ impl Session {
                 table: Catalog::table(lang),
                 languages: Lang::ALL
                     .iter()
-                    .map(|&id| LanguageInfo { id, name: id.name() })
+                    .map(|&id| LanguageInfo {
+                        id,
+                        name: id.name(),
+                    })
                     .collect(),
             });
         }
         if let Command::SavedGame = command {
             let Some(path) = &self.save else {
-                return Ok(Response::SavedGame { state: None, problem: None });
+                return Ok(Response::SavedGame {
+                    state: None,
+                    problem: None,
+                });
             };
             return Ok(match load(path) {
                 Ok(game) => Response::SavedGame {
@@ -710,8 +716,14 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let mut first = Session::default().with_save(path.clone());
         let none = send(&mut first, r#"{"cmd":"saved_game"}"#);
-        assert_eq!((&none["state"], &none["problem"]), (&Value::Null, &Value::Null));
-        send(&mut first, r#"{"cmd":"new_game","seed":7,"deck":"think_pad"}"#);
+        assert_eq!(
+            (&none["state"], &none["problem"]),
+            (&Value::Null, &Value::Null)
+        );
+        send(
+            &mut first,
+            r#"{"cmd":"new_game","seed":7,"deck":"think_pad"}"#,
+        );
         send(&mut first, r#"{"cmd":"select_blind"}"#);
         send(&mut first, r#"{"cmd":"play","cards":[0,1]}"#);
         assert!(path.exists());
@@ -724,7 +736,10 @@ mod tests {
         assert_eq!(send(&mut again, r#"{"cmd":"resume"}"#)["state"], before);
         // The same draws follow.
         let play = r#"{"cmd":"play","cards":[0]}"#;
-        assert_eq!(send(&mut first, play)["state"], send(&mut again, play)["state"]);
+        assert_eq!(
+            send(&mut first, play)["state"],
+            send(&mut again, play)["state"]
+        );
 
         // A save it can't read is reported, never resumed.
         std::fs::write(&path, r#"{"version":0}"#).unwrap();
@@ -758,8 +773,14 @@ mod tests {
             .find(|d| d["id"] == "raid1")
             .unwrap();
         assert_eq!(raid["achievement"], "It's Not a Phase");
-        let r = send(&mut session, r#"{"cmd":"new_game","seed":1,"deck":"raid1"}"#);
-        assert_eq!(r["message"], "RAID 1 is locked: It's Not a Phase unlocks it");
+        let r = send(
+            &mut session,
+            r#"{"cmd":"new_game","seed":1,"deck":"raid1"}"#,
+        );
+        assert_eq!(
+            r["message"],
+            "RAID 1 is locked: It's Not a Phase unlocks it"
+        );
 
         let reply: Value = serde_json::from_str(
             &session.handle_json(r#"{"cmd":"new_game","seed":1,"deck":"think_pad"}"#),
@@ -767,7 +788,14 @@ mod tests {
         .unwrap();
         assert_eq!(reply["news"][0]["name"], "ThinkPad");
         assert!(path.exists());
-        assert!(session.game.as_ref().unwrap().locked().contains(&Joker::HashCollision));
+        assert!(
+            session
+                .game
+                .as_ref()
+                .unwrap()
+                .locked()
+                .contains(&Joker::HashCollision)
+        );
 
         let reply: Value =
             serde_json::from_str(&session.handle_json(r#"{"cmd":"collection"}"#)).unwrap();
@@ -780,7 +808,10 @@ mod tests {
         assert!(again.profile().unwrap().is_done(Achievement::Rtfm));
         // Sessions without a profile lock nothing.
         let mut plain = Session::default();
-        assert_eq!(send(&mut plain, r#"{"cmd":"collection"}"#)["event"], "error");
+        assert_eq!(
+            send(&mut plain, r#"{"cmd":"collection"}"#)["event"],
+            "error"
+        );
         send(&mut plain, r#"{"cmd":"new_game","seed":1,"deck":"raid1"}"#);
         assert!(plain.game.as_ref().unwrap().locked().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
@@ -792,13 +823,25 @@ mod tests {
         let r = send(&mut session, r#"{"cmd":"decks"}"#);
         assert_eq!(r["stakes"].as_array().unwrap().len(), Stake::ALL.len());
         assert_eq!(r["decks"][0]["top_stake"], "daily_commute");
-        let r = send(&mut session, r#"{"cmd":"new_game","seed":1,"deck":"think_pad","stake":"track_day"}"#);
-        assert_eq!(r["message"], "Track Day is locked: win at the level below with this deck first");
-        let r = send(&mut session, r#"{"cmd":"new_game","seed":1,"deck":"think_pad"}"#);
+        let r = send(
+            &mut session,
+            r#"{"cmd":"new_game","seed":1,"deck":"think_pad","stake":"track_day"}"#,
+        );
+        assert_eq!(
+            r["message"],
+            "Track Day is locked: win at the level below with this deck first"
+        );
+        let r = send(
+            &mut session,
+            r#"{"cmd":"new_game","seed":1,"deck":"think_pad"}"#,
+        );
         assert_eq!(r["state"]["stake"]["name"], "Daily Commute");
         // Without a profile, every level is open.
         let mut plain = Session::default();
-        let r = send(&mut plain, r#"{"cmd":"new_game","seed":1,"stake":"hypercar"}"#);
+        let r = send(
+            &mut plain,
+            r#"{"cmd":"new_game","seed":1,"stake":"hypercar"}"#,
+        );
         assert_eq!(r["state"]["stake"]["rules"].as_array().unwrap().len(), 7);
     }
 }

@@ -21,7 +21,11 @@ pub struct Term {
     pub description: String,
 }
 
-fn term(name: impl Into<String>, category: impl Into<String>, description: impl Into<String>) -> Term {
+fn term(
+    name: impl Into<String>,
+    category: impl Into<String>,
+    description: impl Into<String>,
+) -> Term {
     Term {
         name: name.into(),
         category: category.into(),

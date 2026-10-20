@@ -189,17 +189,23 @@ impl Bot {
     /// starts again, and checks it finds the state it left.
     fn resume_elsewhere(&mut self, after: &Value) {
         let mut session = new_session(self.chaos, &self.save);
-        let resumed: Value = serde_json::from_str(&session.handle_json(r#"{"cmd":"resume"}"#)).unwrap();
-        let left: Value = serde_json::from_str(&self.session.handle_json(r#"{"cmd":"state"}"#)).unwrap();
+        let resumed: Value =
+            serde_json::from_str(&session.handle_json(r#"{"cmd":"resume"}"#)).unwrap();
+        let left: Value =
+            serde_json::from_str(&self.session.handle_json(r#"{"cmd":"state"}"#)).unwrap();
         if resumed["state"] != left["state"] {
             let field = left["state"]
                 .as_object()
-                .and_then(|o| o.keys().find(|k| resumed["state"][k.as_str()] != left["state"][k.as_str()]))
+                .and_then(|o| {
+                    o.keys()
+                        .find(|k| resumed["state"][k.as_str()] != left["state"][k.as_str()])
+                })
                 .cloned()
                 .unwrap_or_else(|| format!("{}", resumed["message"]));
-            self.out
-                .violations
-                .push(format!("resumed game differs in {field} (after {})", after["cmd"]));
+            self.out.violations.push(format!(
+                "resumed game differs in {field} (after {})",
+                after["cmd"]
+            ));
         }
         self.session = session;
     }
@@ -238,7 +244,10 @@ impl Bot {
             .chain(s["remaining"].as_array().into_iter().flatten())
         {
             if s["phase"] == "playing" && !ids.insert(card["id"].as_u64()) {
-                broken.push(format!("card id {} twice in hand and draw pile", card["id"]));
+                broken.push(format!(
+                    "card id {} twice in hand and draw pile",
+                    card["id"]
+                ));
             }
         }
         let jokers = s["jokers"].as_array().map_or(0, Vec::len);
@@ -337,7 +346,10 @@ impl Bot {
                 .map(|i| i as usize)
                 .collect();
             let chips = preview["base_chips"].as_f64().unwrap_or(0.0)
-                + scoring.iter().map(|&i| Self::card_chips(&hand[i])).sum::<f64>();
+                + scoring
+                    .iter()
+                    .map(|&i| Self::card_chips(&hand[i]))
+                    .sum::<f64>();
             let estimate = chips * preview["base_mult"].as_f64().unwrap_or(1.0);
             if best.as_ref().is_none_or(|b| estimate > b.2) {
                 best = Some((cards, scoring, estimate));
@@ -368,7 +380,8 @@ impl Bot {
             }
             let cards = self.random_cards(min);
             self.probe(json!({"cmd": "use_consumable", "index": index, "cards": cards}));
-            if self.phase() != "playing" && self.phase() != "shop" && self.phase() != "blind_select" {
+            if self.phase() != "playing" && self.phase() != "shop" && self.phase() != "blind_select"
+            {
                 return;
             }
         }
@@ -391,8 +404,8 @@ impl Bot {
         if self.phase() != "playing" {
             return;
         }
-        let meeting = self.state["boss_active"] == true
-            && self.state["boss"]["id"] == "mandatory_meeting";
+        let meeting =
+            self.state["boss_active"] == true && self.state["boss"]["id"] == "mandatory_meeting";
         let sizes: &[usize] = if meeting { &[5] } else { &[1, 2, 3, 4, 5] };
         let Some((cards, scoring, estimate)) = self.best_play(sizes) else {
             // Everything face down: play blind.
@@ -411,7 +424,9 @@ impl Bot {
             let mut spare: Vec<usize> = (0..hand.len())
                 .filter(|i| !scoring.iter().any(|&s| cards.get(s) == Some(i)))
                 .collect();
-            spare.sort_by(|&a, &b| Self::card_chips(&hand[a]).total_cmp(&Self::card_chips(&hand[b])));
+            spare.sort_by(|&a, &b| {
+                Self::card_chips(&hand[a]).total_cmp(&Self::card_chips(&hand[b]))
+            });
             if let Some(f) = self.state["forced"].as_u64().map(|i| i as usize) {
                 spare.retain(|&i| i != f);
                 spare.truncate(4);
@@ -432,7 +447,10 @@ impl Bot {
             if self.phase() != "pack" {
                 return;
             }
-            let choices = self.state["opened"]["choices"].as_array().cloned().unwrap_or_default();
+            let choices = self.state["opened"]["choices"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
             let mut picked = false;
             for (choice, item) in choices.iter().enumerate() {
                 let min = item["min_cards"].as_u64().unwrap_or(0) as usize;
@@ -525,7 +543,9 @@ impl Bot {
             break;
         }
         for i in (0..self.len("vouchers_for_sale")).rev() {
-            let price = self.state["vouchers_for_sale"][i]["price"].as_i64().unwrap_or(99);
+            let price = self.state["vouchers_for_sale"][i]["price"]
+                .as_i64()
+                .unwrap_or(99);
             if self.money() >= price + 5 {
                 self.send(json!({"cmd": "buy_voucher", "index": i}));
             }
@@ -748,7 +768,10 @@ fn main() {
     }
     println!("\nAnte reached:");
     for (ante, count) in &antes {
-        println!("  {ante:>2}  {count:>5}  {}", "#".repeat((60 * count / n.max(1)).max(1)));
+        println!(
+            "  {ante:>2}  {count:>5}  {}",
+            "#".repeat((60 * count / n.max(1)).max(1))
+        );
     }
 
     println!("\nDecks (games, wins):");
@@ -769,7 +792,10 @@ fn main() {
 
     println!("\nDifficulty levels (games, wins):");
     for stake in omatro_engine::stake::Stake::ALL {
-        let games: Vec<&Outcome> = outcomes.iter().filter(|o| o.stake == stake.name()).collect();
+        let games: Vec<&Outcome> = outcomes
+            .iter()
+            .filter(|o| o.stake == stake.name())
+            .collect();
         if !games.is_empty() {
             let won = games.iter().filter(|o| o.won).count();
             println!(
@@ -852,12 +878,12 @@ fn main() {
     // Problems grouped by kind (numbers left out), with the games they hit.
     let mut problems: BTreeMap<String, (Vec<u64>, String)> = BTreeMap::new();
     for o in &outcomes {
-        let stuck = o
-            .stuck
-            .then(|| format!("stuck after {MAX_STEPS} commands"));
+        let stuck = o.stuck.then(|| format!("stuck after {MAX_STEPS} commands"));
         for v in o.violations.iter().cloned().chain(stuck) {
             let kind: String = v.chars().filter(|c| !c.is_ascii_digit()).collect();
-            let entry = problems.entry(kind).or_insert_with(|| (Vec::new(), v.clone()));
+            let entry = problems
+                .entry(kind)
+                .or_insert_with(|| (Vec::new(), v.clone()));
             if !entry.0.contains(&o.seed) {
                 entry.0.push(o.seed);
             }
@@ -866,7 +892,11 @@ fn main() {
     println!("\nProblems (games hit, first example):");
     for (seeds, example) in problems.values() {
         let shown: Vec<String> = seeds.iter().take(5).map(u64::to_string).collect();
-        println!("  {:>5}  {example}   (seeds {})", seeds.len(), shown.join(", "));
+        println!(
+            "  {:>5}  {example}   (seeds {})",
+            seeds.len(),
+            shown.join(", ")
+        );
     }
     if problems.is_empty() {
         println!("  none");

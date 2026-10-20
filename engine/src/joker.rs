@@ -879,18 +879,28 @@ impl Joker {
             Joker::RainbowPrompt => "×3 mult if all four suits score",
             Joker::PitchBlack => "×3 mult if every card held in hand is a spade or a club",
             Joker::JqFilter => "Gains ×0.5 mult per jack discarded; resets after each blind",
-            Joker::FuzzyFinder => "Hearts and diamonds count as each other, and so do spades and clubs",
+            Joker::FuzzyFinder => {
+                "Hearts and diamonds count as each other, and so do spades and clubs"
+            }
             Joker::Identicon => "Every card counts as a face card",
             Joker::BigBangRelease => "Every played card scores",
             Joker::FastForward => "Straights may skip one rank between two cards",
             Joker::ChaosMonkey => "Doubles every chance (1 in 4 becomes 2 in 4)",
-            Joker::RollingRelease => "×1.5 mult for each scoring card of a suit drawn at each blind",
-            Joker::DailyDriver => "×2 mult for each scoring card matching a card drawn at each blind",
+            Joker::RollingRelease => {
+                "×1.5 mult for each scoring card of a suit drawn at each blind"
+            }
+            Joker::DailyDriver => {
+                "×2 mult for each scoring card matching a card drawn at each blind"
+            }
             Joker::LogRotation => "Gains +3 chips per discarded card of a suit drawn at each blind",
             Joker::BugBounty => "+$5 per discarded card of a rank drawn at each blind",
             Joker::TodoMd => "+$4 if the hand is of a type drawn at each blind",
-            Joker::GarageSale => "If the first discard of a blind is a single card, destroys it and gives $3",
-            Joker::Quine => "If the first hand of a blind is a single card, adds a copy of it to the deck and the hand",
+            Joker::GarageSale => {
+                "If the first discard of a blind is a single card, destroys it and gives $3"
+            }
+            Joker::Quine => {
+                "If the first hand of a blind is a single card, adds a copy of it to the deck and the hand"
+            }
             Joker::Headhunter => "+$5 when 3 face cards or more are discarded at once",
             Joker::EmptyWorkspace => "+30 chips per discard left",
             Joker::InboxZero => "+15 mult when no discard is left",
@@ -900,7 +910,9 @@ impl Joker {
             Joker::WarmStart => "×3 mult if the hand type was already played this blind",
             Joker::GridLayout => "Gains +4 chips per hand of exactly 4 cards",
             Joker::DotfilesBak => "Gains +2 mult per hand containing a Two Pair",
-            Joker::HipsterStack => "Gains ×0.2 mult per hand in a row that isn't your most played type",
+            Joker::HipsterStack => {
+                "Gains ×0.2 mult per hand in a row that isn't your most played type"
+            }
             Joker::EspressoShot => "Retriggers every scoring card, for 10 hands",
             Joker::HypeCycle => "+20 mult, −4 mult at the end of each blind",
             Joker::EnergyDrink => "×2 mult, −×0.01 mult per card discarded",
@@ -919,7 +931,9 @@ impl Joker {
             Joker::Homelab => "Adds the sell value of your other jokers to mult",
             Joker::PackageMaintainer => "×1.5 mult per extra joker you own",
             Joker::CloudCredits => "You can spend down to −$20",
-            Joker::SemverInflation => "+$1 sell value to every joker and consumable at the end of each blind",
+            Joker::SemverInflation => {
+                "+$1 sell value to every joker and consumable at the end of each blind"
+            }
             Joker::NineNines => "+$1 per 9 in the deck at the end of each blind",
             Joker::HockeyStick => "+$1 at the end of each blind, +$2 more after each boss",
             Joker::CompoundInterest => "+$1 of interest per $5 you have (same cap)",
@@ -927,13 +941,23 @@ impl Joker {
             Joker::RefreshSpam => "Gains +2 mult per shop reroll",
             Joker::Paru => "One free reroll per shop",
             Joker::Flatpak => "Jokers you own can show up in the shop again",
-            Joker::BtrfsSnapshot => "Saves a lost blind if you scored 25% of the target, then disappears",
+            Joker::BtrfsSnapshot => {
+                "Saves a lost blind if you scored 25% of the target, then disappears"
+            }
             Joker::Syncthing => "Sold after 2 blinds, copies another random joker",
             Joker::Upstream => "Copies the ability of the leftmost joker",
-            Joker::TransitiveDependencies => "When a blind starts, creates 2 core jokers (if there is room)",
-            Joker::RmRfNodeModules => "When a blind starts, destroys the joker on its right and gains twice its sell value as mult",
-            Joker::DistroHopping => "When a small or big blind starts, gains ×0.5 mult and destroys another random joker",
-            Joker::HashCollision => "×2 mult if the hand contains two identical cards (same rank and suit)",
+            Joker::TransitiveDependencies => {
+                "When a blind starts, creates 2 core jokers (if there is room)"
+            }
+            Joker::RmRfNodeModules => {
+                "When a blind starts, destroys the joker on its right and gains twice its sell value as mult"
+            }
+            Joker::DistroHopping => {
+                "When a small or big blind starts, gains ×0.5 mult and destroys another random joker"
+            }
+            Joker::HashCollision => {
+                "×2 mult if the hand contains two identical cards (same rank and suit)"
+            }
             Joker::Postmortem => "Gains ×0.5 mult when a blind is won on its last hand",
             Joker::SingleBinary => "×3 mult if it is your only joker",
             Joker::IntegerOverflow => {
@@ -1467,7 +1491,9 @@ impl Joker {
             Joker::ProfilePicture if first_face => vec![Effect::XMult(2.0)],
             Joker::RollingRelease if card.is_suit(targets.suit) => vec![Effect::XMult(1.5)],
             Joker::DailyDriver
-                if card.has_rank() && card.rank == targets.card.0 && card.is_suit(targets.card.1) =>
+                if card.has_rank()
+                    && card.rank == targets.card.0
+                    && card.is_suit(targets.card.1) =>
             {
                 vec![Effect::XMult(2.0)]
             }
@@ -1571,7 +1597,9 @@ impl Joker {
             Joker::Bloatware => Effect::Chips(250),
             Joker::MinimalWaybar if board.waybar() > 1.0 => Effect::XMult(board.waybar()),
             Joker::PluginManager => Effect::Mult(3.0 * board.jokers.len() as f64),
-            Joker::BitRot if board.lost_cards() > 0 => Effect::Mult(4.0 * board.lost_cards() as f64),
+            Joker::BitRot if board.lost_cards() > 0 => {
+                Effect::Mult(4.0 * board.lost_cards() as f64)
+            }
             Joker::FreeRam if board.draw_pile > 0 => Effect::Chips(2 * board.draw_pile as u64),
             Joker::OwnedServers if board.money > 0 => Effect::Chips(2 * board.money as u64),
             Joker::Bootstrapped if board.money >= 5 => Effect::Mult(2.0 * (board.money / 5) as f64),
@@ -1749,7 +1777,10 @@ impl OwnedJoker {
         let targets = board.targets;
         let to_go = |n: u32| format!("{n} hand{} to go", if n == 1 { "" } else { "s" });
         let (kind, text) = match self.joker {
-            Joker::TwoFactorAuth | Joker::GridLayout | Joker::EmptyWorkspace | Joker::FreeRam
+            Joker::TwoFactorAuth
+            | Joker::GridLayout
+            | Joker::EmptyWorkspace
+            | Joker::FreeRam
             | Joker::OwnedServers => {
                 let chips = match self.joker {
                     Joker::EmptyWorkspace => 30 * board.discards_left as u64,
@@ -1794,10 +1825,7 @@ impl OwnedJoker {
             Joker::BugBounty => ("money", format!("$5 per {}", rank_label(targets.rank))),
             Joker::TodoMd => ("money", format!("$4 for {}", targets.hand.name())),
             Joker::InboxZero if board.discards_left == 0 => ("mult", "+15 mult".to_string()),
-            Joker::InboxZero => (
-                "progress",
-                format!("{} discards left", board.discards_left),
-            ),
+            Joker::InboxZero => ("progress", format!("{} discards left", board.discards_left)),
             Joker::ReleaseTrain => match RELEASE_TRAIN - (self.counter as u32).min(RELEASE_TRAIN) {
                 0 | 1 => ("x_mult", "×4 next hand".to_string()),
                 n => ("progress", to_go(n - 1)),
@@ -1873,7 +1901,10 @@ impl OwnedJoker {
     ) {
         match self.joker {
             Joker::TwoFactorAuth => {
-                let twos = scoring.iter().filter(|c| c.has_rank() && c.rank == 2).count();
+                let twos = scoring
+                    .iter()
+                    .filter(|c| c.has_rank() && c.rank == 2)
+                    .count();
                 self.counter += 8.0 * twos as f64;
             }
             Joker::GridLayout if played.len() == 4 => self.counter += 4.0,
@@ -1928,7 +1959,10 @@ impl OwnedJoker {
                 self.progress %= MAILING_LIST_DISCARDS;
             }
             Joker::JqFilter => {
-                let jacks = cards.iter().filter(|c| c.has_rank() && c.rank == 11).count();
+                let jacks = cards
+                    .iter()
+                    .filter(|c| c.has_rank() && c.rank == 11)
+                    .count();
                 self.counter += 0.5 * jacks as f64;
             }
             Joker::LogRotation => {
@@ -2057,18 +2091,39 @@ mod tests {
 
         let mut cleanup = OwnedJoker::new(Joker::OrphanCleanup, None);
         cleanup.on_card_sold();
-        assert_eq!(cleanup.bonus(None, &Board::default()).unwrap().text, "×1.25 mult");
+        assert_eq!(
+            cleanup.bonus(None, &Board::default()).unwrap().text,
+            "×1.25 mult"
+        );
 
         let mut collector = OwnedJoker::new(Joker::ThemeCollector, None);
-        assert_eq!(collector.bonus(None, &Board::default()).unwrap().text, "×1 mult");
+        assert_eq!(
+            collector.bonus(None, &Board::default()).unwrap().text,
+            "×1 mult"
+        );
         for _ in 0..3 {
             collector.on_theme_used();
         }
-        assert_eq!(collector.bonus(None, &Board::default()).unwrap().text, "×1.3 mult");
+        assert_eq!(
+            collector.bonus(None, &Board::default()).unwrap().text,
+            "×1.3 mult"
+        );
         let memory = OwnedJoker::new(Joker::MuscleMemory, None);
         assert_eq!(memory.bonus(None, &Board::default()), None);
-        assert_eq!(memory.bonus(Some((HandKind::Pair, 4)), &Board::default()).unwrap().text, "+4 mult");
-        cleanup.end_of_blind(BlindEnd { boss: true, ..BlindEnd::default() }, &mut Rng::new(1));
+        assert_eq!(
+            memory
+                .bonus(Some((HandKind::Pair, 4)), &Board::default())
+                .unwrap()
+                .text,
+            "+4 mult"
+        );
+        cleanup.end_of_blind(
+            BlindEnd {
+                boss: true,
+                ..BlindEnd::default()
+            },
+            &mut Rng::new(1),
+        );
         assert_eq!(cleanup.counter, 1.0);
     }
 
@@ -2084,13 +2139,19 @@ mod tests {
         let two = Card::new(2, Suit::Clubs);
         assert_eq!(Joker::BitTwiddling.retriggers(two, false, false), 1);
         assert_eq!(Joker::BitTwiddling.retriggers(king, false, false), 0);
-        assert_eq!(Joker::LowBattery.on_held(king, true, rng), [Effect::Mult(20.0)]);
+        assert_eq!(
+            Joker::LowBattery.on_held(king, true, rng),
+            [Effect::Mult(20.0)]
+        );
         assert_eq!(
             Joker::BenevolentDictator.on_held(king, false, rng),
             [Effect::XMult(1.5)]
         );
         let queen = Card::new(12, Suit::Hearts);
-        assert_eq!(Joker::QueueManager.on_held(queen, false, rng), [Effect::Mult(13.0)]);
+        assert_eq!(
+            Joker::QueueManager.on_held(queen, false, rng),
+            [Effect::Mult(13.0)]
+        );
     }
 
     #[test]
@@ -2114,6 +2175,9 @@ mod tests {
             train.before_hand(&pair, &five, &five, false);
             train.after_hand();
         }
-        assert_eq!(train.bonus(None, &Board::default()).unwrap().text, "×4 next hand");
+        assert_eq!(
+            train.bonus(None, &Board::default()).unwrap().text,
+            "×4 next hand"
+        );
     }
 }

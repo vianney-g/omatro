@@ -351,9 +351,7 @@ fn item_info(item: Item, profile: &Profile) -> ItemInfo {
         },
         secret: item.secret(),
         name: found.then(|| item.name()),
-        description: found
-            .then(|| item.description())
-            .filter(|d| !d.is_empty()),
+        description: found.then(|| item.description()).filter(|d| !d.is_empty()),
         quip: found.then(|| item.quip()).filter(|q| !q.is_empty()),
         rarity: joker.filter(|_| found).map(Joker::rarity),
         achievement: hidden_by.map(Achievement::name),
@@ -388,8 +386,15 @@ mod tests {
         assert_eq!((jokers.found, jokers.total), (1, Joker::ALL.len()));
         let fork = jokers.items.iter().find(|i| i.id == "joker:fork").unwrap();
         assert_eq!((fork.state, fork.name.as_deref()), ("found", Some("Fork")));
-        let other = jokers.items.iter().find(|i| i.id == "joker:dotfiles").unwrap();
-        assert_eq!((other.state, &other.name, &other.description), ("unknown", &None, &None));
+        let other = jokers
+            .items
+            .iter()
+            .find(|i| i.id == "joker:dotfiles")
+            .unwrap();
+        assert_eq!(
+            (other.state, &other.name, &other.description),
+            ("unknown", &None, &None)
+        );
         let hidden = jokers
             .items
             .iter()

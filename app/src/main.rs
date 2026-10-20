@@ -13,7 +13,8 @@ fn main() {
     // kept in ~/.config/omatro/omatro.conf.
     if let Some(mut app) = app.as_mut() {
         app.as_mut().set_organization_name(&QString::from("omatro"));
-        app.as_mut().set_organization_domain(&QString::from("github.com/vianney-g"));
+        app.as_mut()
+            .set_organization_domain(&QString::from("github.com/vianney-g"));
         app.as_mut().set_application_name(&QString::from("omatro"));
     }
     let mut engine = QQmlApplicationEngine::new();

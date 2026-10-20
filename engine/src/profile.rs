@@ -12,8 +12,8 @@ use crate::run_deck::Deck;
 use crate::stake::Stake;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::sync::OnceLock;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 /// Bumped when profiles of older versions can no longer be read.
 pub const PROFILE_VERSION: u32 = 1;
@@ -91,7 +91,10 @@ impl Profile {
         match serde_json::from_str::<Profile>(&text) {
             Ok(profile) if profile.version <= PROFILE_VERSION => profile,
             _ => {
-                eprintln!("omatro: the profile {} can't be read, starting a new one", path.display());
+                eprintln!(
+                    "omatro: the profile {} can't be read, starting a new one",
+                    path.display()
+                );
                 let _ = std::fs::rename(path, path.with_extension("json.bak"));
                 Profile::default()
             }
@@ -112,7 +115,10 @@ impl Profile {
             .and_then(|_| std::fs::write(&tmp, text))
             .and_then(|_| std::fs::rename(&tmp, path));
         if let Err(e) = written {
-            eprintln!("omatro: could not save the profile to {}: {e}", path.display());
+            eprintln!(
+                "omatro: could not save the profile to {}: {e}",
+                path.display()
+            );
         }
     }
 
@@ -243,7 +249,11 @@ impl Profile {
                         self.achieve(Achievement::HeatDeath, &mut news);
                     }
                 }
-                Event::BlindWon { boss, hands, discards } => {
+                Event::BlindWon {
+                    boss,
+                    hands,
+                    discards,
+                } => {
                     self.stats.blinds_won += 1;
                     self.achieve(Achievement::HelloWorld, &mut news);
                     if boss && hands == 1 && discards == 0 {
@@ -310,7 +320,10 @@ mod tests {
         let mut profile = Profile::default();
         profile.find(Item::Joker(Joker::Fork));
         let mut text: serde_json::Value = serde_json::to_value(&profile).unwrap();
-        text["found"].as_array_mut().unwrap().push("joker:gone_since".into());
+        text["found"]
+            .as_array_mut()
+            .unwrap()
+            .push("joker:gone_since".into());
         text["achievements"] = serde_json::json!(["hello_world", "retired"]);
         let back: Profile = serde_json::from_value(text).unwrap();
         assert!(back.has_found(Item::Joker(Joker::Fork)));
@@ -329,8 +342,13 @@ mod tests {
         profile.achieve(Achievement::DuplicateDetected, &mut news);
         assert!(!profile.locked_jokers().contains(&Joker::HashCollision));
         assert_eq!(
-            news.iter().map(|n| (n.kind, n.name.as_str())).collect::<Vec<_>>(),
-            [("achievement", "Duplicate Detected"), ("unlocked", "Hash Collision")]
+            news.iter()
+                .map(|n| (n.kind, n.name.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                ("achievement", "Duplicate Detected"),
+                ("unlocked", "Hash Collision")
+            ]
         );
         // Done once only.
         profile.achieve(Achievement::DuplicateDetected, &mut news);
@@ -348,7 +366,11 @@ mod tests {
         assert!(profile.observe(&mut game).is_empty());
 
         game.select_blind().unwrap();
-        game.cheat(Cheat { win: true, ..Cheat::default() }).unwrap();
+        game.cheat(Cheat {
+            win: true,
+            ..Cheat::default()
+        })
+        .unwrap();
         profile.observe(&mut game);
         // A blind won with a cheat is no achievement.
         assert!(!profile.is_done(Achievement::HelloWorld));
@@ -372,7 +394,10 @@ mod tests {
         game.events_for_tests(vec![Event::GameOver { won: false }]);
         let news = profile.observe(&mut game);
         assert!(profile.is_done(Achievement::CoreDump));
-        assert!(news.iter().any(|n| n.kind == "unlocked" && n.name == "Postmortem"));
+        assert!(
+            news.iter()
+                .any(|n| n.kind == "unlocked" && n.name == "Postmortem")
+        );
     }
 
     #[test]
@@ -382,15 +407,29 @@ mod tests {
         let mut game = Game::with_stake(1, vec![], Some(Deck::ThinkPad), Stake::TrackDay);
         game.events_for_tests(vec![Event::GameOver { won: true }]);
         let news = profile.observe(&mut game);
-        assert_eq!(profile.best_stake(Some(Deck::ThinkPad)), Some(Stake::TrackDay));
+        assert_eq!(
+            profile.best_stake(Some(Deck::ThinkPad)),
+            Some(Stake::TrackDay)
+        );
         assert_eq!(profile.top_stake(Some(Deck::ThinkPad)), Stake::ClubRacing);
         assert_eq!(profile.top_stake(Some(Deck::Basecamp)), Stake::DailyCommute);
-        assert!(news.iter().any(|n| n.kind == "unlocked" && n.name == "Club Racing"));
+        assert!(
+            news.iter()
+                .any(|n| n.kind == "unlocked" && n.name == "Club Racing")
+        );
         // A lower level never lowers the best.
         let mut game = Game::with_stake(1, vec![], Some(Deck::ThinkPad), Stake::DailyCommute);
         game.events_for_tests(vec![Event::GameOver { won: true }]);
-        assert!(profile.observe(&mut game).iter().all(|n| n.kind != "unlocked"));
-        assert_eq!(profile.best_stake(Some(Deck::ThinkPad)), Some(Stake::TrackDay));
+        assert!(
+            profile
+                .observe(&mut game)
+                .iter()
+                .all(|n| n.kind != "unlocked")
+        );
+        assert_eq!(
+            profile.best_stake(Some(Deck::ThinkPad)),
+            Some(Stake::TrackDay)
+        );
         // The last level unlocks nothing more.
         profile.won_at(None, Stake::Hypercar);
         assert_eq!(profile.top_stake(None), Stake::Hypercar);

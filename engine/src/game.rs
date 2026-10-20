@@ -6,7 +6,7 @@ use crate::card::{ACE, Card, Suit, standard_deck};
 use crate::collection::Item;
 use crate::consumable::{CONSUMABLE_SLOTS, Command, Consumable, Oligarchy, Theme};
 use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, Rules, evaluate_with};
-use crate::joker::{Board, BlindEnd, Bonus, Joker, OwnedJoker, Rarity, SYNCTHING_BLINDS, Targets};
+use crate::joker::{BlindEnd, Board, Bonus, Joker, OwnedJoker, Rarity, SYNCTHING_BLINDS, Targets};
 use crate::modifier::{Edition, Enhancement, Seal};
 use crate::pack::{Pack, PackKind, SHOP_PACKS};
 use crate::rng::Rng;
@@ -684,12 +684,23 @@ pub enum Event {
     /// Obtained without staying in the game: a consumable used, a badge
     /// won, a pack opened, a boss beaten.
     Obtained(Item),
-    HandPlayed { kind: HandKind, total: f64 },
-    BlindWon { boss: bool, hands: usize, discards: u32 },
+    HandPlayed {
+        kind: HandKind,
+        total: f64,
+    },
+    BlindWon {
+        boss: bool,
+        hands: usize,
+        discards: u32,
+    },
     JokerSold,
     /// Rerolls in this shop so far.
-    Rerolled { in_shop: u32 },
-    GameOver { won: bool },
+    Rerolled {
+        in_shop: u32,
+    },
+    GameOver {
+        won: bool,
+    },
 }
 
 /// The whole game, saved as it is (`Session` writes it after each command):
@@ -1020,7 +1031,11 @@ impl Game {
             items.extend(joker.edition.map(Item::Edition));
         }
         items.extend(self.vouchers.iter().map(|&v| Item::Voucher(v)));
-        items.extend(self.consumables.iter().map(|h| Item::Consumable(h.consumable)));
+        items.extend(
+            self.consumables
+                .iter()
+                .map(|h| Item::Consumable(h.consumable)),
+        );
         for card in &self.deck {
             items.extend(card.enhancement.map(Item::Enhancement));
             items.extend(card.seal.map(Item::Seal));
@@ -1332,7 +1347,10 @@ impl Game {
                 _ => 0,
             });
             // The new workspace opens right away.
-            if matches!(voucher, Voucher::MoreWorkspaces | Voucher::EvenMoreWorkspaces) {
+            if matches!(
+                voucher,
+                Voucher::MoreWorkspaces | Voucher::EvenMoreWorkspaces
+            ) {
                 self.add_offer();
             }
         }
@@ -1923,7 +1941,10 @@ impl Game {
             return Err(GameError::NotPlaying);
         }
         if from >= self.hand.len() || to >= self.hand.len() {
-            return Err(GameError::BadSelection(format!("no card #{}", from.max(to))));
+            return Err(GameError::BadSelection(format!(
+                "no card #{}",
+                from.max(to)
+            )));
         }
         let card = self.hand.remove(from);
         self.hand.insert(to, card);
@@ -2544,8 +2565,7 @@ impl Game {
 
     /// Whether a joker may show up in the shop.
     fn on_sale(&self, joker: Joker) -> bool {
-        let owned =
-            self.count(Joker::Flatpak) == 0 && self.jokers.iter().any(|j| j.joker == joker);
+        let owned = self.count(Joker::Flatpak) == 0 && self.jokers.iter().any(|j| j.joker == joker);
         let offered = self
             .offers
             .iter()
@@ -2622,7 +2642,9 @@ impl Game {
         } else if roll < 20.0 + theme + command + card {
             Some(Offer::Card(self.shop_card(rng)))
         } else {
-            Some(Offer::Consumable(Consumable::Oligarchy(roll_oligarchy(rng))))
+            Some(Offer::Consumable(Consumable::Oligarchy(roll_oligarchy(
+                rng,
+            ))))
         }
     }
 
@@ -2803,7 +2825,11 @@ impl Game {
         self.in_shop()?;
         let consumable = match self.offers.get(offer) {
             Some(Offer::Consumable(consumable)) => *consumable,
-            _ => return Err(GameError::BadSelection(format!("no theme or command #{offer}"))),
+            _ => {
+                return Err(GameError::BadSelection(format!(
+                    "no theme or command #{offer}"
+                )));
+            }
         };
         if consumable.needs_hand() {
             return Err(GameError::BadSelection(format!(
@@ -3141,7 +3167,8 @@ impl Game {
     }
 
     fn apply_consumable(&mut self, consumable: Consumable, targets: &[usize]) {
-        self.events.push(Event::Obtained(Item::Consumable(consumable)));
+        self.events
+            .push(Event::Obtained(Item::Consumable(consumable)));
         match consumable {
             Consumable::Theme(theme) => {
                 self.levels.raise(theme.hand(), 1);
@@ -3784,11 +3811,7 @@ impl Game {
         } else {
             None
         };
-        JokerInfo::new(
-            owned,
-            current,
-            owned.bonus(None, &self.board()),
-        )
+        JokerInfo::new(owned, current, owned.bonus(None, &self.board()))
     }
 
     pub fn state(&self) -> State {
@@ -3938,13 +3961,11 @@ impl Game {
                             ..JokerInfo::new(&owned, None, None)
                         })
                     }
-                    Offer::Consumable(c) => {
-                        OfferInfo::Consumable(ConsumableInfo::new(
-                            c,
-                            self.offer_price(i),
-                            self.consumable_current(c, false),
-                        ))
-                    }
+                    Offer::Consumable(c) => OfferInfo::Consumable(ConsumableInfo::new(
+                        c,
+                        self.offer_price(i),
+                        self.consumable_current(c, false),
+                    )),
                     Offer::Card(card) => OfferInfo::Card(CardOffer {
                         kind: "card",
                         card,
@@ -4339,7 +4360,10 @@ mod tests {
         assert!(game.buy(5).is_err());
         game.sell(0).unwrap();
         assert!(game.jokers.is_empty());
-        assert_eq!(game.money, 20 - owned.price() as i64 + owned.sell_value() as i64);
+        assert_eq!(
+            game.money,
+            20 - owned.price() as i64 + owned.sell_value() as i64
+        );
     }
 
     #[test]
@@ -5004,7 +5028,8 @@ mod tests {
             game.discard(&[0, 1, 2, 3, 4]).unwrap();
         }
         assert_eq!((game.jokers[1].counter, game.jokers[1].progress), (1.0, 15));
-        game.jokers[1].on_cards_discarded(&cards("2H 2H 2H 2H 2H 2H 2H 2H 2H 2H"), &Targets::default());
+        game.jokers[1]
+            .on_cards_discarded(&cards("2H 2H 2H 2H 2H 2H 2H 2H 2H 2H"), &Targets::default());
         let s = game.state();
         assert_eq!(s.jokers[1].bonus.as_ref().unwrap().text, "×2 mult · 2/23");
     }
@@ -5317,7 +5342,10 @@ mod tests {
             current(&game, Consumable::Theme(Theme::Nord)).as_deref(),
             Some("Straight: level 1 → 2 (60 × 7)")
         );
-        assert_eq!(current(&game, Consumable::Command(Command::Rsync)).as_deref(), Some("+$15 now"));
+        assert_eq!(
+            current(&game, Consumable::Command(Command::Rsync)).as_deref(),
+            Some("+$15 now")
+        );
         assert_eq!(
             current(&game, Consumable::Command(Command::UpArrow)).as_deref(),
             Some("nothing to recall yet")
@@ -5328,7 +5356,10 @@ mod tests {
             Some("would create Nord")
         );
         game.skips = 2;
-        assert_eq!(game.tag_info(Tag::SpeedBlazing, true).current.as_deref(), Some("+$15 now"));
+        assert_eq!(
+            game.tag_info(Tag::SpeedBlazing, true).current.as_deref(),
+            Some("+$15 now")
+        );
         assert_eq!(game.tag_info(Tag::Version3, true).current, None);
     }
 
@@ -5364,7 +5395,10 @@ mod tests {
         // Up Arrow recalls the theme just used, into the clipboard.
         game.consumables.clear();
         game.buy_and_use(1).unwrap();
-        assert_eq!(game.consumables[0].consumable, Consumable::Theme(Theme::Nord));
+        assert_eq!(
+            game.consumables[0].consumable,
+            Consumable::Theme(Theme::Nord)
+        );
         assert_eq!(game.offers.len(), 1);
     }
 
@@ -5659,9 +5693,15 @@ mod tests {
     fn jokers_that_bend_hands() {
         let mut game = playing(1, vec![Joker::FastForward, Joker::FuzzyFinder]);
         game.hand = cards("2H 4D 6S 8C 10H 3D 3C 3S");
-        assert_eq!(game.preview(&[0, 1, 2, 3, 4]).unwrap().unwrap().kind, HandKind::Straight);
+        assert_eq!(
+            game.preview(&[0, 1, 2, 3, 4]).unwrap().unwrap().kind,
+            HandKind::Straight
+        );
         game.hand = cards("2H 4D 7D 9D JD 3C 3C 3S");
-        assert_eq!(game.preview(&[0, 1, 2, 3, 4]).unwrap().unwrap().kind, HandKind::Flush);
+        assert_eq!(
+            game.preview(&[0, 1, 2, 3, 4]).unwrap().unwrap().kind,
+            HandKind::Flush
+        );
         let mut game = playing(1, vec![Joker::Identicon, Joker::EmojiReaction]);
         game.hand = cards("2H 2D 5S 7C 9H 3D 3C 3S");
         assert_eq!(game.play(&[0, 1]).unwrap().mult, 12.0);
@@ -5672,11 +5712,20 @@ mod tests {
         let game = Game::new(1, vec![Joker::SwapFile, Joker::Bloatware]);
         assert_eq!(game.hand_size(), HAND_SIZE + 5 - 2);
         let game = Game::new(1, vec![Joker::Backspace]);
-        assert_eq!((game.discards_left, game.hand_size()), (DISCARDS_PER_BLIND + 3, HAND_SIZE - 1));
+        assert_eq!(
+            (game.discards_left, game.hand_size()),
+            (DISCARDS_PER_BLIND + 3, HAND_SIZE - 1)
+        );
         let game = Game::new(1, vec![Joker::VerticalMonitor]);
-        assert_eq!((game.hands_left, game.hand_size()), (HANDS_PER_BLIND - 1, HAND_SIZE + 2));
+        assert_eq!(
+            (game.hands_left, game.hand_size()),
+            (HANDS_PER_BLIND - 1, HAND_SIZE + 2)
+        );
         let game = playing(1, vec![Joker::ForcePush]);
-        assert_eq!((game.hands_left, game.discards_left), (HANDS_PER_BLIND + 3, 0));
+        assert_eq!(
+            (game.hands_left, game.discards_left),
+            (HANDS_PER_BLIND + 3, 0)
+        );
         let mut swap = OwnedJoker::new(Joker::SwapFile, None);
         for _ in 0..4 {
             assert!(swap.end_of_blind(BlindEnd::default(), &mut Rng::new(1)));
@@ -5690,7 +5739,10 @@ mod tests {
         game.draw_pile.clear();
         game.hand.truncate(1);
         game.play(&[0]).unwrap();
-        assert_eq!((game.phase, game.hands_left), (Phase::Lost, HANDS_PER_BLIND - 1));
+        assert_eq!(
+            (game.phase, game.hands_left),
+            (Phase::Lost, HANDS_PER_BLIND - 1)
+        );
     }
 
     #[test]
@@ -5709,7 +5761,13 @@ mod tests {
         game.sort_hand_by(SortBy::Suit);
         let order = |g: &Game| g.hand.iter().map(|c| (c.rank, c.suit)).collect::<Vec<_>>();
         let expected = cards("KS 9H 2H 5C AD");
-        assert_eq!(order(&game), expected.iter().map(|c| (c.rank, c.suit)).collect::<Vec<_>>());
+        assert_eq!(
+            order(&game),
+            expected
+                .iter()
+                .map(|c| (c.rank, c.suit))
+                .collect::<Vec<_>>()
+        );
         game.sort_hand_by(SortBy::Rank);
         let ranks = |g: &Game| g.hand.iter().map(|c| c.rank).collect::<Vec<_>>();
         assert_eq!(ranks(&game), [14, 13, 9, 5, 2]);
@@ -5726,7 +5784,13 @@ mod tests {
         let (low, high) = (game.hand[0], game.hand[1]);
         assert!(low.rank < high.rank);
         game.use_consumable(0, &[0, 1]).unwrap();
-        assert_eq!(game.hand.iter().filter(|c| c.rank == high.rank && c.suit == high.suit).count(), 2);
+        assert_eq!(
+            game.hand
+                .iter()
+                .filter(|c| c.rank == high.rank && c.suit == high.suit)
+                .count(),
+            2
+        );
     }
 
     #[test]
@@ -5782,10 +5846,21 @@ mod tests {
 
     #[test]
     fn jokers_act_when_a_blind_starts() {
-        let game = playing(1, vec![Joker::RmRfNodeModules, Joker::Omakase, Joker::TransitiveDependencies]);
+        let game = playing(
+            1,
+            vec![
+                Joker::RmRfNodeModules,
+                Joker::Omakase,
+                Joker::TransitiveDependencies,
+            ],
+        );
         assert_eq!(game.jokers.len(), 4);
         assert_eq!(game.jokers[0].counter, 4.0);
-        assert!(game.jokers[2..].iter().all(|j| j.joker.rarity() == Rarity::Core));
+        assert!(
+            game.jokers[2..]
+                .iter()
+                .all(|j| j.joker.rarity() == Rarity::Core)
+        );
         let game = playing(1, vec![Joker::DistroHopping, Joker::Omakase]);
         assert_eq!(game.jokers.len(), 1);
         assert_eq!(game.jokers[0].counter, 1.5);
@@ -5793,7 +5868,10 @@ mod tests {
 
     #[test]
     fn discard_jokers_pay_and_destroy() {
-        let mut game = playing(1, vec![Joker::Headhunter, Joker::BugBounty, Joker::GarageSale]);
+        let mut game = playing(
+            1,
+            vec![Joker::Headhunter, Joker::BugBounty, Joker::GarageSale],
+        );
         game.targets.rank = 13;
         game.hand = cards("KH QD JS 5C 4H 3D 2C 2S");
         game.discard(&[0, 1, 2]).unwrap();
@@ -5811,7 +5889,13 @@ mod tests {
         let card = game.hand[0];
         let b = game.play(&[0]).unwrap();
         assert_eq!(game.deck.len(), 53);
-        assert!(game.deck.iter().filter(|c| c.rank == card.rank && c.suit == card.suit).count() == 2);
+        assert!(
+            game.deck
+                .iter()
+                .filter(|c| c.rank == card.rank && c.suit == card.suit)
+                .count()
+                == 2
+        );
         assert!(b.notes.iter().any(|n| n.starts_with("Quine")));
         assert_eq!(game.jokers[1].counter, 1.25);
     }
@@ -5838,7 +5922,14 @@ mod tests {
             game.await_blind();
         }
         assert!(seen.len() > 1);
-        assert!(game.state().jokers[0].bonus.as_ref().unwrap().text.starts_with("$4 for "));
+        assert!(
+            game.state().jokers[0]
+                .bonus
+                .as_ref()
+                .unwrap()
+                .text
+                .starts_with("$4 for ")
+        );
     }
 
     #[test]
@@ -5921,7 +6012,11 @@ mod tests {
             [Event::Rerolled { in_shop: 1 }, Event::JokerSold]
         );
         assert_eq!(game.most_jokers(), 1);
-        assert!(game.owned_items().iter().all(|i| !matches!(i, Item::Joker(_))));
+        assert!(
+            game.owned_items()
+                .iter()
+                .all(|i| !matches!(i, Item::Joker(_)))
+        );
     }
 
     #[test]
@@ -5961,7 +6056,10 @@ mod tests {
             game.win_blind();
             game.cash_out().unwrap();
             for offer in &game.offers {
-                if let Offer::Joker { joker, stickers, .. } = offer {
+                if let Offer::Joker {
+                    joker, stickers, ..
+                } = offer
+                {
                     assert!(!(stickers.welded && stickers.worn.is_some()));
                     assert!(joker.sticker_compat() || stickers.is_empty());
                     seen.0 += usize::from(stickers.welded);
@@ -6007,7 +6105,14 @@ mod tests {
 
     #[test]
     fn welded_jokers_survive_the_jokers_that_destroy() {
-        let mut game = Game::new(5, vec![Joker::RmRfNodeModules, Joker::Dotfiles, Joker::DistroHopping]);
+        let mut game = Game::new(
+            5,
+            vec![
+                Joker::RmRfNodeModules,
+                Joker::Dotfiles,
+                Joker::DistroHopping,
+            ],
+        );
         game.jokers[1].stickers.welded = true;
         game.select_blind().unwrap();
         assert!(game.jokers.iter().any(|j| j.joker == Joker::Dotfiles));
@@ -6018,7 +6123,13 @@ mod tests {
         let mut game = with_oligarchy(
             7,
             Oligarchy::Merger,
-            vec![Joker::Dotfiles, Joker::Omakase, Joker::Uptime, Joker::Paru, Joker::Pipeline],
+            vec![
+                Joker::Dotfiles,
+                Joker::Omakase,
+                Joker::Uptime,
+                Joker::Paru,
+                Joker::Pipeline,
+            ],
         );
         for joker in &mut game.jokers[1..] {
             joker.stickers.welded = true;
@@ -6030,7 +6141,17 @@ mod tests {
 
     #[test]
     fn a_transparent_syncthing_copies_only_with_room() {
-        let mut game = shopping(3, vec![Joker::Syncthing, Joker::Dotfiles, Joker::Omakase, Joker::Uptime, Joker::Paru, Joker::Pipeline]);
+        let mut game = shopping(
+            3,
+            vec![
+                Joker::Syncthing,
+                Joker::Dotfiles,
+                Joker::Omakase,
+                Joker::Uptime,
+                Joker::Paru,
+                Joker::Pipeline,
+            ],
+        );
         game.jokers[0].edition = Some(Edition::Transparent);
         game.jokers[0].counter = SYNCTHING_BLINDS;
         game.sell(0).unwrap();

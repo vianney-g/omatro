@@ -4,7 +4,9 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Stake {
     #[default]
@@ -234,10 +236,7 @@ mod tests {
         }
         assert_eq!(Stake::DailyCommute.next(), Some(Stake::TrackDay));
         assert_eq!(Stake::Hypercar.next(), None);
-        assert_eq!(
-            Stake::ALL.map(Stake::scaling),
-            [1, 1, 2, 2, 2, 3, 3, 3]
-        );
+        assert_eq!(Stake::ALL.map(Stake::scaling), [1, 1, 2, 2, 2, 3, 3, 3]);
         assert!(StakeInfo::from(Stake::DailyCommute).rules.is_empty());
         assert_eq!(StakeInfo::from(Stake::ClubRacing).rules.len(), 2);
     }

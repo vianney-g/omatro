@@ -387,8 +387,11 @@ fn achievements() -> String {
             id(a),
             a.name(),
             a.description(),
-            a.unlocks()
-                .map_or_else(String::new, |i| format!("{} ({})", i.name(), i.family().singular())),
+            a.unlocks().map_or_else(String::new, |i| format!(
+                "{} ({})",
+                i.name(),
+                i.family().singular()
+            )),
             cell(a.quip())
         );
     }
