@@ -40,8 +40,17 @@ Rectangle {
   function moveStake(step) {
     stake = Math.max(0, Math.min(topStake, chosenStake + step))
   }
+  // A game in progress, not over: starting another abandons it, so the
+  // first Start asks again (its ante, for the warning; 0 for none).
+  property int ongoingAnte: 0
+  property bool confirming: false
+  onVisibleChanged: confirming = false
+  onCurrentChanged: confirming = false
   function startChosen() {
-    if (deck && !deck.achievement && stakes.length) start(deck.id, stakes[chosenStake].id, seed)
+    if (!deck || deck.achievement || !stakes.length) return
+    if (ongoingAnte > 0 && !confirming) { confirming = true; return }
+    confirming = false
+    start(deck.id, stakes[chosenStake].id, seed)
   }
   function editSeed() { seedInput.forceActiveFocus() }
 
@@ -69,8 +78,10 @@ Rectangle {
     }
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
-      visible: root.message !== ""
-      text: root.message
+      visible: root.message !== "" || root.confirming
+      text: root.confirming
+        ? I18n.tr("Your game in progress (ante {n}) will count as abandoned. Enter again to start · Escape to go back to it", { n: root.ongoingAnte })
+        : root.message
       color: Colors.urgent
       font.family: Style.font.family
       font.pixelSize: Style.font.body
@@ -367,7 +378,7 @@ Rectangle {
       anchors.horizontalCenter: parent.horizontalCenter
       spacing: Style.spacing.xxl
       Button {
-        text: I18n.tr("Start (Enter)")
+        text: I18n.tr(root.confirming ? "Abandon and start (Enter)" : "Start (Enter)")
         enabled: root.decks.length > 0 && !root.decks[root.current].achievement
         onClicked: root.startChosen()
       }

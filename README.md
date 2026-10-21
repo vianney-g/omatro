@@ -100,7 +100,8 @@ and the language, and list every key.
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, Tab to sort the hand
 by rank or suit, Shift+←/→ to move the selected card (or drag it), J to bring the next
 joker to the front when they overlap (or hover or click one), then Shift+←/→ to move it
-(or drag it, in the shop and during a blind), N for a new game, I for fastfetch (run
+(or drag it, in the shop and during a blind), Ctrl+N for a new game (starting it
+asks again while a game is in progress), I for fastfetch (run
 info: the machine and its level, hand levels, cards left), C for the collection, O for the
 settings and the list of keys, M for the music, Shift+M for the sound effects, Ctrl+Q
 to quit. Before a blind: Enter to play it, S to skip it. Ctrl+1 and Ctrl+2 apply the

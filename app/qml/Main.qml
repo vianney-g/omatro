@@ -836,7 +836,8 @@ Window {
       else if (k === Qt.Key_F8) root.cheat({ level_up: root.game.hands.map(function(h) { return h.kind }) })
       else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) root.confirm()
       else if (k === Qt.Key_D || k === Qt.Key_Delete) root.discard()
-      else if (k === Qt.Key_N) root.newGame()
+      // Ctrl+N, not N alone: too easy to hit in the middle of a game.
+      else if (k === Qt.Key_N && (event.modifiers & Qt.ControlModifier)) root.newGame()
       else return
       event.accepted = true
     }
@@ -1804,7 +1805,7 @@ Window {
             }
             Button {
               visible: endCol.victory
-              text: I18n.tr("New game (N)")
+              text: I18n.tr("New game (Ctrl+N)")
               bordered: true
               onClicked: root.newGame()
             }
@@ -1847,6 +1848,7 @@ Window {
       stakes: root.stakes
       message: root.saveProblem
       canCancel: root.game !== null
+      ongoingAnte: root.game !== null && root.game.phase !== "lost" ? root.game.ante : 0
       onStart: function(deck, stake, seed) { root.startGame(deck, stake, seed) }
       onSeedDone: keyCatcher.forceActiveFocus()
       onCancel: root.choosingDeck = false
