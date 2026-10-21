@@ -65,7 +65,7 @@ jobs:
             sudo pacman -U https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ env.PACKAGE }}
             ```
 
-            Elsewhere, the archive needs Qt 6: `sudo pacman -S qt6-base qt6-declarative`. Then, from
+            Elsewhere, the archive needs Qt 6: `sudo pacman -S qt6-base qt6-declarative qt6-multimedia qt6-multimedia-ffmpeg` (the last two for the music and sounds). Then, from
             the unpacked archive, run `./omatro`, or install it with its launcher
             entry and icon:
 
