@@ -72,7 +72,10 @@ A Cargo workspace with two crates:
   must be declared in `app/build.rs` (singletons with `.singleton(true)`, `.js` files
   via `qrc_resources`). Displayed names come from the engine (`name()` of jokers,
   blinds, hands, sent in the state); `Labels.js` only formats ranks, suits, effects
-  and numbers. `FastFetch.qml` is the run info panel (I key).
+  and numbers. `FastFetch.qml` is the run info panel (I key), `Options.qml` the settings
+(O: language, volumes) with the list of every key: a new key goes there. The left
+column of `Main.qml` is a `Flickable`: past the window's height it scrolls rather
+than push the play area out.
 - Music: `Music.qml` plays the Opus tracks of `app/music/` (embedded, listed in
   `build.rs` and in its `tracks`, `song` for those with lyrics, kept out of blinds).
   `Main.qml` loads it through a `Loader`, so a missing Qt Multimedia leaves the

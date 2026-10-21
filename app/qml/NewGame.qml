@@ -2,14 +2,14 @@ import QtQuick
 import omatro
 import "Labels.js" as Labels
 
-// The new game screen: pick the machine to play on (arrows, Enter), or go back
-// to the game in progress (Escape).
+// The new game screen: pick the machine to play on in a carousel (←/→,
+// Enter), or go back to the game in progress (Escape).
 Rectangle {
   id: root
 
   property var decks: []
   property int current: 0
-  // The difficulty levels, and the one chosen (Shift+←/→), within what the
+  // The difficulty levels, and the one chosen (↑/↓), within what the
   // chosen deck has unlocked.
   property var stakes: []
   property int stake: 0
@@ -25,17 +25,7 @@ Rectangle {
   // The seed field gives the keys back.
   signal seedDone()
   signal cancel()
-  signal language(string lang)
-  // The music, on or off (M), and its volume.
-  property bool music: true
-  property real musicVolume: 0.5
-  signal toggleMusic()
-  signal musicVolumeSet(real volume)
-  // The sound effects, likewise (Shift+M).
-  property bool sounds: true
-  property real soundVolume: 0.5
-  signal toggleSounds()
-  signal soundVolumeSet(real volume)
+  signal options()
   signal collection()
 
   color: Util.alpha(Colors.background, 0.96)
@@ -57,43 +47,6 @@ Rectangle {
 
   MouseArea { anchors.fill: parent }
 
-  // On or off, and the volume by tenths.
-  component VolumeControl: Row {
-    id: control
-    property string label
-    property bool active
-    property real volume
-    signal toggled()
-    signal volumeChosen(real volume)
-    spacing: Style.spacing.md
-    Text {
-      anchors.verticalCenter: parent.verticalCenter
-      text: control.label
-      color: Colors.muted
-      font.family: Style.font.family
-      font.pixelSize: Style.font.body
-    }
-    Button {
-      compact: true
-      text: "−"
-      enabled: control.active && control.volume > 0
-      onClicked: control.volumeChosen(control.volume - 0.1)
-    }
-    Button {
-      compact: true
-      width: Style.space(70)
-      text: control.active ? Math.round(control.volume * 100) + (I18n.lang === "fr" ? "\u00a0%" : "%") : I18n.tr("Off")
-      bordered: control.active
-      onClicked: control.toggled()
-    }
-    Button {
-      compact: true
-      text: "+"
-      enabled: !control.active || control.volume < 1
-      onClicked: control.volumeChosen(control.volume + 0.1)
-    }
-  }
-
   Column {
     anchors.centerIn: parent
     spacing: Style.spacing.huge
@@ -108,8 +61,8 @@ Rectangle {
     }
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
-      text: I18n.tr("Pick your machine · arrows to choose · Enter to start") + (root.canCancel ? I18n.tr(" · Escape to go back") : "")
-        + I18n.tr(" · C: collection")
+      text: I18n.tr("Pick your machine · ←/→ to choose · Enter to start") + (root.canCancel ? I18n.tr(" · Escape to go back") : "")
+        + I18n.tr(" · C: collection") + I18n.tr(" · O: settings")
       color: Colors.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
@@ -123,18 +76,41 @@ Rectangle {
       font.pixelSize: Style.font.body
     }
 
-    Grid {
+    // The decks in a carousel: the chosen one in front, its neighbours
+    // around it, smaller (click one to bring it forward).
+    Item {
+      id: carousel
       anchors.horizontalCenter: parent.horizontalCenter
-      columns: 3
-      spacing: Style.spacing.lg
+      width: Style.space(980)
+      height: Style.space(140)
+      clip: true
+      // Distance from the centre of the first and second neighbours.
+      readonly property real near: Style.space(300)
+      readonly property real far: Style.space(490)
       Repeater {
         model: root.decks
         Rectangle {
           readonly property bool chosen: index === root.current
+          // Its place from the chosen one, the shortest way round.
+          readonly property int offset: {
+            var n = root.decks.length
+            var d = ((index - root.current) % n + n) % n
+            return d > n / 2 ? d - n : d
+          }
+          readonly property int distance: Math.abs(offset)
+          visible: distance <= 2
+          x: carousel.width / 2 + (offset === 0 ? 0 : (offset > 0 ? 1 : -1) * (distance === 1 ? carousel.near : carousel.far)) - width / 2
+          y: (carousel.height - height) / 2
+          z: 3 - distance
+          scale: distance === 0 ? 1 : distance === 1 ? 0.8 : 0.62
+          opacity: distance === 0 ? 1 : distance === 1 ? 0.7 : 0.35
+          Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+          Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+          Behavior on opacity { NumberAnimation { duration: 180 } }
           // A hidden deck, until its achievement.
           readonly property bool locked: !!modelData.achievement
-          width: Style.space(285)
-          height: Style.space(88)
+          width: Style.space(320)
+          height: Style.space(120)
           radius: Style.cornerRadius
           color: chosen ? Qt.tint(Colors.background, Util.alpha(Colors.accent, 0.15)) : Style.normalFill
           border.width: chosen ? Style.space(2) : Style.normalBorderWidth
@@ -153,7 +129,7 @@ Rectangle {
             Text {
               width: parent.width
               wrapMode: Text.WordWrap
-              maximumLineCount: 2
+              maximumLineCount: 3
               elide: Text.ElideRight
               text: locked ? I18n.tr("Hidden: {achievement}", { achievement: modelData.achievement })
                 + " · " + I18n.tr(modelData.condition) : ""
@@ -191,7 +167,7 @@ Rectangle {
             Text {
               width: parent.width
               wrapMode: Text.WordWrap
-              maximumLineCount: 2
+              maximumLineCount: 3
               elide: Text.ElideRight
               textFormat: Text.StyledText
               text: Labels.highlight(modelData.description, Hints.terms, modelData.name)
@@ -221,6 +197,20 @@ Rectangle {
         }
       }
     }
+    // ‹ n / total ›, also clickable.
+    Row {
+      anchors.horizontalCenter: parent.horizontalCenter
+      spacing: Style.spacing.lg
+      Button { compact: true; text: "‹"; onClicked: root.move(-1) }
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        text: root.decks.length ? (root.current + 1) + " / " + root.decks.length : ""
+        color: Colors.muted
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+      }
+      Button { compact: true; text: "›"; onClicked: root.move(1) }
+    }
 
     // The difficulty level: those the deck unlocked, then locked ones.
     Column {
@@ -233,7 +223,7 @@ Rectangle {
         Text {
           anchors.verticalCenter: parent.verticalCenter
           rightPadding: Style.spacing.md
-          text: I18n.tr("Level (Shift+←/→)")
+          text: I18n.tr("Level (↑/↓)")
           color: Colors.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.body
@@ -308,8 +298,7 @@ Rectangle {
       }
     }
 
-    // The seed (random unless one is typed in, to replay or share a game)
-    // and the language of the game (L switches).
+    // The seed: random unless one is typed in, to replay or share a game.
     Column {
       anchors.horizontalCenter: parent.horizontalCenter
       spacing: Style.spacing.sm
@@ -361,42 +350,6 @@ Rectangle {
             font.italic: true
           }
         }
-        Item { width: Style.space(40); height: 1 }
-        Text {
-          anchors.verticalCenter: parent.verticalCenter
-          text: I18n.tr("Language (L)")
-          color: Colors.muted
-          font.family: Style.font.family
-          font.pixelSize: Style.font.body
-        }
-        Repeater {
-          model: I18n.languages
-          Button {
-            compact: true
-            text: modelData.name
-            bordered: modelData.id === I18n.lang
-            onClicked: root.language(modelData.id)
-          }
-        }
-      }
-      // The music (M) and the sound effects (Shift+M): on or off, and their volume.
-      Row {
-        anchors.horizontalCenter: parent.horizontalCenter
-        spacing: Style.space(40)
-        VolumeControl {
-          label: I18n.tr("Music (M)")
-          active: root.music
-          volume: root.musicVolume
-          onToggled: root.toggleMusic()
-          onVolumeChosen: function(v) { root.musicVolumeSet(v) }
-        }
-        VolumeControl {
-          label: I18n.tr("Sounds (Shift+M)")
-          active: root.sounds
-          volume: root.soundVolume
-          onToggled: root.toggleSounds()
-          onVolumeChosen: function(v) { root.soundVolumeSet(v) }
-        }
       }
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -421,6 +374,10 @@ Rectangle {
       Button {
         text: I18n.tr("Collection (C)")
         onClicked: root.collection()
+      }
+      Button {
+        text: I18n.tr("Settings (O)")
+        onClicked: root.options()
       }
       Button {
         visible: root.canCancel

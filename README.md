@@ -55,17 +55,18 @@ make test
 ```
 
 A new game starts by picking a deck, the machine you play on
-([docs/decks.md](docs/decks.md)): more hands or discards, money, slots, a deck without
-face cards, starting pull requests… The last one picked is remembered.
+([docs/decks.md](docs/decks.md)), in a carousel (←/→): more hands or discards, money,
+slots, a deck without face cards, starting pull requests… The last one picked is
+remembered.
 
 The game speaks English and French: the system's language by default, L (or the
-buttons of the new game screen) to switch. Card names and quips stay in English.
+settings, O) to switch. Card names and quips stay in English.
 
 The game in progress is saved after every move, in `~/.local/state/omatro/save.json`
 (`$XDG_STATE_HOME` if set): quit whenever you like, the next start offers to resume it.
 A lost game is removed.
 
-Each deck is played at a difficulty level (Shift+←/→ on the new game screen): eight
+Each deck is played at a difficulty level (↑/↓ or Shift+←/→ on the new game screen): eight
 levels, from Daily Commute to Hypercar, each adding its rule to those below it (see
 [docs/stakes.md](docs/stakes.md)). A deck starts at the first level only; winning a
 game with it unlocks its next level, and its card shows the highest level won.
@@ -92,15 +93,17 @@ but unlock no achievement and count in neither the stats nor the history. The pr
 The music is lofi, from the maintainer: instrumentals during blinds, songs (with
 lyrics, and jokes) everywhere else; each track plays to its end and the next one
 follows where you are. M switches it on and off, Shift+M the sound effects (cards,
-chips climbing a scale, the PC speaker's beeps when a game is lost…), and the new
-game screen sets their volumes.
+chips climbing a scale, the PC speaker's beeps when a game is lost…). The settings
+(O, from anywhere) set their volumes (←/→ for the music, Shift+←/→ for the sounds)
+and the language, and list every key.
 
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, Tab to sort the hand
 by rank or suit, Shift+←/→ to move the selected card (or drag it), J to bring the next
 joker to the front when they overlap (or hover or click one), then Shift+←/→ to move it
 (or drag it, in the shop and during a blind), N for a new game, I for fastfetch (run
-info: the machine and its level, hand levels, cards left), C for the collection, M for the
-music, Shift+M for the sound effects, Ctrl+Q to quit. Before a blind: Enter to play it, S to skip it. Ctrl+1 and Ctrl+2 apply the
+info: the machine and its level, hand levels, cards left), C for the collection, O for the
+settings and the list of keys, M for the music, Shift+M for the sound effects, Ctrl+Q
+to quit. Before a blind: Enter to play it, S to skip it. Ctrl+1 and Ctrl+2 apply the
 consumables of the clipboard. In the shop: 1 to 9 to buy the offers, then the packs,
 then the pull requests, in order; Shift+1 to 9 for Use now, which buys a theme or
 command and uses it at once; R to reroll, Enter for the next blind. The button under

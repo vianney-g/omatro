@@ -126,6 +126,7 @@ Window {
   }
   property string notice: ""
   property bool infoOpen: false   // fastfetch panel
+  property bool optionsOpen: false  // settings and keys (O)
 
   // ---- collection and achievements (C), and what they gain (news)
   property var collection: null
@@ -764,6 +765,17 @@ Window {
         else if (k === Qt.Key_N) root.declineResume()
         else return
       }
+      else if (root.optionsOpen) {
+        var shift = (event.modifiers & Qt.ShiftModifier) !== 0
+        if (k === Qt.Key_Escape || k === Qt.Key_O) root.optionsOpen = false
+        else if (k === Qt.Key_Left || k === Qt.Key_Right) {
+          var step = k === Qt.Key_Left ? -0.1 : 0.1
+          if (shift) root.setSoundVolume(settings.soundVolume + step)
+          else root.setMusicVolume(settings.musicVolume + step)
+        }
+        else return
+      }
+      else if (k === Qt.Key_O) root.optionsOpen = true
       else if (root.collectionOpen) {
         if (k === Qt.Key_Escape || k === Qt.Key_C) root.collectionOpen = false
         else if (k === Qt.Key_Left) collectionScreen.move(-1)
@@ -778,8 +790,8 @@ Window {
           newGameScreen.moveStake(k === Qt.Key_Left ? -1 : 1)
         else if (k === Qt.Key_Left) newGameScreen.move(-1)
         else if (k === Qt.Key_Right) newGameScreen.move(1)
-        else if (k === Qt.Key_Up) newGameScreen.move(-3)
-        else if (k === Qt.Key_Down) newGameScreen.move(3)
+        else if (k === Qt.Key_Up) newGameScreen.moveStake(1)
+        else if (k === Qt.Key_Down) newGameScreen.moveStake(-1)
         else if (k === Qt.Key_Return || k === Qt.Key_Enter) newGameScreen.startChosen()
         else if (k === Qt.Key_S) newGameScreen.editSeed()
         else if (k === Qt.Key_Escape && root.game !== null) root.choosingDeck = false
@@ -887,299 +899,320 @@ Window {
 
       // ---- left column: blind, score, running calculation
       // Fixed width: a nested layout stretches by default and the column
-      // would resize with the right-hand content (game or shop).
-      ColumnLayout {
+      // would resize with the right-hand content (game or shop). It scrolls
+      // when it holds more than the window's height (a long boss text,
+      // badges, a full clipboard), rather than push the play area out.
+      Flickable {
+        id: leftFlick
         Layout.fillWidth: false
         Layout.preferredWidth: Style.space(250)
         Layout.minimumWidth: Style.space(250)
         Layout.maximumWidth: Style.space(250)
         Layout.fillHeight: true
-        spacing: Style.spacing.xxl
+        contentWidth: width
+        contentHeight: leftColumn.height
+        interactive: contentHeight > height
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
 
-        Column {
-          Text {
-            text: "omatro"
-            color: Colors.accent
-            font.family: Style.font.family
-            font.pixelSize: Style.font.displayLarge
-            font.bold: true
-          }
-          // The machine the game is played on.
-          Caption {
-            visible: root.game !== null && root.game.run_deck !== null
-            text: visible ? I18n.tr("on {deck}", { deck: root.game.run_deck.name }) + " · " + root.game.stake.name : ""
-          }
+        // Where it scrolls, a thin bar on its right edge.
+        Rectangle {
+          parent: leftFlick
+          visible: leftFlick.interactive
+          anchors.right: parent.right
+          y: leftFlick.visibleArea.yPosition * leftFlick.height
+          width: Style.space(3)
+          height: leftFlick.visibleArea.heightRatio * leftFlick.height
+          radius: width / 2
+          color: Util.alpha(Colors.muted, 0.6)
+          z: 1
         }
 
-        Box {
-          Layout.fillWidth: true
-          implicitHeight: blindCol.implicitHeight + 2 * Style.spacing.xxl
-          Column {
-            id: blindCol
-            anchors { fill: parent; margins: Style.spacing.xxl }
-            spacing: Style.spacing.xs
-            Caption {
-              text: root.game
-                ? (root.endless ? I18n.tr("Ante {n}", { n: root.game.ante })
-                    : I18n.tr("Ante {a} / {b}", { a: root.game.ante, b: root.game.winning_ante }))
-                  + " · " + (root.currentBlind ? root.currentBlind.name : "")
-                : I18n.tr("Ante")
-            }
-            Value { text: root.game ? Labels.number(root.game.target) : "–" }
-            // The ante's boss, ahead of its blind (muted) and while its effect
-            // applies (urgent).
-            Text {
-              width: parent.width
-              visible: root.upcomingBoss
-              wrapMode: Text.WordWrap
-              textFormat: Text.StyledText
-              text: visible
-                ? "<b>" + I18n.tr("Boss: {name}", { name: root.game.boss.name }) + "</b><br>" + root.game.boss.description
-                : ""
-              color: root.bossName !== "" && root.game.phase === "playing" ? Colors.urgent : Colors.muted
-              font.family: Style.font.family
-              font.pixelSize: Style.font.caption
-            }
-          }
-        }
-
-        Box {
-          Layout.fillWidth: true
-          implicitHeight: scoreCol.implicitHeight + 2 * Style.spacing.xxl
-          Column {
-            id: scoreCol
-            anchors { fill: parent; margins: Style.spacing.xxl }
-            spacing: Style.spacing.xs
-            Caption { text: I18n.tr("Blind score") }
-            Value { text: Labels.number(root.shownScore) }
-          }
-        }
-
-        Box {
-          Layout.fillWidth: true
-          implicitHeight: moneyCol.implicitHeight + 2 * Style.spacing.xxl
-          Column {
-            id: moneyCol
-            anchors { fill: parent; margins: Style.spacing.xxl }
-            spacing: Style.spacing.xs
-            Caption { text: I18n.tr("Money") }
-            Row {
-              spacing: Style.spacing.lg
-              Value { text: root.game ? Labels.money(Math.round(root.shownMoney)) : "–"; color: Colors.accent }
-              // The last change, rising and fading.
-              Text {
-                id: moneyDelta
-                anchors.baseline: parent.children[0].baseline
-                opacity: 0
-                font.family: Style.font.family
-                font.pixelSize: Style.font.title
-                font.bold: true
-                transform: Translate { id: moneyRise }
-                function show(delta) {
-                  text = (delta > 0 ? "+" : "−") + Labels.money(Math.abs(delta))
-                  color = delta > 0 ? Colors.accent : Colors.urgent
-                  moneyFloat.restart()
-                }
-                ParallelAnimation {
-                  id: moneyFloat
-                  NumberAnimation { target: moneyDelta; property: "opacity"; from: 1; to: 0; duration: 1200; easing.type: Easing.InQuad }
-                  NumberAnimation { target: moneyRise; property: "y"; from: 0; to: -Style.space(14); duration: 1200; easing.type: Easing.OutCubic }
-                }
-              }
-            }
-          }
-        }
-
-        // Recognized hand and chips × mult (preview, then animated scoring),
-        // on fire when a single hand beats the blind.
-        Box {
-          Layout.fillWidth: true
-          implicitHeight: calcCol.implicitHeight + 2 * Style.spacing.xxl
-          border.color: root.fireHeat > 0 ? Colors.warm : Style.normalBorderColor
-          Behavior on border.color { ColorAnimation { duration: 300 } }
-          // Behind the hand name and the counters.
-          ScoreFire {
-            anchors { fill: parent; margins: Style.normalBorderWidth }
-            heat: root.fireHeat
-          }
-          Column {
-            id: calcCol
-            anchors { fill: parent; margins: Style.spacing.xxl }
-            spacing: Style.spacing.md
-            // The hand and its level.
-            Row {
-              width: parent.width
-              spacing: Style.spacing.md
-              Text {
-                id: handNameText
-                text: root.handName || I18n.tr("Choose cards")
-                color: root.handName ? Colors.foreground : Colors.muted
-                font.family: Style.font.family
-                font.pixelSize: Style.font.heading
-                font.bold: root.handName !== ""
-              }
-              Text {
-                anchors.baseline: handNameText.baseline
-                visible: root.handLevel > 0
-                text: I18n.tr("lvl.{n}", { n: root.handLevel })
-                color: Colors.accent
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
-                font.bold: true
-              }
-            }
-            Row {
-              spacing: Style.spacing.md
-              Counter {
-                id: chipsCounter
-                tint: Colors.accent
-                value: Labels.number(root.liveChips)
-              }
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "×"
-                color: Colors.muted
-                font.family: Style.font.family
-                font.pixelSize: Style.font.heading
-              }
-              Counter {
-                id: multCounter
-                tint: Colors.urgent
-                value: Labels.mult(root.liveMult)
-              }
-            }
-          }
-        }
-
-        RowLayout {
-          Layout.fillWidth: true
+        ColumnLayout {
+          id: leftColumn
+          width: leftFlick.width
+          height: Math.max(implicitHeight, leftFlick.height)
           spacing: Style.spacing.xxl
+
+          Column {
+            Text {
+              text: "omatro"
+              color: Colors.accent
+              font.family: Style.font.family
+              font.pixelSize: Style.font.displayLarge
+              font.bold: true
+            }
+            // The machine the game is played on.
+            Caption {
+              visible: root.game !== null && root.game.run_deck !== null
+              text: visible ? I18n.tr("on {deck}", { deck: root.game.run_deck.name }) + " · " + root.game.stake.name : ""
+            }
+          }
+
           Box {
             Layout.fillWidth: true
-            implicitHeight: handsCol.implicitHeight + 2 * Style.spacing.xl
+            implicitHeight: blindCol.implicitHeight + 2 * Style.spacing.xxl
             Column {
-              id: handsCol
-              anchors { fill: parent; margins: Style.spacing.xl }
-              Caption { text: I18n.tr("Hands") }
-              Value { text: root.game ? root.game.hands_left : "–"; color: Colors.accent }
+              id: blindCol
+              anchors { fill: parent; margins: Style.spacing.xxl }
+              spacing: Style.spacing.xs
+              Caption {
+                text: root.game
+                  ? (root.endless ? I18n.tr("Ante {n}", { n: root.game.ante })
+                      : I18n.tr("Ante {a} / {b}", { a: root.game.ante, b: root.game.winning_ante }))
+                    + " · " + (root.currentBlind ? root.currentBlind.name : "")
+                  : I18n.tr("Ante")
+              }
+              Value { text: root.game ? Labels.number(root.game.target) : "–" }
+              // The ante's boss, ahead of its blind (muted) and while its effect
+              // applies (urgent).
+              Text {
+                width: parent.width
+                visible: root.upcomingBoss
+                wrapMode: Text.WordWrap
+                textFormat: Text.StyledText
+                text: visible
+                  ? "<b>" + I18n.tr("Boss: {name}", { name: root.game.boss.name }) + "</b><br>" + root.game.boss.description
+                  : ""
+                color: root.bossName !== "" && root.game.phase === "playing" ? Colors.urgent : Colors.muted
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+              }
             }
           }
+
           Box {
             Layout.fillWidth: true
-            implicitHeight: discardsCol.implicitHeight + 2 * Style.spacing.xl
+            implicitHeight: scoreCol.implicitHeight + 2 * Style.spacing.xxl
             Column {
-              id: discardsCol
-              anchors { fill: parent; margins: Style.spacing.xl }
-              Caption { text: I18n.tr("Discards") }
-              Value { text: root.game ? root.game.discards_left : "–"; color: Colors.urgent }
+              id: scoreCol
+              anchors { fill: parent; margins: Style.spacing.xxl }
+              spacing: Style.spacing.xs
+              Caption { text: I18n.tr("Blind score") }
+              Value { text: Labels.number(root.shownScore) }
             }
           }
-        }
 
-        Caption { text: root.game ? I18n.tr("Deck: {a} / {b}", { a: root.game.remaining.length, b: root.game.deck_size }) : "" }
-
-        // Badges won, waiting for their moment.
-        Column {
-          Layout.fillWidth: true
-          visible: root.game !== null && root.game.tags.length > 0
-          spacing: Style.spacing.sm
-          Caption { text: I18n.tr("Badges") }
-          Flow {
-            width: parent.width
-            spacing: Style.spacing.sm
-            Repeater {
-              model: root.game ? root.game.tags : []
-              BadgeView { tag: modelData }
-            }
-          }
-        }
-
-        // Clipboard: consumables waiting to be used (Ctrl+1, Ctrl+2).
-        Column {
-          Layout.fillWidth: true
-          spacing: Style.spacing.md
-          Caption {
-            // Transparent consumables take no slot.
-            text: root.game ? I18n.tr("Clipboard {a} / {b}", {
-              a: root.game.consumables.filter(function(c) { return !c.transparent }).length,
-              b: root.game.consumable_slots }) : ""
-          }
-          // Past two cards (Transparent copies take no slot, but room), they
-          // overlap: hover or click one to bring it to the front.
-          Fan {
-            id: clipboardRow
-            width: implicitWidth
-            height: implicitHeight
-            count: root.game ? root.game.consumables.length : 0
-            itemWidth: (Style.space(250) - spacing) / 2
-            spacing: Style.spacing.md
-            available: Style.space(250)
-            Repeater {
-              model: root.game ? root.game.consumables : []
-              Column {
-                x: clipboardRow.xOf(index)
-                y: clipboardRow.liftOf(index)
-                z: clipboardRow.zOf(index)
-                Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                Behavior on y { NumberAnimation { duration: 100 } }
-                spacing: Style.spacing.sm
-                // Its controls only show in front, when the cards overlap.
-                readonly property bool controls: clipboardRow.showsControls(index)
-                HoverHandler {
-                  blocking: true
-                  onHoveredChanged: clipboardRow.hover(index, hovered)
-                }
-                ConsumableView {
-                  item: modelData
-                  width: clipboardRow.itemWidth
-                  TapHandler { onTapped: clipboardRow.pin(index) }
-                }
-                Caption {
-                  width: clipboardRow.itemWidth
-                  visible: modelData.max_cards > 0
-                  opacity: parent.controls ? 1 : 0
-                  fontSizeMode: Text.HorizontalFit
-                  minimumPixelSize: Style.fontPx(0.6)
-                  horizontalAlignment: Text.AlignHCenter
-                  text: I18n.tr("select {range}", { range: Labels.range(modelData.min_cards, modelData.max_cards) })
-                }
-                Row {
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  opacity: parent.controls ? 1 : 0
-                  enabled: parent.controls
-                  spacing: Style.spacing.xs
-                  Button {
-                    compact: true
-                    text: I18n.tr("Apply")
-                    enabled: root.canUse(modelData)
-                    opacity: enabled ? 1 : 0.5
-                    onClicked: root.useConsumable(index)
+          Box {
+            Layout.fillWidth: true
+            implicitHeight: moneyCol.implicitHeight + 2 * Style.spacing.xxl
+            Column {
+              id: moneyCol
+              anchors { fill: parent; margins: Style.spacing.xxl }
+              spacing: Style.spacing.xs
+              Caption { text: I18n.tr("Money") }
+              Row {
+                spacing: Style.spacing.lg
+                Value { text: root.game ? Labels.money(Math.round(root.shownMoney)) : "–"; color: Colors.accent }
+                // The last change, rising and fading.
+                Text {
+                  id: moneyDelta
+                  anchors.baseline: parent.children[0].baseline
+                  opacity: 0
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.title
+                  font.bold: true
+                  transform: Translate { id: moneyRise }
+                  function show(delta) {
+                    text = (delta > 0 ? "+" : "−") + Labels.money(Math.abs(delta))
+                    color = delta > 0 ? Colors.accent : Colors.urgent
+                    moneyFloat.restart()
                   }
-                  Button {
-                    compact: true
-                    text: Labels.money(modelData.sell_value)
-                    enabled: !root.busy && root.game.phase !== "lost"
-                    onClicked: root.sellConsumable(index)
+                  ParallelAnimation {
+                    id: moneyFloat
+                    NumberAnimation { target: moneyDelta; property: "opacity"; from: 1; to: 0; duration: 1200; easing.type: Easing.InQuad }
+                    NumberAnimation { target: moneyRise; property: "y"; from: 0; to: -Style.space(14); duration: 1200; easing.type: Easing.OutCubic }
                   }
                 }
               }
             }
           }
-        }
 
-        Item { Layout.fillHeight: true }
+          // Recognized hand and chips × mult (preview, then animated scoring),
+          // on fire when a single hand beats the blind.
+          Box {
+            Layout.fillWidth: true
+            implicitHeight: calcCol.implicitHeight + 2 * Style.spacing.xxl
+            border.color: root.fireHeat > 0 ? Colors.warm : Style.normalBorderColor
+            Behavior on border.color { ColorAnimation { duration: 300 } }
+            // Behind the hand name and the counters.
+            ScoreFire {
+              anchors { fill: parent; margins: Style.normalBorderWidth }
+              heat: root.fireHeat
+            }
+            Column {
+              id: calcCol
+              anchors { fill: parent; margins: Style.spacing.xxl }
+              spacing: Style.spacing.md
+              // The hand and its level.
+              Row {
+                width: parent.width
+                spacing: Style.spacing.md
+                Text {
+                  id: handNameText
+                  text: root.handName || I18n.tr("Choose cards")
+                  color: root.handName ? Colors.foreground : Colors.muted
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.heading
+                  font.bold: root.handName !== ""
+                }
+                Text {
+                  anchors.baseline: handNameText.baseline
+                  visible: root.handLevel > 0
+                  text: I18n.tr("lvl.{n}", { n: root.handLevel })
+                  color: Colors.accent
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  font.bold: true
+                }
+              }
+              Row {
+                spacing: Style.spacing.md
+                Counter {
+                  id: chipsCounter
+                  tint: Colors.accent
+                  value: Labels.number(root.liveChips)
+                }
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "×"
+                  color: Colors.muted
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.heading
+                }
+                Counter {
+                  id: multCounter
+                  tint: Colors.urgent
+                  value: Labels.mult(root.liveMult)
+                }
+              }
+            }
+          }
 
-        Caption {
-          Layout.fillWidth: true
-          wrapMode: Text.WordWrap
-          text: root.shopping
-            ? I18n.tr("1-9: buy · Shift+1-9: use now\nR: reroll · Enter: next blind\nJ, Shift+←/→: move a joker\nI: fastfetch · C: collection · Ctrl+Q: quit")
-            : root.inPack
-            ? I18n.tr(root.packHand ? "1-9, 0: select cards · Shift+1-5: install\n" : "1-5: install\n") + I18n.tr("Ctrl+C: skip · I: fastfetch\nC: collection · Ctrl+Q: quit")
-            : root.choosing
-            ? I18n.tr("Enter: play the blind · S: skip it\n") + (root.game.boss_reroll_cost !== null ? I18n.tr("B: reroll the boss · ") : "")
-              + I18n.tr("N: new game · C: collection\nI: fastfetch · Ctrl+Q: quit")
-            : I18n.tr("1-9, 0: choose · Enter: play\nD: discard · Tab: sort\nShift+←/→: move a card\nJ, Shift+←/→: move a joker\nN: new game · I: fastfetch\nC: collection · Ctrl+Q: quit")
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.spacing.xxl
+            Box {
+              Layout.fillWidth: true
+              implicitHeight: handsCol.implicitHeight + 2 * Style.spacing.xl
+              Column {
+                id: handsCol
+                anchors { fill: parent; margins: Style.spacing.xl }
+                Caption { text: I18n.tr("Hands") }
+                Value { text: root.game ? root.game.hands_left : "–"; color: Colors.accent }
+              }
+            }
+            Box {
+              Layout.fillWidth: true
+              implicitHeight: discardsCol.implicitHeight + 2 * Style.spacing.xl
+              Column {
+                id: discardsCol
+                anchors { fill: parent; margins: Style.spacing.xl }
+                Caption { text: I18n.tr("Discards") }
+                Value { text: root.game ? root.game.discards_left : "–"; color: Colors.urgent }
+              }
+            }
+          }
+
+          Caption { text: root.game ? I18n.tr("Deck: {a} / {b}", { a: root.game.remaining.length, b: root.game.deck_size }) : "" }
+
+          // Badges won, waiting for their moment.
+          Column {
+            Layout.fillWidth: true
+            visible: root.game !== null && root.game.tags.length > 0
+            spacing: Style.spacing.sm
+            Caption { text: I18n.tr("Badges") }
+            Flow {
+              width: parent.width
+              spacing: Style.spacing.sm
+              Repeater {
+                model: root.game ? root.game.tags : []
+                BadgeView { tag: modelData }
+              }
+            }
+          }
+
+          // Clipboard: consumables waiting to be used (Ctrl+1, Ctrl+2).
+          Column {
+            Layout.fillWidth: true
+            spacing: Style.spacing.md
+            Caption {
+              // Transparent consumables take no slot.
+              text: root.game ? I18n.tr("Clipboard {a} / {b}", {
+                a: root.game.consumables.filter(function(c) { return !c.transparent }).length,
+                b: root.game.consumable_slots }) : ""
+            }
+            // Past two cards (Transparent copies take no slot, but room), they
+            // overlap: hover or click one to bring it to the front.
+            Fan {
+              id: clipboardRow
+              width: implicitWidth
+              height: implicitHeight
+              count: root.game ? root.game.consumables.length : 0
+              itemWidth: (Style.space(250) - spacing) / 2
+              spacing: Style.spacing.md
+              available: Style.space(250)
+              Repeater {
+                model: root.game ? root.game.consumables : []
+                Column {
+                  x: clipboardRow.xOf(index)
+                  y: clipboardRow.liftOf(index)
+                  z: clipboardRow.zOf(index)
+                  Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                  Behavior on y { NumberAnimation { duration: 100 } }
+                  spacing: Style.spacing.sm
+                  // Its controls only show in front, when the cards overlap.
+                  readonly property bool controls: clipboardRow.showsControls(index)
+                  HoverHandler {
+                    blocking: true
+                    onHoveredChanged: clipboardRow.hover(index, hovered)
+                  }
+                  ConsumableView {
+                    item: modelData
+                    width: clipboardRow.itemWidth
+                    TapHandler { onTapped: clipboardRow.pin(index) }
+                  }
+                  Caption {
+                    width: clipboardRow.itemWidth
+                    visible: modelData.max_cards > 0
+                    opacity: parent.controls ? 1 : 0
+                    fontSizeMode: Text.HorizontalFit
+                    minimumPixelSize: Style.fontPx(0.6)
+                    horizontalAlignment: Text.AlignHCenter
+                    text: I18n.tr("select {range}", { range: Labels.range(modelData.min_cards, modelData.max_cards) })
+                  }
+                  Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    opacity: parent.controls ? 1 : 0
+                    enabled: parent.controls
+                    spacing: Style.spacing.xs
+                    Button {
+                      compact: true
+                      text: I18n.tr("Apply")
+                      enabled: root.canUse(modelData)
+                      opacity: enabled ? 1 : 0.5
+                      onClicked: root.useConsumable(index)
+                    }
+                    Button {
+                      compact: true
+                      text: Labels.money(modelData.sell_value)
+                      enabled: !root.busy && root.game.phase !== "lost"
+                      onClicked: root.sellConsumable(index)
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          Item { Layout.fillHeight: true }
+
+          // Every key is in the settings.
+          Button {
+            compact: true
+            text: I18n.tr("Settings and keys (O)")
+            onClicked: root.optionsOpen = true
+          }
         }
       }
 
@@ -1813,20 +1846,12 @@ Window {
       decks: root.decks
       stakes: root.stakes
       message: root.saveProblem
-      onLanguage: function(lang) { root.setLanguage(lang) }
-      music: settings.music
-      musicVolume: settings.musicVolume
-      onToggleMusic: root.toggleMusic()
-      onMusicVolumeSet: function(v) { root.setMusicVolume(v) }
-      sounds: settings.sounds
-      soundVolume: settings.soundVolume
-      onToggleSounds: root.toggleSounds()
-      onSoundVolumeSet: function(v) { root.setSoundVolume(v) }
       canCancel: root.game !== null
       onStart: function(deck, stake, seed) { root.startGame(deck, stake, seed) }
       onSeedDone: keyCatcher.forceActiveFocus()
       onCancel: root.choosingDeck = false
       onCollection: root.openCollection()
+      onOptions: root.optionsOpen = true
     }
 
     // ---- the collection and the achievements
@@ -1836,6 +1861,22 @@ Window {
       visible: root.collectionOpen
       collection: root.collection
       onClose: root.collectionOpen = false
+    }
+
+    // ---- settings and keys (O), over the screens
+    Options {
+      anchors.fill: parent
+      visible: root.optionsOpen
+      music: settings.music
+      musicVolume: settings.musicVolume
+      sounds: settings.sounds
+      soundVolume: settings.soundVolume
+      onClose: root.optionsOpen = false
+      onLanguage: function(lang) { root.setLanguage(lang) }
+      onToggleMusic: root.toggleMusic()
+      onMusicVolumeSet: function(v) { root.setMusicVolume(v) }
+      onToggleSounds: root.toggleSounds()
+      onSoundVolumeSet: function(v) { root.setSoundVolume(v) }
     }
 
     // ---- news: items found, achievements done, what they unlocked

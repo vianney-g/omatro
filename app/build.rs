@@ -40,6 +40,8 @@ fn main() {
         QmlFile::from("qml/SeedLabel.qml"),
         QmlFile::from("qml/Music.qml"),
         QmlFile::from("qml/Sounds.qml"),
+        QmlFile::from("qml/Options.qml"),
+        QmlFile::from("qml/VolumeControl.qml"),
         QmlFile::from("qml/Colors.qml").singleton(true),
         QmlFile::from("qml/Style.qml").singleton(true),
         QmlFile::from("qml/Util.qml").singleton(true),
