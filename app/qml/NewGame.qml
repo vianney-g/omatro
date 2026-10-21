@@ -19,7 +19,11 @@ Rectangle {
   property bool canCancel: false
   // A problem to report (a saved game that could not be resumed).
   property string message: ""
-  signal start(string deck, string stake)
+  // The seed typed in (S), empty for a random one.
+  property alias seed: seedInput.text
+  signal start(string deck, string stake, string seed)
+  // The seed field gives the keys back.
+  signal seedDone()
   signal cancel()
   signal language(string lang)
   signal collection()
@@ -37,8 +41,9 @@ Rectangle {
     stake = Math.max(0, Math.min(topStake, chosenStake + step))
   }
   function startChosen() {
-    if (deck && !deck.achievement && stakes.length) start(deck.id, stakes[chosenStake].id)
+    if (deck && !deck.achievement && stakes.length) start(deck.id, stakes[chosenStake].id, seed)
   }
+  function editSeed() { seedInput.forceActiveFocus() }
 
   MouseArea { anchors.fill: parent }
 
@@ -256,25 +261,86 @@ Rectangle {
       }
     }
 
-    // The language of the game (L switches).
-    Row {
+    // The seed (random unless one is typed in, to replay or share a game)
+    // and the language of the game (L switches).
+    Column {
       anchors.horizontalCenter: parent.horizontalCenter
-      spacing: Style.spacing.md
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        text: I18n.tr("Language (L)")
-        color: Colors.muted
-        font.family: Style.font.family
-        font.pixelSize: Style.font.body
-      }
-      Repeater {
-        model: I18n.languages
-        Button {
-          compact: true
-          text: modelData.name
-          bordered: modelData.id === I18n.lang
-          onClicked: root.language(modelData.id)
+      spacing: Style.spacing.sm
+      Row {
+        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: Style.spacing.md
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: I18n.tr("Seed (S)")
+          color: Colors.muted
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
         }
+        Rectangle {
+          width: Style.space(180)
+          height: seedInput.implicitHeight + 2 * Style.spacing.sm
+          radius: Style.cornerRadius
+          color: Style.normalFill
+          border.width: seedInput.activeFocus ? Style.space(2) : Style.normalBorderWidth
+          border.color: seedInput.activeFocus ? Colors.accent : Style.normalBorderColor
+          TextInput {
+            id: seedInput
+            anchors { fill: parent; leftMargin: Style.spacing.md; rightMargin: Style.spacing.md }
+            verticalAlignment: TextInput.AlignVCenter
+            clip: true
+            validator: RegularExpressionValidator { regularExpression: /[0-9A-Za-z]{0,12}/ }
+            color: Colors.foreground
+            selectionColor: Colors.accent
+            selectedTextColor: Colors.background
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            font.bold: true
+            font.capitalization: Font.AllUppercase
+            Keys.onPressed: function(event) {
+              if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) root.startChosen()
+              else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Tab) root.seedDone()
+              else return
+              event.accepted = true
+            }
+          }
+          Text {
+            anchors { fill: parent; leftMargin: Style.spacing.md }
+            verticalAlignment: Text.AlignVCenter
+            visible: seedInput.text === "" && !seedInput.activeFocus
+            text: I18n.tr("random")
+            color: Colors.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            font.italic: true
+          }
+        }
+        Item { width: Style.space(40); height: 1 }
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: I18n.tr("Language (L)")
+          color: Colors.muted
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
+        Repeater {
+          model: I18n.languages
+          Button {
+            compact: true
+            text: modelData.name
+            bordered: modelData.id === I18n.lang
+            onClicked: root.language(modelData.id)
+          }
+        }
+      }
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: seedInput.text !== ""
+          ? I18n.tr("A chosen seed counts for no stat nor achievement.")
+          : I18n.tr("Replay or share a game by its seed (I during the game).")
+        color: seedInput.text !== "" ? Colors.warm : Colors.muted
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+        font.italic: true
       }
     }
 

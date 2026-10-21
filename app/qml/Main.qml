@@ -255,17 +255,22 @@ Window {
     newGameScreen.current = Math.max(0, last)
     choosingDeck = true
   }
-  function startGame(deck, stake) {
+  function startGame(deck, stake, seed) {
     settings.lastDeck = deck
     settings.lastStake = stake
     choosingDeck = false
     notice = ""
-    send({ cmd: "new_game", deck: deck, stake: stake })
+    var command = { cmd: "new_game", deck: deck, stake: stake }
+    if (seed !== "") command.seed_code = seed
+    send(command)
+    // Typed again for the next game, so that none is seeded by mistake.
+    newGameScreen.seed = ""
+    keyCatcher.forceActiveFocus()
   }
 
   function applyState(s) {
     // Another game (new or resumed): its money shows as it is.
-    if (game === null || game.seed !== s.seed) {
+    if (game === null || game.seed_code !== s.seed_code) {
       moneyCounts = false
       shownMoney = s.money
       moneyCounts = true
@@ -696,14 +701,18 @@ Window {
         else if (k === Qt.Key_Up) newGameScreen.move(-3)
         else if (k === Qt.Key_Down) newGameScreen.move(3)
         else if (k === Qt.Key_Return || k === Qt.Key_Enter) newGameScreen.startChosen()
+        else if (k === Qt.Key_S) newGameScreen.editSeed()
         else if (k === Qt.Key_Escape && root.game !== null) root.choosingDeck = false
         else return
       }
       else if (k === Qt.Key_I) root.infoOpen = !root.infoOpen
       else if (root.infoOpen) {
         if (k === Qt.Key_Escape) root.infoOpen = false
+        else if (k === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) fastFetch.copySeed()
         else return
       }
+      else if (k === Qt.Key_C && (event.modifiers & Qt.ControlModifier) && root.game !== null && root.game.phase === "lost")
+        endSeed.copy()
       else if (digit >= 0 && (event.modifiers & Qt.ControlModifier))
         root.useConsumable(digit)
       else if ((k === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) || (k === Qt.Key_Escape && root.inPack))
@@ -1685,6 +1694,16 @@ Window {
               onClicked: root.newGame()
             }
           }
+
+          // To replay it, or share it.
+          SeedLabel {
+            id: endSeed
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: endCol.victory || !endCol.won
+            code: root.game ? root.game.seed_code : ""
+            shortcut: endCol.won ? "" : "Ctrl+C"
+            pixelSize: Style.font.caption
+          }
         }
       }
     }
@@ -1697,6 +1716,7 @@ Window {
 
     // ---- fastfetch: run info over everything
     FastFetch {
+      id: fastFetch
       anchors.fill: parent
       visible: root.infoOpen
       game: root.game
@@ -1713,7 +1733,8 @@ Window {
       message: root.saveProblem
       onLanguage: function(lang) { root.setLanguage(lang) }
       canCancel: root.game !== null
-      onStart: function(deck, stake) { root.startGame(deck, stake) }
+      onStart: function(deck, stake, seed) { root.startGame(deck, stake, seed) }
+      onSeedDone: keyCatcher.forceActiveFocus()
       onCancel: root.choosingDeck = false
       onCollection: root.openCollection()
     }

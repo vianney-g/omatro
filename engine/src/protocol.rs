@@ -9,6 +9,7 @@ use crate::hand::HandKind;
 use crate::i18n::{Catalog, Lang, translate_response};
 use crate::joker::{Bonus, Joker};
 use crate::profile::{News, Profile};
+use crate::rng;
 use crate::run_deck::Deck;
 use crate::score::Breakdown;
 use crate::stake::{Stake, StakeInfo};
@@ -21,6 +22,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub enum Command {
     NewGame {
         seed: Option<u64>,
+        /// A seed the player typed (as the state's `seed_code`): the game
+        /// counts for no achievement, stat nor history.
+        #[serde(default)]
+        seed_code: Option<String>,
         #[serde(default)]
         jokers: Vec<Joker>,
         /// The starting deck (none: the plain one).
@@ -361,12 +366,20 @@ impl Session {
     fn run(&mut self, command: Command) -> Result<Response, String> {
         if let Command::NewGame {
             seed,
+            seed_code,
             mut jokers,
             deck,
             stake,
         } = command
         {
             let stake = stake.unwrap_or_default();
+            let chosen = match seed_code.as_deref().map(str::trim) {
+                None | Some("") => None,
+                Some(code) => Some(
+                    rng::parse_seed_code(code)
+                        .ok_or_else(|| format!("{code} is not a seed: letters and digits only"))?,
+                ),
+            };
             if let Some(profile) = &self.profile
                 && stake > profile.top_stake(deck)
             {
@@ -400,10 +413,13 @@ impl Session {
                 }
             }
             let helped = !jokers.is_empty();
-            let seed = seed.unwrap_or_else(random_seed);
+            let seed = chosen.or(seed).unwrap_or_else(random_seed);
             let mut game = Game::with_stake(seed, jokers, deck, stake);
             if helped {
                 game.mark_cheated();
+            }
+            if chosen.is_some() {
+                game.mark_seeded();
             }
             if let Some(profile) = &self.profile {
                 game.lock(profile.locked_jokers());
@@ -575,11 +591,14 @@ fn sorted_nth(cards: &[usize], n: usize) -> usize {
     sorted[n]
 }
 
+/// A seed of 8 characters at most once written as a code, short enough to
+/// copy by hand.
 fn random_seed() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos() as u64)
         .unwrap_or(0)
+        % 36u64.pow(8)
 }
 
 #[cfg(test)]
@@ -598,6 +617,7 @@ mod tests {
                 .unwrap(),
             Command::NewGame {
                 seed: Some(3),
+                seed_code: None,
                 jokers: vec![Joker::Dotfiles],
                 deck: None,
                 stake: None,
@@ -835,6 +855,33 @@ mod tests {
         send(&mut plain, r#"{"cmd":"new_game","seed":1,"deck":"raid1"}"#);
         assert!(plain.game.as_ref().unwrap().locked().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_chosen_seed_replays_the_game_but_counts_for_nothing() {
+        let mut random = Session::default();
+        let first = send(&mut random, r#"{"cmd":"new_game"}"#)["state"].clone();
+        let code = first["seed_code"].as_str().unwrap().to_string();
+        assert!(code.len() <= 8 && first["seeded"] == false);
+        let mut session = Session::default().with_new_profile();
+        let line = format!(
+            r#"{{"cmd":"new_game","seed_code":"{}"}}"#,
+            code.to_lowercase()
+        );
+        let state = &send(&mut session, &line)["state"];
+        assert_eq!(
+            (&state["hand"], &state["seed"]),
+            (&first["hand"], &first["seed"])
+        );
+        assert_eq!(state["seeded"], true);
+        send(&mut session, r#"{"cmd":"select_blind"}"#);
+        send(&mut session, r#"{"cmd":"play","cards":[0]}"#);
+        send(&mut session, r#"{"cmd":"new_game"}"#);
+        let profile = session.profile().unwrap();
+        assert!(profile.history().is_empty());
+        assert_eq!(profile.stats.hands_played, 0);
+        let r = session.handle_json(r#"{"cmd":"new_game","seed_code":"not a seed"}"#);
+        assert!(r.contains("is not a seed"), "{r}");
     }
 
     #[test]

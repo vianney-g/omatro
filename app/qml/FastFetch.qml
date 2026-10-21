@@ -9,6 +9,8 @@ Rectangle {
   property var game: null
   signal close()
 
+  function copySeed() { seedLabel.copy() }
+
   color: Util.alpha(Colors.background, 0.92)
 
   // Hand types strongest first, as in a poker ranking.
@@ -130,6 +132,18 @@ Rectangle {
             text: !stake ? "" : "<b>" + stake.name + "</b>: " + (stake.rules.length
               ? stake.rules.map(function(r) { return "<br>· " + I18n.tr(r) }).join("")
               : I18n.tr(stake.description))
+          }
+          SeedLabel {
+            id: seedLabel
+            code: root.game ? root.game.seed_code : ""
+            shortcut: "Ctrl+C"
+          }
+          Header {
+            width: Style.space(280)
+            visible: root.game !== null && root.game.seeded
+            wrapMode: Text.WordWrap
+            text: I18n.tr("A chosen seed: this game counts for no stat nor achievement.")
+            font.italic: true
           }
 
           Text {

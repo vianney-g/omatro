@@ -9,7 +9,7 @@ use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, Rules, evaluate_w
 use crate::joker::{BlindEnd, Board, Bonus, Joker, OwnedJoker, Rarity, SYNCTHING_BLINDS, Targets};
 use crate::modifier::{Edition, Enhancement, Seal};
 use crate::pack::{Pack, PackKind, SHOP_PACKS};
-use crate::rng::Rng;
+use crate::rng::{self, Rng};
 use crate::run_deck::Deck;
 use crate::score::{Breakdown, Table, copy_target, score};
 use crate::stake::{
@@ -454,6 +454,10 @@ impl Modifiers {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct State {
     pub seed: u64,
+    /// The seed as the player sees it, to copy and type in.
+    pub seed_code: String,
+    /// The player chose the seed: the game counts for nothing.
+    pub seeded: bool,
     pub ante: u32,
     pub winning_ante: u32,
     /// The blind being chosen, played or just beaten.
@@ -824,6 +828,10 @@ pub struct Game {
     /// A cheat was used: the game counts for no achievement.
     #[serde(default)]
     cheated: bool,
+    /// The player chose the seed: the game counts for no achievement, stat
+    /// nor history, as it can be replayed knowing what comes.
+    #[serde(default)]
+    seeded: bool,
     /// Most jokers held at once (Bare Metal).
     #[serde(default)]
     most_jokers: usize,
@@ -930,6 +938,7 @@ impl Game {
             arranged: false,
             locked: Vec::new(),
             cheated: false,
+            seeded: false,
             most_jokers: 0,
             shop_rerolls: 0,
             won: false,
@@ -968,6 +977,16 @@ impl Game {
 
     pub fn cheated(&self) -> bool {
         self.cheated
+    }
+
+    /// The player chose the seed.
+    pub fn mark_seeded(&mut self) {
+        self.seeded = true;
+    }
+
+    /// Neither cheats nor a chosen seed: the game counts for the profile.
+    pub fn counts(&self) -> bool {
+        !self.cheated && !self.seeded
     }
 
     pub fn money(&self) -> i64 {
@@ -3862,6 +3881,8 @@ impl Game {
     pub fn state(&self) -> State {
         State {
             seed: self.seed,
+            seed_code: rng::seed_code(self.seed),
+            seeded: self.seeded,
             ante: self.ante,
             winning_ante: WINNING_ANTE,
             blind: self.blind,

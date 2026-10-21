@@ -340,7 +340,7 @@ Rectangle {
               font.pixelSize: Style.font.body
             }
             Header {
-              text: Qt.formatDateTime(new Date(g.ended * 1000), "yyyy-MM-dd hh:mm") + " · " + I18n.tr("seed {seed}", { seed: g.seed })
+              text: Qt.formatDateTime(new Date(g.ended * 1000), "yyyy-MM-dd hh:mm") + " · " + I18n.tr("seed {seed}", { seed: g.seed_code })
             }
           }
           Text {

@@ -273,6 +273,8 @@ comes back as `news` in the JSON response. A new content family goes in
 in the game. The profile also keeps the stats and the history of the last games
 (`Profile::record`, at a win, a loss, or `abandon` when `new_game` replaces a game
 in progress); the `collection` command sends them for the collection's last two tabs.
+A game whose seed the player chose (`seed_code` in `new_game`, `Game::seeded`) fills
+the collection too, but counts for no achievement, stat nor history (`Game::counts`).
 `achievement.rs` lists the achievements; `unlocks` names a hidden item,
 which `Game::lock` keeps out of `on_sale` (jokers) and `Session` out of the decks
 until it is done. A game with `cheated` set (cheats, `OMATRO_JOKERS`) fills the

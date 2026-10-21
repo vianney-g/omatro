@@ -66,6 +66,12 @@ levels, from Daily Commute to Hypercar, each adding its rule to those below it (
 [docs/stakes.md](docs/stakes.md)). A deck starts at the first level only; winning a
 game with it unlocks its next level, and its card shows the highest level won.
 
+Each game has a seed, a code of letters and digits that deals it again card for card:
+fastfetch (I) and the game over screen show it, with a button (or Ctrl+C) to copy it.
+Type one in on the new game screen (S) to replay a game or play a friend's; left
+empty, the seed is random. A game on a chosen seed counts for no achievement, stat
+nor history.
+
 The collection (C, in game or on the new game screen) lists every joker, deck,
 consumable, pull request, badge, boss, package, modifier and hand type: each one shows
 up once you have obtained it in a game (a joker bought, a badge won, a boss beaten…).
@@ -75,8 +81,8 @@ stats (games won, lost and abandoned, win streak, best ante and hand, games per 
 hand types played); and the history of the last 50 games (how each one ended, deck,
 level, ante, best hand, jokers held). A game left for a new one after its first hand
 counts as abandoned; a won game going on in endless mode stays one won game. Games
-where a debug cheat was used still fill the collection, but unlock no achievement and
-count in neither the stats nor the history. The profile is kept in
+where a debug cheat was used, or played on a chosen seed, still fill the collection,
+but unlock no achievement and count in neither the stats nor the history. The profile is kept in
 `~/.local/state/omatro/profile.json`.
 
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, Tab to sort the hand
@@ -151,7 +157,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 
 | Command | Effect |
 |---|---|
-| `{"cmd":"new_game","seed":42,"jokers":["dotfiles"],"deck":"thinkpad","stake":"quattro"}` | New game (`seed`, `jokers`, `deck` and `stake` optional; a level the deck hasn't unlocked is refused) |
+| `{"cmd":"new_game","seed":42,"jokers":["dotfiles"],"deck":"thinkpad","stake":"quattro"}` | New game (`seed`, `jokers`, `deck` and `stake` optional; a level the deck hasn't unlocked is refused). `"seed_code":"J6QCWLJK"` instead of `seed` is a seed the player chose (as the state's `seed_code`, any case): the game counts for no achievement, stat nor history |
 | `{"cmd":"decks"}` | Lists the decks a new game may start with |
 | `{"cmd":"glossary"}` | Lists the terms card texts mention, with what they mean |
 | `{"cmd":"collection"}` | The collection, the achievements, the stats and the history, as the profile has them (the app only) |
@@ -184,7 +190,8 @@ One JSON command per line on standard input, one JSON response per line on outpu
 
 Responses:
 
-- `{"event":"state","state":{…}}`: game state: `run_deck` (the deck picked, or `null`), `ante`, `blind` (`small` / `big` /
+- `{"event":"state","state":{…}}`: game state: `seed`, `seed_code` (the seed as shown
+  to the player, in base 36), `seeded` (the player chose it), `run_deck` (the deck picked, or `null`), `ante`, `blind` (`small` / `big` /
   `boss`), the ante's three `blinds` (name, the boss's `description`, target, reward,
   `status`, and the `tag` skipping it gives), the ante's `boss` and `boss_active`, `target`, `score`,
   hands and discards left (in the `pack` phase, the hand is the one a coreutils pack
@@ -236,7 +243,7 @@ Responses:
   `abandoned`, `streak`, `best_streak`, `best_ante`, `best_hand`, `blinds_won`,
   `hands_played`, `jokers_sold`, `decks`: `deck` (null for the plain deck), `games`,
   `won`, `best_ante`, `best_stake`; `hands`: `kind`, `hand_name`, `played`) and the
-  `history`, the last game first (`ended` in seconds since 1970, `seed`, `deck`,
+  `history`, the last game first (`ended` in seconds since 1970, `seed`, `seed_code`, `deck`,
   `stake`, `outcome`: `won`, `lost` or `abandoned`, `ante`, `boss` that ended it,
   `best_hand`, `hand_name` played most, `jokers`).
 - Any response may carry `news`: what the profile just gained, each with its `kind`

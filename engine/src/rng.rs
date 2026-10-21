@@ -3,6 +3,33 @@
 //! Hand-written rather than taken from `rand`: the same seed must give the
 //! same game whatever the dependency versions.
 
+const SEED_DIGITS: &[u8; 36] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/// How a seed is shown to the player, to copy and type in: base 36, in capitals.
+pub fn seed_code(mut seed: u64) -> String {
+    let mut digits = Vec::new();
+    loop {
+        digits.push(SEED_DIGITS[(seed % 36) as usize]);
+        seed /= 36;
+        if seed == 0 {
+            break;
+        }
+    }
+    digits.reverse();
+    String::from_utf8(digits).unwrap()
+}
+
+/// The seed a code stands for, whatever its case and surrounding spaces.
+pub fn parse_seed_code(code: &str) -> Option<u64> {
+    let code = code.trim();
+    if code.is_empty() {
+        return None;
+    }
+    code.chars().try_fold(0u64, |seed, c| {
+        seed.checked_mul(36)?.checked_add(c.to_digit(36)? as u64)
+    })
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Rng {
     state: u64,
@@ -68,6 +95,18 @@ impl Rng {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn seed_codes_read_back() {
+        for seed in [0, 35, 36, 1_234_567, 36u64.pow(8) - 1, u64::MAX] {
+            assert_eq!(parse_seed_code(&seed_code(seed)), Some(seed));
+        }
+        assert_eq!(seed_code(36u64.pow(8) - 1), "ZZZZZZZZ");
+        assert_eq!(parse_seed_code(" omarchy "), parse_seed_code("OMARCHY"));
+        for bad in ["", "  ", "no-seed", "3W5E11264SGSG"] {
+            assert_eq!(parse_seed_code(bad), None, "{bad}");
+        }
+    }
 
     #[test]
     fn same_seed_same_sequence() {

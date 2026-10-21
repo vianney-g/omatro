@@ -367,9 +367,10 @@ impl Profile {
     }
 
     /// A new game replaces this one: abandoned, unless it was over or not
-    /// started (no hand played). Games with cheats count for nothing.
+    /// started (no hand played). Games with cheats or a chosen seed count
+    /// for nothing.
     pub fn abandon(&mut self, game: &Game) {
-        if !game.cheated() && !game.is_over() && game.main_hand().is_some() {
+        if game.counts() && !game.is_over() && game.main_hand().is_some() {
             self.record(game, Outcome::Abandoned);
         }
     }
@@ -382,10 +383,11 @@ impl Profile {
     }
 
     /// Takes in what happened in the game since the last look. A game with
-    /// cheats fills the collection, but no achievement nor count.
+    /// cheats or a chosen seed fills the collection, but no achievement nor
+    /// count.
     pub fn observe(&mut self, game: &mut Game) -> Vec<News> {
         let mut news = Vec::new();
-        let fair = !game.cheated();
+        let fair = game.counts();
         for event in game.take_events() {
             match event {
                 Event::Obtained(item) => self.found(item, &mut news),

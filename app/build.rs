@@ -20,6 +20,7 @@ fn main() {
         QmlFile::from("qml/CardView.qml"),
         QmlFile::from("qml/JokerView.qml"),
         QmlFile::from("qml/Button.qml"),
+        QmlFile::from("qml/SeedLabel.qml"),
         QmlFile::from("qml/Colors.qml").singleton(true),
         QmlFile::from("qml/Style.qml").singleton(true),
         QmlFile::from("qml/Util.qml").singleton(true),

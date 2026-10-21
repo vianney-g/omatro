@@ -336,6 +336,8 @@ pub struct RecordInfo {
     /// When it ended, in seconds since 1970.
     pub ended: u64,
     pub seed: u64,
+    /// The seed as the player types it.
+    pub seed_code: String,
     /// The deck's name (none: the plain deck).
     pub deck: Option<&'static str>,
     pub stake: &'static str,
@@ -412,6 +414,7 @@ fn history_info(profile: &Profile) -> Vec<RecordInfo> {
         .map(|r| RecordInfo {
             ended: r.ended,
             seed: r.seed,
+            seed_code: crate::rng::seed_code(r.seed),
             deck: from_id::<Deck>(&r.deck).map(Deck::name),
             stake: r.stake.name(),
             outcome: r.outcome,
