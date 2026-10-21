@@ -4,6 +4,7 @@
 //! or removed later never keeps a profile from loading.
 
 use crate::achievement::{Achievement, BARE_METAL_JOKERS, Count};
+use crate::boss::Boss;
 use crate::collection::Item;
 use crate::game::{Event, Game};
 use crate::hand::HandKind;
@@ -11,12 +12,16 @@ use crate::joker::Joker;
 use crate::run_deck::Deck;
 use crate::stake::Stake;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Bumped when profiles of older versions can no longer be read.
 pub const PROFILE_VERSION: u32 = 1;
+
+/// Games the history keeps, the latest ones (the stats count them all).
+pub const HISTORY_LEN: usize = 50;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Stats {
@@ -32,6 +37,98 @@ pub struct Stats {
     pub jokers_sold: u64,
     #[serde(default)]
     pub best_hand: f64,
+    /// Games left for a new one before their end.
+    #[serde(default)]
+    pub games_abandoned: u64,
+    /// Games won in a row, up to now, and the most ever.
+    #[serde(default)]
+    pub streak: u64,
+    #[serde(default)]
+    pub best_streak: u64,
+    /// The highest ante a game reached.
+    #[serde(default)]
+    pub best_ante: u32,
+    /// How often each hand type was played, by id.
+    #[serde(default)]
+    pub hands: BTreeMap<String, u64>,
+    /// Games per deck id (`plain` for none).
+    #[serde(default)]
+    pub decks: BTreeMap<String, DeckStats>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DeckStats {
+    /// Games ended: won, lost or abandoned.
+    #[serde(default)]
+    pub games: u64,
+    #[serde(default)]
+    pub won: u64,
+    #[serde(default)]
+    pub best_ante: u32,
+}
+
+/// How a game of the history ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Outcome {
+    /// The winning ante's boss was beaten (endless mode may have gone on).
+    Won,
+    Lost,
+    /// Left for a new game.
+    Abandoned,
+}
+
+/// A game of the history. Items are kept by id, as in the collection.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GameRecord {
+    /// When it ended, in seconds since 1970.
+    pub ended: u64,
+    pub seed: u64,
+    /// The deck id (`plain` for none).
+    pub deck: String,
+    pub stake: Stake,
+    pub outcome: Outcome,
+    pub ante: u32,
+    /// The boss whose blind ended the game.
+    #[serde(default)]
+    pub lost_to: Option<String>,
+    #[serde(default)]
+    pub best_hand: f64,
+    /// The hand type played most.
+    #[serde(default)]
+    pub main_hand: Option<String>,
+    /// The jokers held at the end.
+    #[serde(default)]
+    pub jokers: Vec<String>,
+}
+
+fn id_of<T: Serialize>(item: T) -> Option<String> {
+    serde_json::to_value(item)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+}
+
+impl GameRecord {
+    fn of(game: &Game, outcome: Outcome) -> GameRecord {
+        GameRecord {
+            ended: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs()),
+            seed: game.seed(),
+            deck: deck_id(game.run_deck()),
+            stake: game.stake(),
+            outcome,
+            ante: game.ante(),
+            lost_to: game.lost_to().and_then(id_of::<Boss>),
+            best_hand: game.best_hand(),
+            main_hand: game.main_hand().and_then(id_of::<HandKind>),
+            jokers: game
+                .joker_list()
+                .into_iter()
+                .filter_map(id_of::<Joker>)
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -49,6 +146,9 @@ pub struct Profile {
     /// The highest difficulty level won with each deck (`plain` for none).
     #[serde(default)]
     stakes: BTreeMap<String, Stake>,
+    /// The latest games, the last one first.
+    #[serde(default)]
+    history: VecDeque<GameRecord>,
 }
 
 /// Something new for the player: an item found, an achievement done, or what
@@ -220,6 +320,60 @@ impl Profile {
         }
     }
 
+    /// The latest games, the last one first.
+    pub fn history(&self) -> &VecDeque<GameRecord> {
+        &self.history
+    }
+
+    /// A game came to its end (or was left): into the history and the
+    /// stats. A won game going on in endless mode keeps the record of its
+    /// win, brought up to date when it ends.
+    fn record(&mut self, game: &Game, outcome: Outcome) {
+        let record = GameRecord::of(game, outcome);
+        let deck = self.stats.decks.entry(record.deck.clone()).or_default();
+        deck.best_ante = deck.best_ante.max(record.ante);
+        self.stats.best_ante = self.stats.best_ante.max(record.ante);
+        if outcome != Outcome::Won
+            && game.won()
+            && let Some(won) = self
+                .history
+                .iter_mut()
+                .find(|r| r.seed == record.seed && r.outcome == Outcome::Won)
+        {
+            *won = GameRecord {
+                outcome: Outcome::Won,
+                ..record
+            };
+            return;
+        }
+        deck.games += 1;
+        deck.won += u64::from(outcome == Outcome::Won);
+        match outcome {
+            Outcome::Won => {
+                self.stats.streak += 1;
+                self.stats.best_streak = self.stats.best_streak.max(self.stats.streak);
+            }
+            Outcome::Lost => {
+                self.stats.games_lost += 1;
+                self.stats.streak = 0;
+            }
+            Outcome::Abandoned => {
+                self.stats.games_abandoned += 1;
+                self.stats.streak = 0;
+            }
+        }
+        self.history.push_front(record);
+        self.history.truncate(HISTORY_LEN);
+    }
+
+    /// A new game replaces this one: abandoned, unless it was over or not
+    /// started (no hand played). Games with cheats count for nothing.
+    pub fn abandon(&mut self, game: &Game) {
+        if !game.cheated() && !game.is_over() && game.main_hand().is_some() {
+            self.record(game, Outcome::Abandoned);
+        }
+    }
+
     /// The collection was opened.
     pub fn opened_collection(&mut self) -> Vec<News> {
         let mut news = Vec::new();
@@ -238,6 +392,9 @@ impl Profile {
                 _ if !fair => {}
                 Event::HandPlayed { kind, total } => {
                     self.stats.hands_played += 1;
+                    if let Some(id) = id_of(kind) {
+                        *self.stats.hands.entry(id).or_default() += 1;
+                    }
                     self.stats.best_hand = self.stats.best_hand.max(total);
                     if kind == HandKind::ForkBomb {
                         self.achieve(Achievement::DuplicateDetected, &mut news);
@@ -267,6 +424,7 @@ impl Profile {
                 Event::Rerolled { .. } => {}
                 Event::GameOver { won: true } => {
                     self.stats.games_won += 1;
+                    self.record(game, Outcome::Won);
                     let (deck, stake) = (game.run_deck(), game.stake());
                     let before = self.top_stake(deck);
                     self.won_at(deck, stake);
@@ -286,7 +444,7 @@ impl Profile {
                         self.achieve(Achievement::BareMetal, &mut news);
                     }
                 }
-                Event::GameOver { won: false } => self.stats.games_lost += 1,
+                Event::GameOver { won: false } => self.record(game, Outcome::Lost),
             }
         }
         for item in game.owned_items() {
@@ -433,6 +591,88 @@ mod tests {
         // The last level unlocks nothing more.
         profile.won_at(None, Stake::Hypercar);
         assert_eq!(profile.top_stake(None), Stake::Hypercar);
+    }
+
+    /// Plays the first card until the blind is lost.
+    fn lose(game: &mut Game) {
+        game.select_blind().unwrap();
+        while game.state().phase == crate::game::Phase::Playing {
+            game.play(&[0]).unwrap();
+        }
+    }
+
+    #[test]
+    fn games_go_to_the_history_and_the_stats() {
+        let mut profile = Profile::default();
+        let mut game = Game::with_deck(3, vec![], Some(Deck::ThinkPad));
+        lose(&mut game);
+        profile.observe(&mut game);
+        let lost = &profile.history()[0];
+        assert_eq!(
+            (lost.outcome, lost.seed, lost.deck.as_str(), lost.ante),
+            (Outcome::Lost, 3, "think_pad", 1)
+        );
+        assert_eq!(lost.main_hand.as_deref(), Some("high_card"));
+        assert_eq!(lost.lost_to, None);
+        assert!(lost.best_hand > 0.0);
+        assert_eq!(profile.stats.hands.get("high_card"), Some(&4));
+        assert_eq!(
+            profile.stats.decks.get("think_pad"),
+            Some(&DeckStats {
+                games: 1,
+                won: 0,
+                best_ante: 1
+            })
+        );
+
+        // A win, then the same game lost further on in endless mode: one
+        // game, won.
+        let mut game = Game::new(4, vec![]);
+        game.won_for_tests();
+        profile.observe(&mut game);
+        assert_eq!((profile.stats.streak, profile.stats.best_streak), (1, 1));
+        lose(&mut game);
+        profile.observe(&mut game);
+        assert_eq!(profile.history().len(), 2);
+        assert_eq!(profile.history()[0].outcome, Outcome::Won);
+        assert_eq!(profile.history()[0].main_hand.as_deref(), Some("high_card"));
+        assert_eq!((profile.stats.games_won, profile.stats.games_lost), (1, 1));
+        assert_eq!(profile.stats.streak, 1);
+        assert_eq!(profile.stats.decks.get("plain").map(|d| d.won), Some(1));
+    }
+
+    #[test]
+    fn games_left_for_another_are_abandoned() {
+        let mut profile = Profile::default();
+        // Before its first hand, a game leaves no trace.
+        let mut game = Game::new(5, vec![]);
+        profile.abandon(&game);
+        assert!(profile.history().is_empty());
+        game.select_blind().unwrap();
+        game.play(&[0]).unwrap();
+        profile.abandon(&game);
+        assert_eq!(profile.history()[0].outcome, Outcome::Abandoned);
+        assert_eq!(profile.stats.games_abandoned, 1);
+        // Neither a lost game nor one with cheats.
+        let mut lost = Game::new(6, vec![]);
+        lose(&mut lost);
+        profile.abandon(&lost);
+        game.mark_cheated();
+        profile.abandon(&game);
+        assert_eq!(profile.history().len(), 1);
+    }
+
+    #[test]
+    fn the_history_keeps_the_latest_games() {
+        let mut profile = Profile::default();
+        let mut game = Game::new(7, vec![]);
+        game.select_blind().unwrap();
+        game.play(&[0]).unwrap();
+        for _ in 0..HISTORY_LEN + 5 {
+            profile.abandon(&game);
+        }
+        assert_eq!(profile.history().len(), HISTORY_LEN);
+        assert_eq!(profile.stats.games_abandoned, HISTORY_LEN as u64 + 5);
     }
 
     #[test]

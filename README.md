@@ -69,10 +69,15 @@ game with it unlocks its next level, and its card shows the highest level won.
 The collection (C, in game or on the new game screen) lists every joker, deck,
 consumable, pull request, badge, boss, package, modifier and hand type: each one shows
 up once you have obtained it in a game (a joker bought, a badge won, a boss beaten…).
-Its last tab holds the achievements (see [docs/achievements.md](docs/achievements.md)),
-some of which unlock hidden jokers and a hidden deck, absent from games before. Games
-where a debug cheat was used still fill the collection, but unlock no achievement. The
-profile is kept in `~/.local/state/omatro/profile.json`.
+Then come the achievements (see [docs/achievements.md](docs/achievements.md)),
+some of which unlock hidden jokers and a hidden deck, absent from games before; the
+stats (games won, lost and abandoned, win streak, best ante and hand, games per deck,
+hand types played); and the history of the last 50 games (how each one ended, deck,
+level, ante, best hand, jokers held). A game left for a new one after its first hand
+counts as abandoned; a won game going on in endless mode stays one won game. Games
+where a debug cheat was used still fill the collection, but unlock no achievement and
+count in neither the stats nor the history. The profile is kept in
+`~/.local/state/omatro/profile.json`.
 
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, Tab to sort the hand
 by rank or suit, Shift+←/→ to move the selected card (or drag it), J to bring the next
@@ -149,7 +154,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"new_game","seed":42,"jokers":["dotfiles"],"deck":"thinkpad","stake":"quattro"}` | New game (`seed`, `jokers`, `deck` and `stake` optional; a level the deck hasn't unlocked is refused) |
 | `{"cmd":"decks"}` | Lists the decks a new game may start with |
 | `{"cmd":"glossary"}` | Lists the terms card texts mention, with what they mean |
-| `{"cmd":"collection"}` | The collection and the achievements, as the profile has them (the app only) |
+| `{"cmd":"collection"}` | The collection, the achievements, the stats and the history, as the profile has them (the app only) |
 | `{"cmd":"language","lang":"fr"}` | Sets the language of the responses (`en`, `fr`) and returns the catalog |
 | `{"cmd":"saved_game"}` | Tells whether a saved game can be resumed (the app only) |
 | `{"cmd":"resume"}` | Resumes the saved game |
@@ -227,7 +232,13 @@ Responses:
   found `name`, `description`, `quip` and a joker's `rarity`; a locked item's
   `achievement` and `condition`), then the `achievements` (`id`, `name`,
   `description`, `quip`, `done`, `progress` and `goal` for counting ones, `unlocks`
-  once done or `unlocks_family` before).
+  once done or `unlocks_family` before), the `stats` (`games`, `won`, `lost`,
+  `abandoned`, `streak`, `best_streak`, `best_ante`, `best_hand`, `blinds_won`,
+  `hands_played`, `jokers_sold`, `decks`: `deck` (null for the plain deck), `games`,
+  `won`, `best_ante`, `best_stake`; `hands`: `kind`, `hand_name`, `played`) and the
+  `history`, the last game first (`ended` in seconds since 1970, `seed`, `deck`,
+  `stake`, `outcome`: `won`, `lost` or `abandoned`, `ante`, `boss` that ended it,
+  `best_hand`, `hand_name` played most, `jokers`).
 - Any response may carry `news`: what the profile just gained, each with its `kind`
   (`found`, `achievement`, or `unlocked` for a hidden item), `name` and `text` (the
   item's family, or what the achievement took).

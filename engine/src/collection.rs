@@ -9,11 +9,13 @@ use crate::hand::HandKind;
 use crate::joker::{Joker, Rarity};
 use crate::modifier::{Edition, Enhancement, Seal};
 use crate::pack::PackKind;
-use crate::profile::Profile;
+use crate::profile::{Outcome, Profile};
 use crate::run_deck::Deck;
+use crate::stake::Stake;
 use crate::tag::Tag;
 use crate::voucher::Voucher;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 /// A family of items, one tab of the collection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -284,6 +286,155 @@ pub struct Collection {
     pub total: usize,
     pub families: Vec<FamilyInfo>,
     pub achievements: Vec<AchievementInfo>,
+    pub stats: StatsInfo,
+    /// The latest games, the last one first.
+    pub history: Vec<RecordInfo>,
+}
+
+/// The lifetime stats, for the collection's stats tab.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct StatsInfo {
+    /// Games ended: won, lost or abandoned.
+    pub games: u64,
+    pub won: u64,
+    pub lost: u64,
+    pub abandoned: u64,
+    pub streak: u64,
+    pub best_streak: u64,
+    pub best_ante: u32,
+    pub best_hand: f64,
+    pub blinds_won: u64,
+    pub hands_played: u64,
+    pub jokers_sold: u64,
+    /// Decks played, most games first.
+    pub decks: Vec<DeckStatsInfo>,
+    /// Hand types played, most played first.
+    pub hands: Vec<HandStatsInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DeckStatsInfo {
+    /// The deck's name (none: the plain deck).
+    pub deck: Option<&'static str>,
+    pub games: u64,
+    pub won: u64,
+    pub best_ante: u32,
+    /// The highest difficulty level won with it.
+    pub best_stake: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct HandStatsInfo {
+    pub kind: HandKind,
+    pub hand_name: &'static str,
+    pub played: u64,
+}
+
+/// A game of the history, its items by name.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RecordInfo {
+    /// When it ended, in seconds since 1970.
+    pub ended: u64,
+    pub seed: u64,
+    /// The deck's name (none: the plain deck).
+    pub deck: Option<&'static str>,
+    pub stake: &'static str,
+    pub outcome: Outcome,
+    pub ante: u32,
+    /// The boss whose blind ended the game.
+    pub boss: Option<&'static str>,
+    pub best_hand: f64,
+    /// The hand type played most.
+    pub hand_name: Option<&'static str>,
+    pub jokers: Vec<&'static str>,
+}
+
+/// An item from its id, as the profile keeps it (none if it is gone).
+fn from_id<T: DeserializeOwned>(id: &str) -> Option<T> {
+    serde_json::from_value(serde_json::Value::String(id.to_string())).ok()
+}
+
+fn stats_info(profile: &Profile) -> StatsInfo {
+    let s = &profile.stats;
+    let mut decks: Vec<DeckStatsInfo> = s
+        .decks
+        .iter()
+        .filter_map(|(id, d)| {
+            let deck = (id != "plain").then(|| from_id::<Deck>(id));
+            if deck == Some(None) {
+                return None;
+            }
+            let deck = deck.flatten();
+            Some(DeckStatsInfo {
+                deck: deck.map(Deck::name),
+                games: d.games,
+                won: d.won,
+                best_ante: d.best_ante,
+                best_stake: profile.best_stake(deck).map(Stake::name),
+            })
+        })
+        .collect();
+    decks.sort_by_key(|d| std::cmp::Reverse(d.games));
+    let mut hands: Vec<HandStatsInfo> = s
+        .hands
+        .iter()
+        .filter_map(|(id, &played)| {
+            let kind = from_id::<HandKind>(id)?;
+            Some(HandStatsInfo {
+                kind,
+                hand_name: kind.name(),
+                played,
+            })
+        })
+        .collect();
+    hands.sort_by_key(|h| std::cmp::Reverse(h.played));
+    StatsInfo {
+        games: s.games_won + s.games_lost + s.games_abandoned,
+        won: s.games_won,
+        lost: s.games_lost,
+        abandoned: s.games_abandoned,
+        streak: s.streak,
+        best_streak: s.best_streak,
+        best_ante: s.best_ante,
+        best_hand: s.best_hand,
+        blinds_won: s.blinds_won,
+        hands_played: s.hands_played,
+        jokers_sold: s.jokers_sold,
+        decks,
+        hands,
+    }
+}
+
+fn history_info(profile: &Profile) -> Vec<RecordInfo> {
+    profile
+        .history()
+        .iter()
+        .map(|r| RecordInfo {
+            ended: r.ended,
+            seed: r.seed,
+            deck: from_id::<Deck>(&r.deck).map(Deck::name),
+            stake: r.stake.name(),
+            outcome: r.outcome,
+            ante: r.ante,
+            boss: r
+                .lost_to
+                .as_deref()
+                .and_then(from_id::<Boss>)
+                .map(Boss::name),
+            best_hand: r.best_hand,
+            hand_name: r
+                .main_hand
+                .as_deref()
+                .and_then(from_id::<HandKind>)
+                .map(HandKind::name),
+            jokers: r
+                .jokers
+                .iter()
+                .filter_map(|j| from_id::<Joker>(j))
+                .map(Joker::name)
+                .collect(),
+        })
+        .collect()
 }
 
 /// The collection as the profile has it.
@@ -329,6 +480,8 @@ pub fn collection(profile: &Profile) -> Collection {
         total: families.iter().map(|f| f.total).sum(),
         families,
         achievements,
+        stats: stats_info(profile),
+        history: history_info(profile),
     }
 }
 

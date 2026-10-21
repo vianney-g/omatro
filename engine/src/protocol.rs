@@ -384,6 +384,21 @@ impl Session {
             if jokers.is_empty() {
                 jokers = self.start_jokers.clone();
             }
+            // The game it replaces, in the session or still in the save, goes
+            // to the history.
+            let previous = self
+                .game
+                .take()
+                .or_else(|| self.save.as_deref().and_then(|p| load(p).ok().flatten()));
+            if let (Some(profile), Some(previous)) = (&mut self.profile, &previous) {
+                let before = profile.clone();
+                profile.abandon(previous);
+                if *profile != before
+                    && let Some(path) = &self.profile_path
+                {
+                    profile.save(path);
+                }
+            }
             let helped = !jokers.is_empty();
             let seed = seed.unwrap_or_else(random_seed);
             let mut game = Game::with_stake(seed, jokers, deck, stake);
@@ -819,6 +834,49 @@ mod tests {
         );
         send(&mut plain, r#"{"cmd":"new_game","seed":1,"deck":"raid1"}"#);
         assert!(plain.game.as_ref().unwrap().locked().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_game_left_for_another_goes_to_the_history() {
+        let dir = std::env::temp_dir().join(format!("omatro-history-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (save, profile) = (dir.join("save.json"), dir.join("profile.json"));
+        let session = || {
+            Session::default()
+                .with_save(save.clone())
+                .with_profile(profile.clone())
+        };
+        let mut first = session();
+        send(
+            &mut first,
+            r#"{"cmd":"new_game","seed":9,"deck":"think_pad"}"#,
+        );
+        send(&mut first, r#"{"cmd":"select_blind"}"#);
+        send(&mut first, r#"{"cmd":"play","cards":[0]}"#);
+        // The next start leaves the saved game for a new one.
+        let mut next = session();
+        send(&mut next, r#"{"cmd":"new_game","seed":10}"#);
+        let r = send(&mut next, r#"{"cmd":"collection"}"#);
+        let history = &r["collection"]["history"];
+        assert_eq!(history.as_array().unwrap().len(), 1);
+        assert_eq!(
+            (
+                &history[0]["outcome"],
+                &history[0]["deck"],
+                &history[0]["seed"]
+            ),
+            (&"abandoned".into(), &"ThinkPad".into(), &9.into())
+        );
+        let stats = &r["collection"]["stats"];
+        assert_eq!(
+            (&stats["games"], &stats["abandoned"]),
+            (&1.into(), &1.into())
+        );
+        assert_eq!(stats["decks"][0]["deck"], "ThinkPad");
+        assert_eq!(stats["hands"][0]["played"], 1);
+        // Kept for the sessions after.
+        assert_eq!(session().profile().unwrap().history().len(), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

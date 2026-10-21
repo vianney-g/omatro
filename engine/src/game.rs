@@ -830,6 +830,12 @@ pub struct Game {
     /// Rerolls in this shop (Sunk Cost).
     #[serde(default)]
     shop_rerolls: u32,
+    /// The winning ante's boss was beaten (endless mode may go on).
+    #[serde(default)]
+    won: bool,
+    /// The best score of a hand this game.
+    #[serde(default)]
+    best_hand: f64,
     /// What happened since the session last looked.
     #[serde(skip)]
     events: Vec<Event>,
@@ -926,6 +932,8 @@ impl Game {
             cheated: false,
             most_jokers: 0,
             shop_rerolls: 0,
+            won: false,
+            best_hand: 0.0,
             events: Vec::new(),
             stake,
         };
@@ -1004,6 +1012,38 @@ impl Game {
         !self.jokers[index].stickers.welded
     }
 
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
+
+    /// The winning ante's boss was beaten, whatever came after it.
+    pub fn won(&self) -> bool {
+        self.won
+    }
+
+    /// The best score of a hand this game.
+    pub fn best_hand(&self) -> f64 {
+        self.best_hand
+    }
+
+    /// The hand type played most this game.
+    pub fn main_hand(&self) -> Option<HandKind> {
+        HandKind::ALL
+            .into_iter()
+            .filter(|&k| self.plays.get(k) > 0)
+            .max_by_key(|&k| self.plays.get(k))
+    }
+
+    /// The jokers held now.
+    pub fn joker_list(&self) -> Vec<Joker> {
+        self.jokers.iter().map(|j| j.joker).collect()
+    }
+
+    /// The boss whose blind ended the game, if one did.
+    pub fn lost_to(&self) -> Option<Boss> {
+        (self.phase == Phase::Lost && self.blind == BlindKind::Boss).then_some(self.boss)
+    }
+
     /// Most jokers held at once so far.
     pub fn most_jokers(&self) -> usize {
         self.most_jokers.max(self.jokers.len())
@@ -1012,6 +1052,13 @@ impl Game {
     #[cfg(test)]
     pub(crate) fn events_for_tests(&mut self, events: Vec<Event>) {
         self.events = events;
+    }
+
+    /// The winning ante's boss beaten, as `win_blind` leaves it.
+    #[cfg(test)]
+    pub(crate) fn won_for_tests(&mut self) {
+        self.won = true;
+        self.events = vec![Event::GameOver { won: true }];
     }
 
     /// What happened since the last call.
@@ -2153,6 +2200,7 @@ impl Game {
     /// After any hand: Incident Commander pays if the boss struck, The OOM
     /// Killer discards 2 cards, then the blind is won, lost or goes on.
     fn end_hand(&mut self, mut breakdown: Breakdown, triggered: bool) -> Breakdown {
+        self.best_hand = self.best_hand.max(breakdown.total);
         self.events.push(Event::HandPlayed {
             kind: breakdown.hand,
             total: breakdown.total,
@@ -2412,6 +2460,7 @@ impl Game {
             self.events.push(Event::Obtained(Item::Boss(self.boss)));
         }
         if self.victory {
+            self.won = true;
             self.events.push(Event::GameOver { won: true });
         }
     }
@@ -3456,11 +3505,7 @@ impl Game {
         let mut items: Vec<PackItem> = Vec::new();
         // Theme Preview: the theme of the most played hand comes first.
         if pack.kind == PackKind::Base16 && self.has(Voucher::ThemePreview) {
-            let most = HandKind::ALL
-                .into_iter()
-                .filter(|&k| self.plays.get(k) > 0)
-                .max_by_key(|&k| self.plays.get(k));
-            if let Some(kind) = most {
+            if let Some(kind) = self.main_hand() {
                 items.push(PackItem::Consumable(Consumable::Theme(
                     Theme::ALL[kind as usize],
                 )));
