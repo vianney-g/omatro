@@ -19,7 +19,8 @@ Translations); English numbers read `12,345`, `2.5`, `$4`, French ones `12 345`,
 
 ## Commands
 
-Requires Rust and Qt 6 (`qt6-base`, `qt6-declarative`).
+Requires Rust and Qt 6 (`qt6-base`, `qt6-declarative`; `qt6-multimedia` and
+`qt6-multimedia-ffmpeg` for the music).
 
 ```sh
 make test                          # cargo test --workspace
@@ -72,6 +73,18 @@ A Cargo workspace with two crates:
   via `qrc_resources`). Displayed names come from the engine (`name()` of jokers,
   blinds, hands, sent in the state); `Labels.js` only formats ranks, suits, effects
   and numbers. `FastFetch.qml` is the run info panel (I key).
+- Music: `Music.qml` plays the Opus tracks of `app/music/` (embedded, listed in
+  `build.rs` and in its `tracks`, `song` for those with lyrics, kept out of blinds).
+  `Main.qml` loads it through a `Loader`, so a missing Qt Multimedia leaves the
+  game silent rather than broken; scripted runs (`OMATRO_SCRIPT`) play none until
+  an `audio` step. New tracks: encode them to Opus at 96 kb/s, at −18 LUFS,
+  trailing silence trimmed. `build.rs` embeds every file of `music/` and `sounds/`.
+- Sound effects: `Sounds.qml` (loaded the same way) holds a `SoundEffect` per WAV
+  of `app/sounds/` (mono, 44.1 kHz), with its own level in `levels`; Main plays
+  them with `sound(name)`, `act(command, name)` (the sound if the state changed,
+  `error` if refused) and `soundTransition` (phase changes). Kenney's CC0 packs
+  give most of them; `app/sounds/synth.py` writes the others (chips steps, blind
+  won, victory, game over).
 - Glossary: the engine's `glossary` command lists every named term (`glossary.rs`:
   modifiers, badges, pull requests, consumables, jokers, packages; hand types only
   block matches) and its test forbids two things sharing a name. Card views

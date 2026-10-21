@@ -1,5 +1,22 @@
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 
+/// The files embedded next to the QML: Labels.js, the music, the sounds.
+fn resources() -> Vec<String> {
+    let mut files = vec!["qml/Labels.js".to_string()];
+    for (dir, ext) in [("music", "opus"), ("sounds", "wav")] {
+        println!("cargo:rerun-if-changed={dir}");
+        let mut found: Vec<String> = std::fs::read_dir(dir)
+            .unwrap_or_else(|e| panic!("{dir}: {e}"))
+            .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+            .filter(|name| name.ends_with(&format!(".{ext}")))
+            .map(|name| format!("{dir}/{name}"))
+            .collect();
+        found.sort();
+        files.extend(found);
+    }
+    files
+}
+
 fn main() {
     CxxQtBuilder::new_qml_module(QmlModule::new("omatro").qml_files([
         QmlFile::from("qml/Main.qml"),
@@ -21,6 +38,8 @@ fn main() {
         QmlFile::from("qml/JokerView.qml"),
         QmlFile::from("qml/Button.qml"),
         QmlFile::from("qml/SeedLabel.qml"),
+        QmlFile::from("qml/Music.qml"),
+        QmlFile::from("qml/Sounds.qml"),
         QmlFile::from("qml/Colors.qml").singleton(true),
         QmlFile::from("qml/Style.qml").singleton(true),
         QmlFile::from("qml/Util.qml").singleton(true),
@@ -28,7 +47,8 @@ fn main() {
         QmlFile::from("qml/I18n.qml").singleton(true),
     ]))
     // .js files are not module files: they go next to them, in the resources.
-    .qrc_resources(["qml/Labels.js"])
+    // So are the music (Music.qml) and the sound effects (Sounds.qml).
+    .qrc_resources(resources())
     .files(["src/bridge.rs"])
     .build();
 }

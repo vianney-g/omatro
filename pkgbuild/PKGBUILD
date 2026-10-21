@@ -6,7 +6,7 @@ pkgdesc="A Balatro-like card game for Omarchy, in the colors of your theme"
 arch=('x86_64')
 url="https://github.com/vianney-g/omatro"
 license=('MIT')
-depends=('qt6-base' 'qt6-declarative' 'gcc-libs' 'glibc')
+depends=('qt6-base' 'qt6-declarative' 'qt6-multimedia' 'qt6-multimedia-ffmpeg' 'gcc-libs' 'glibc')
 makedepends=('cargo')
 # cxx-qt's C++ objects can't link with LTO.
 options=('!lto')

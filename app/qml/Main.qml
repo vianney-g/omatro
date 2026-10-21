@@ -103,6 +103,7 @@ Window {
   property var scoring: null     // score breakdown being animated
   property var pendingState: null
   property int stepIndex: -1
+  property int chipSteps: 0      // chips steps sounded, a note higher each
   property bool showTotal: false
   property real liveChips: 0
   property real liveMult: 0
@@ -143,6 +144,8 @@ Window {
       shown.unshift({ kind: "found", name: I18n.tr("{n} new things", { n: found.length }), text: "" })
     else
       shown = found.concat(shown)
+    if (items.some(function(n) { return n.kind === "achievement" || n.kind === "unlocked" })) sound("achievement")
+    else if (items.some(function(n) { return n.kind === "found" })) sound("found")
     news = news.concat(shown).slice(-6)
     newsTimer.restart()
   }
@@ -213,6 +216,58 @@ Window {
     property string lastStake: ""
     // The language chosen in the game ("": the system's).
     property string language: ""
+    property bool music: true
+    property real musicVolume: 0.5
+    property bool sounds: true
+    property real soundVolume: 0.5
+  }
+
+  // ---- music (M switches it on and off); none in scripted runs, unless
+  // they ask (the "audio" step)
+  property bool scriptAudio: false
+  readonly property bool audible: engine.script() === "" || scriptAudio
+  function toggleMusic() { settings.music = !settings.music }
+  function setMusicVolume(v) {
+    settings.musicVolume = Math.round(Math.max(0, Math.min(1, v)) * 10) / 10
+    if (!settings.music) settings.music = true
+  }
+
+  // ---- sound effects (Shift+M), by name (Sounds.qml)
+  function toggleSounds() { settings.sounds = !settings.sounds }
+  function setSoundVolume(v) {
+    settings.soundVolume = Math.round(Math.max(0, Math.min(1, v)) * 10) / 10
+    if (!settings.sounds) settings.sounds = true
+  }
+  function sound(name) {
+    if (soundsPlayer.item) soundsPlayer.item.play(name)
+  }
+  // Sends a command and sounds how it went: its sound once the state
+  // changed, the error one if refused.
+  function chipSound() {
+    if (soundsPlayer.item) soundsPlayer.item.chips(chipSteps++)
+  }
+  function act(command, name) {
+    var before = game
+    send(command)
+    sound(game !== before ? name : "error")
+  }
+  Loader {
+    id: soundsPlayer
+    source: "Sounds.qml"
+  }
+  Binding { target: soundsPlayer.item; when: soundsPlayer.item !== null; property: "active"; value: settings.sounds && root.audible }
+  Binding { target: soundsPlayer.item; when: soundsPlayer.item !== null; property: "volume"; value: settings.soundVolume }
+  Loader {
+    id: musicPlayer
+    source: "Music.qml"
+  }
+  Binding { target: musicPlayer.item; when: musicPlayer.item !== null; property: "calm"; value: root.game !== null && !root.choosingDeck && !root.resuming
+    && (root.game.phase === "playing" || root.game.phase === "blind_select") }
+  Binding { target: musicPlayer.item; when: musicPlayer.item !== null; property: "playing"; value: settings.music && root.audible }
+  Binding { target: musicPlayer.item; when: musicPlayer.item !== null; property: "volume"; value: settings.musicVolume }
+  Connections {
+    target: musicPlayer.item
+    function onStarted(title) { root.showNews([{ kind: "music", name: title, text: "" }]) }
   }
 
   // ---- language: the engine translates its text and sends the catalog for
@@ -269,6 +324,7 @@ Window {
   }
 
   function applyState(s) {
+    if (game !== null && game.seed_code === s.seed_code) soundTransition(game, s)
     // Another game (new or resumed): its money shows as it is.
     if (game === null || game.seed_code !== s.seed_code) {
       moneyCounts = false
@@ -286,6 +342,16 @@ Window {
     showMoney(s.money)
   }
 
+  // What a phase change sounds like.
+  function soundTransition(from, to) {
+    if (from.phase === to.phase) return
+    if (to.phase === "playing" && from.phase === "blind_select") sound(to.blind === "boss" ? "boss" : "deal")
+    else if (to.phase === "won") sound(to.victory ? "victory" : "blind-won")
+    else if (to.phase === "lost") sound("game-over")
+    else if (to.phase === "shop" && from.phase === "won") sound("cash-out")
+    else if (to.phase === "pack") sound("pack")
+  }
+
   function toggleCard(i) {
     if (!selecting || i < 0 || i >= hand.length) return
     if (playing && game.forced === i) { notice = I18n.tr("The Clippy insists on this card."); return }
@@ -295,6 +361,7 @@ Window {
     else if (s.length < 5) s.push(i)
     else return
     selected = s
+    sound(k >= 0 ? "deselect" : "select")
     notice = ""
     if (playing) send({ cmd: "preview", cards: s })
   }
@@ -329,13 +396,14 @@ Window {
 
   function play() {
     if (!playing || selected.length === 0) return
+    sound("play")
     send({ cmd: "play", cards: selected })
   }
 
   function discard() {
     if (!playing || selected.length === 0) return
-    if (game.discards_left === 0) { notice = I18n.tr("No discards left."); return }
-    send({ cmd: "discard", cards: selected })
+    if (game.discards_left === 0) { notice = I18n.tr("No discards left."); sound("error"); return }
+    act({ cmd: "discard", cards: selected }, "discard")
   }
 
   // Enter: play the blind or the hand, cash out, leave the shop or start over.
@@ -352,7 +420,7 @@ Window {
   function skipBlind() {
     if (busy || !choosing) return
     notice = ""
-    send({ cmd: "skip_blind" })
+    act({ cmd: "skip_blind" }, "skip")
   }
 
   // Shortcuts for testing, refused by the engine unless OMATRO_DEBUG=1.
@@ -385,15 +453,18 @@ Window {
     if (!shopping || i < 0 || i >= game.shop.length) return
     var offer = game.shop[i]
     var before = game.shop.length
-    send({ cmd: "buy_and_use", offer: i })
+    act({ cmd: "buy_and_use", offer: i }, "use")
     if (game.shop.length < before)
       notice = I18n.tr(offer.kind === "theme" ? "Applied {name}." : "Ran {name}.", { name: offer.name })
   }
   function buy(i) {
-    if (shopping && i >= 0 && i < game.shop.length) send({ cmd: "buy", offer: i })
+    if (shopping && i >= 0 && i < game.shop.length) act({ cmd: "buy", offer: i }, "buy")
   }
   function sell(i) {
-    if (jokersEditable) keepingSelection({ cmd: "sell", joker: i })
+    if (jokersEditable) {
+      keepingSelection({ cmd: "sell", joker: i })
+      sound("sell")
+    }
   }
   // Whether a consumable can be used now: commands that change cards need
   // the right number of them selected, during a blind.
@@ -410,7 +481,7 @@ Window {
   function buyVoucher(i) {
     if (canMerge(i)) {
       var name = game.vouchers_for_sale[i].name
-      send({ cmd: "buy_voucher", index: i })
+      act({ cmd: "buy_voucher", index: i }, "merge")
       notice = I18n.tr("Merged {name}.", { name: name })
     }
   }
@@ -441,10 +512,11 @@ Window {
       notice = choice.max_cards > 0
         ? I18n.tr("{name}: select {range}.", { name: choice.name, range: Labels.range(choice.min_cards, choice.max_cards) })
         : I18n.tr("No room for another joker.")
+      sound("error")
       return
     }
     notice = ""
-    send({ cmd: "pick", choice: i, cards: choice.max_cards > 0 ? selected : [] })
+    act({ cmd: "pick", choice: i, cards: choice.max_cards > 0 ? selected : [] }, "pick")
   }
   // Digit keys pick the item with that number: cards of the hand; in the
   // shop, offers, then packs, then pull requests; in a pack, its choices.
@@ -478,13 +550,14 @@ Window {
     if (!canUse(c)) {
       if (c.max_cards > 0) notice = I18n.tr("{name}: select {range} during a blind.", { name: c.name, range: Labels.range(c.min_cards, c.max_cards) })
       else if (c.needs_hand) notice = I18n.tr("{name}: use it during a blind, on the cards in hand.", { name: c.name })
+      sound("error")
       return
     }
-    send({ cmd: "use_consumable", index: i, cards: c.max_cards > 0 ? selected : [] })
+    act({ cmd: "use_consumable", index: i, cards: c.max_cards > 0 ? selected : [] }, "use")
     notice = I18n.tr(c.kind === "theme" ? "Applied {name}." : "Ran {name}.", { name: c.name })
   }
   function sellConsumable(i) {
-    if (!busy) send({ cmd: "sell_consumable", index: i })
+    if (!busy) act({ cmd: "sell_consumable", index: i }, "sell")
   }
   // Moves a joker (Fork copies its right neighbour); a pinned joker stays
   // pinned.
@@ -497,8 +570,8 @@ Window {
   }
   function reroll() {
     if (!shopping) return
-    if (!canPay(game.reroll_cost)) { notice = I18n.tr("Not enough money to reroll."); return }
-    send({ cmd: "reroll" })
+    if (!canPay(game.reroll_cost)) { notice = I18n.tr("Not enough money to reroll."); sound("error"); return }
+    act({ cmd: "reroll" }, "reroll")
   }
 
   // ---- score animation ---------------------------------------------------
@@ -519,6 +592,7 @@ Window {
     liveMult = r.score.base_mult
     fireOut.stop()
     fireHeat = 0
+    chipSteps = 0
     stepTimer.interval = 600
     stepTimer.start()
   }
@@ -534,9 +608,11 @@ Window {
       if (Labels.isMoney(step.effect)) showMoney(Math.round(shownMoney) + step.effect.money)
       // The counters react: chips and mult pulse with sparks, ×mult shakes.
       var e = step.effect
-      if (Labels.isChips(e)) { chipsCounter.pulse(); sparks.burst(chipsCounter, "chips") }
-      else if (e.mult !== undefined) { multCounter.pulse(); sparks.burst(multCounter, "mult") }
-      else if (e.x_mult !== undefined) { multCounter.pulse(); multCounter.shake(); sparks.burst(multCounter, "warm") }
+      if (Labels.isChips(e)) { chipsCounter.pulse(); sparks.burst(chipsCounter, "chips"); chipSound() }
+      else if (e.mult !== undefined) { multCounter.pulse(); sparks.burst(multCounter, "mult"); sound("mult") }
+      else if (e.x_mult !== undefined) { multCounter.pulse(); multCounter.shake(); sparks.burst(multCounter, "warm"); sound("x-mult") }
+      else if (Labels.isMoney(e)) sound("money")
+      else if (e === "debuffed") sound("debuffed")
       else if (e === "balance") { chipsCounter.pulse(); multCounter.pulse() }
       fireHeat = Math.max(fireHeat, heatFor(step.chips * step.mult))
       var color = step.effect === "debuffed" ? Colors.muted
@@ -552,6 +628,7 @@ Window {
       showTotal = true
       // The blind score counts up with the total, not after it.
       shownScore = pendingState.score
+      if (heatFor(scoring.total) > 0) sound("fire")
       fireHeat = Math.max(fireHeat, heatFor(scoring.total))
       stepTimer.interval = 900
     } else {
@@ -563,6 +640,7 @@ Window {
       pendingState = null
       showTotal = false
       applyState(s)
+      if (s.phase === "playing") sound("draw")
       if (pendingNews.length) {
         showNews(pendingNews)
         pendingNews = []
@@ -679,6 +757,8 @@ Window {
       var digit = digitOf(event)
       if (k === Qt.Key_Q && (event.modifiers & Qt.ControlModifier)) Qt.quit()
       else if (k === Qt.Key_L) root.nextLanguage()
+      else if (k === Qt.Key_M && (event.modifiers & Qt.ShiftModifier)) root.toggleSounds()
+      else if (k === Qt.Key_M) root.toggleMusic()
       else if (root.resuming) {
         if (k === Qt.Key_Return || k === Qt.Key_Enter) root.resumeGame()
         else if (k === Qt.Key_N) root.declineResume()
@@ -751,7 +831,8 @@ Window {
 
     // Debug only (OMATRO_DEBUG=1): plays the steps of OMATRO_SCRIPT, separated
     // by ";": "key:Return", "key:Shift+Left", "key:Ctrl+1", "sleep:500",
-    // "shot:/path/name.png" (the window, as rendered), "size:1100,700", "quit".
+    // "shot:/path/name.png" (the window, as rendered), "size:1100,700", "quit",
+    // "audio" (scripted runs are silent until then).
     // Screenshots this way need no keyboard, pointer or focus, even offscreen.
     property var scriptSteps: []
     Timer {
@@ -794,6 +875,7 @@ Window {
         root.height = parseInt(wh[1])
       }
       else if (verb === "quit") Qt.quit()
+      else if (verb === "audio") root.scriptAudio = true
       else console.warn("script: unknown step", step)
       scriptTimer.interval = wait
       scriptTimer.start()
@@ -1732,6 +1814,14 @@ Window {
       stakes: root.stakes
       message: root.saveProblem
       onLanguage: function(lang) { root.setLanguage(lang) }
+      music: settings.music
+      musicVolume: settings.musicVolume
+      onToggleMusic: root.toggleMusic()
+      onMusicVolumeSet: function(v) { root.setMusicVolume(v) }
+      sounds: settings.sounds
+      soundVolume: settings.soundVolume
+      onToggleSounds: root.toggleSounds()
+      onSoundVolumeSet: function(v) { root.setSoundVolume(v) }
       canCancel: root.game !== null
       onStart: function(deck, stake, seed) { root.startGame(deck, stake, seed) }
       onSeedDone: keyCatcher.forceActiveFocus()
@@ -1755,7 +1845,7 @@ Window {
       Repeater {
         model: root.news
         Rectangle {
-          readonly property bool feat: modelData.kind !== "found"
+          readonly property bool feat: modelData.kind === "achievement" || modelData.kind === "unlocked"
           anchors.right: parent.right
           width: newsText.implicitWidth + 2 * Style.spacing.xl
           height: newsText.implicitHeight + 2 * Style.spacing.lg
@@ -1769,7 +1859,8 @@ Window {
             spacing: Style.spacing.xs
             Text {
               text: I18n.tr(modelData.kind === "achievement" ? "Achievement unlocked"
-                : modelData.kind === "unlocked" ? "Now in your games" : "New in the collection")
+                : modelData.kind === "unlocked" ? "Now in your games"
+                : modelData.kind === "music" ? "Now playing" : "New in the collection")
               color: Colors.muted
               font.family: Style.font.family
               font.pixelSize: Style.font.caption

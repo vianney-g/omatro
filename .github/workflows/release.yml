@@ -16,7 +16,7 @@ jobs:
     container: archlinux:latest
     steps:
       - name: Install the build dependencies
-        run: pacman -Syu --noconfirm --needed base-devel git pacman-contrib rust qt6-base qt6-declarative
+        run: pacman -Syu --noconfirm --needed base-devel git pacman-contrib rust qt6-base qt6-declarative qt6-multimedia qt6-multimedia-ffmpeg
 
       - uses: actions/checkout@v4
 

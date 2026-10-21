@@ -26,6 +26,16 @@ Rectangle {
   signal seedDone()
   signal cancel()
   signal language(string lang)
+  // The music, on or off (M), and its volume.
+  property bool music: true
+  property real musicVolume: 0.5
+  signal toggleMusic()
+  signal musicVolumeSet(real volume)
+  // The sound effects, likewise (Shift+M).
+  property bool sounds: true
+  property real soundVolume: 0.5
+  signal toggleSounds()
+  signal soundVolumeSet(real volume)
   signal collection()
 
   color: Util.alpha(Colors.background, 0.96)
@@ -46,6 +56,43 @@ Rectangle {
   function editSeed() { seedInput.forceActiveFocus() }
 
   MouseArea { anchors.fill: parent }
+
+  // On or off, and the volume by tenths.
+  component VolumeControl: Row {
+    id: control
+    property string label
+    property bool active
+    property real volume
+    signal toggled()
+    signal volumeChosen(real volume)
+    spacing: Style.spacing.md
+    Text {
+      anchors.verticalCenter: parent.verticalCenter
+      text: control.label
+      color: Colors.muted
+      font.family: Style.font.family
+      font.pixelSize: Style.font.body
+    }
+    Button {
+      compact: true
+      text: "−"
+      enabled: control.active && control.volume > 0
+      onClicked: control.volumeChosen(control.volume - 0.1)
+    }
+    Button {
+      compact: true
+      width: Style.space(70)
+      text: control.active ? Math.round(control.volume * 100) + (I18n.lang === "fr" ? "\u00a0%" : "%") : I18n.tr("Off")
+      bordered: control.active
+      onClicked: control.toggled()
+    }
+    Button {
+      compact: true
+      text: "+"
+      enabled: !control.active || control.volume < 1
+      onClicked: control.volumeChosen(control.volume + 0.1)
+    }
+  }
 
   Column {
     anchors.centerIn: parent
@@ -330,6 +377,25 @@ Rectangle {
             bordered: modelData.id === I18n.lang
             onClicked: root.language(modelData.id)
           }
+        }
+      }
+      // The music (M) and the sound effects (Shift+M): on or off, and their volume.
+      Row {
+        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: Style.space(40)
+        VolumeControl {
+          label: I18n.tr("Music (M)")
+          active: root.music
+          volume: root.musicVolume
+          onToggled: root.toggleMusic()
+          onVolumeChosen: function(v) { root.musicVolumeSet(v) }
+        }
+        VolumeControl {
+          label: I18n.tr("Sounds (Shift+M)")
+          active: root.sounds
+          volume: root.soundVolume
+          onToggled: root.toggleSounds()
+          onVolumeChosen: function(v) { root.soundVolumeSet(v) }
         }
       }
       Text {

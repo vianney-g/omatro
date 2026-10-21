@@ -21,7 +21,9 @@ Names of real people, products and companies belong to their owners; they appear
 as affectionate parody.
 
 The code is under the MIT license (see [LICENSE](LICENSE)); the license covers the
-code only, not the names and trademarks the game mentions.
+code only, not the names and trademarks the game mentions. The music (`app/music`)
+was made by the maintainer with Suno. The sound effects (`app/sounds`) come from
+[Kenney](https://kenney.nl)'s packs (CC0), or are synthesized by `app/sounds/synth.py`.
 
 ## Installation
 
@@ -41,7 +43,9 @@ git clone https://github.com/vianney-g/omatro && cd omatro/pkgbuild && makepkg -
 Releases also hold a plain archive (binary, launcher entry, icon) for other
 distributions, which needs Qt 6 installed.
 
-To build it by hand, you need Rust and Qt 6 (`qt6-base`, `qt6-declarative`).
+To build it by hand, you need Rust and Qt 6 (`qt6-base`, `qt6-declarative`,
+`qt6-multimedia` and its `qt6-multimedia-ffmpeg` backend for the music; without them
+the game is silent).
 
 ```sh
 make install   # build and install into ~/.local (binary, launcher entry, icon)
@@ -85,12 +89,18 @@ where a debug cheat was used, or played on a chosen seed, still fill the collect
 but unlock no achievement and count in neither the stats nor the history. The profile is kept in
 `~/.local/state/omatro/profile.json`.
 
+The music is lofi, from the maintainer: instrumentals during blinds, songs (with
+lyrics, and jokes) everywhere else; each track plays to its end and the next one
+follows where you are. M switches it on and off, Shift+M the sound effects (cards,
+chips climbing a scale, the PC speaker's beeps when a game is lost…), and the new
+game screen sets their volumes.
+
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, Tab to sort the hand
 by rank or suit, Shift+←/→ to move the selected card (or drag it), J to bring the next
 joker to the front when they overlap (or hover or click one), then Shift+←/→ to move it
 (or drag it, in the shop and during a blind), N for a new game, I for fastfetch (run
-info: the machine and its level, hand levels, cards left), C for the collection, Ctrl+Q
-to quit. Before a blind: Enter to play it, S to skip it. Ctrl+1 and Ctrl+2 apply the
+info: the machine and its level, hand levels, cards left), C for the collection, M for the
+music, Shift+M for the sound effects, Ctrl+Q to quit. Before a blind: Enter to play it, S to skip it. Ctrl+1 and Ctrl+2 apply the
 consumables of the clipboard. In the shop: 1 to 9 to buy the offers, then the packs,
 then the pull requests, in order; Shift+1 to 9 for Use now, which buys a theme or
 command and uses it at once; R to reroll, Enter for the next blind. The button under
