@@ -20,10 +20,11 @@ Hyprland, with affectionate jokes about DHH; it is unaffiliated with them too.
 Names of real people, products and companies belong to their owners; they appear
 as affectionate parody.
 
-The code is under the MIT license (see [LICENSE](LICENSE)); the license covers the
-code only, not the names and trademarks the game mentions. The music (`app/music`)
-was made by the maintainer with Suno. The sound effects (`app/sounds`) come from
-[Kenney](https://kenney.nl)'s packs (CC0), or are synthesized by `app/sounds/synth.py`.
+The code and the music (`app/music`, made by the maintainer with Suno) are under the
+MIT license (see [LICENSE](LICENSE)); the license does not cover the names and
+trademarks the game mentions. The sound effects (`app/sounds`) come from
+[Kenney](https://kenney.nl)'s packs (CC0), or are synthesized by `app/sounds/synth.py`
+(MIT, like the code).
 
 ## Installation
 
