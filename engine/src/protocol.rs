@@ -268,6 +268,11 @@ impl Session {
         self.profile.as_ref()
     }
 
+    /// The game in progress (the bot scores its candidate hands on a copy).
+    pub fn game(&self) -> Option<&Game> {
+        self.game.as_ref()
+    }
+
     /// What the profile gained since the last call: items found,
     /// achievements and what they unlocked.
     pub fn take_news(&mut self) -> Vec<News> {
