@@ -3036,10 +3036,15 @@ impl Game {
     }
 
     /// A new enhanced card of one of these ranks, added to the deck and the hand.
+    /// Never a Binary Blob, which would lose the rank the card was made for.
     fn add_enhanced_card(&mut self, ranks: &[u8]) {
         let rank = ranks[self.card_rng.below(ranks.len() as u64) as usize];
         let suit = Suit::ALL[self.card_rng.below(4) as usize];
-        let enhancement = Enhancement::ALL[self.card_rng.below(8) as usize];
+        let ranked: Vec<Enhancement> = Enhancement::ALL
+            .into_iter()
+            .filter(|&e| e != Enhancement::BinaryBlob)
+            .collect();
+        let enhancement = ranked[self.card_rng.below(ranked.len() as u64) as usize];
         self.next_card_id += 1;
         let card = Card::new(rank, suit)
             .with_id(self.next_card_id - 1)
@@ -5005,6 +5010,15 @@ mod tests {
             game.hand.iter().filter(|c| c.enhancement.is_some()).count(),
             3
         );
+
+        // The added cards keep the rank they were made for: never a Binary Blob.
+        for seed in 0..50 {
+            let mut game = with_oligarchy(seed, Oligarchy::HostileTakeover, vec![]);
+            game.use_consumable(0, &[]).unwrap();
+            let added = game.hand.iter().filter(|c| c.enhancement.is_some());
+            assert!(added.clone().all(|c| c.has_rank() && c.rank == ACE));
+            assert_eq!(added.count(), 2);
+        }
 
         let mut game = with_oligarchy(71, Oligarchy::MassLayoffs, vec![]);
         game.money = 0;
