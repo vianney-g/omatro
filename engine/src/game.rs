@@ -8,7 +8,7 @@ use crate::consumable::{CONSUMABLE_SLOTS, Command, Consumable, Oligarchy, Theme}
 use crate::hand::{Evaluated, HandCounts, HandKind, HandLevels, Rules, evaluate_with};
 use crate::joker::{BlindEnd, Board, Bonus, Joker, OwnedJoker, Rarity, SYNCTHING_BLINDS, Targets};
 use crate::modifier::{Edition, Enhancement, Seal};
-use crate::pack::{Pack, PackKind, SHOP_PACKS};
+use crate::pack::{Pack, PackKind, PackSize, SHOP_PACKS};
 use crate::rng::{self, Rng};
 use crate::run_deck::Deck;
 use crate::score::{Breakdown, Table, copy_target, score};
@@ -850,6 +850,9 @@ pub struct Game {
     /// The difficulty level.
     #[serde(default)]
     stake: Stake,
+    /// The first shop of the game was opened, with its jokers-git pack.
+    #[serde(default)]
+    first_shop_done: bool,
 }
 
 impl Game {
@@ -945,6 +948,7 @@ impl Game {
             best_hand: 0.0,
             events: Vec::new(),
             stake,
+            first_shop_done: false,
         };
         game.set_up_deck();
         game.starting_deck = game.deck.len();
@@ -1251,7 +1255,6 @@ impl Game {
     }
 
     fn apply_tag(&mut self, tag: Tag, hand: Option<HandKind>) {
-        use crate::pack::PackSize;
         let pack = |kind, size| Pack { kind, size };
         match tag {
             Tag::Sponsors2x => self.money += self.money.clamp(0, 40),
@@ -2627,6 +2630,15 @@ impl Game {
         self.shop_rerolls = 0;
         self.roll_offers();
         self.packs = (0..SHOP_PACKS).map(|_| self.roll_pack()).collect();
+        // Like in the original, the first shop always sells a jokers-git pack.
+        // Saves from before this rule skip it past ante 1.
+        if !self.first_shop_done && self.ante == 1 {
+            self.packs[0] = Pack {
+                kind: PackKind::JokersGit,
+                size: PackSize::Normal,
+            };
+        }
+        self.first_shop_done = true;
         self.shop_tags();
         Ok(())
     }
@@ -4920,6 +4932,15 @@ mod tests {
     }
 
     #[test]
+    fn the_first_shop_sells_a_jokers_pack() {
+        for seed in 0..20 {
+            let mut game = won_game(seed, vec![]);
+            game.cash_out().unwrap();
+            assert_eq!(game.packs[0], pack(PackKind::JokersGit, PackSize::Normal));
+        }
+    }
+
+    #[test]
     fn the_shop_sells_two_packs_that_rerolls_keep() {
         let mut game = shopping(60, vec![]);
         let packs = game.packs.clone();
@@ -4931,7 +4952,6 @@ mod tests {
 
     #[test]
     fn coreutils_draws_a_hand_for_its_commands() {
-        use crate::pack::PackSize;
         let mut game = shopping(61, vec![]);
         game.packs = vec![pack(PackKind::Coreutils, PackSize::Normal)];
         game.buy_pack(0).unwrap();
@@ -4962,7 +4982,6 @@ mod tests {
 
     #[test]
     fn base_devel_and_jokers_git() {
-        use crate::pack::PackSize;
         let mut game = shopping(62, vec![]);
         game.packs = vec![
             pack(PackKind::BaseDevel, PackSize::Meta),
@@ -4982,7 +5001,6 @@ mod tests {
 
     #[test]
     fn skipping_a_pack_grows_minimal_install() {
-        use crate::pack::PackSize;
         let mut game = shopping(63, vec![Joker::MinimalInstall, Joker::FreeAsInBeer]);
         game.packs = vec![pack(PackKind::Base16, PackSize::Full)];
         game.money = 0;
@@ -5160,7 +5178,6 @@ mod tests {
 
     #[test]
     fn oligarchy_packs_draw_a_hand() {
-        use crate::pack::PackSize;
         let mut game = shopping(86, vec![]);
         game.packs = vec![pack(PackKind::Oligarchy, PackSize::Full)];
         game.buy_pack(0).unwrap();

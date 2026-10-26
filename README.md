@@ -151,7 +151,7 @@ a command ($3, 1 chance in 7 each) or a joker you don't own yet, of a rarity dra
 resold at half price; reroll for $5, then $1 more each time). Jokers trigger left to
 right, so their order matters. The shop also sells 2 packs ([docs/packs.md](docs/packs.md)),
 opened on the spot: coreutils (commands), base16 (themes), base-devel (cards) and
-jokers-git (jokers) and oligarchy (oligarchy cards), in normal, `-full` and `-meta` sizes.
+jokers-git (jokers) and oligarchy (oligarchy cards), in normal, `-full` and `-meta` sizes. The first shop of a game always sells a jokers-git pack.
 Each ante, the shop also offers a pull request ([docs/vouchers.md](docs/vouchers.md)),
 a permanent upgrade for $10: more slots, discounts, hands, discards, interest… You start with $4 and no
 jokers.

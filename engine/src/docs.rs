@@ -207,10 +207,11 @@ fn commands() -> String {
 fn packs() -> String {
     let mut doc = header(
         "Packs",
-        "Each shop sells 2 packs besides its cards; rerolls keep them. A bought pack\n\
-         opens on the spot: pick its cards, or skip it. Themes and commands are used\n\
-         on the spot (coreutils draws a hand from the deck for its commands), cards\n\
-         join the deck, jokers the row.",
+        "Each shop sells 2 packs besides its cards; rerolls keep them. The first shop\n\
+         of a game always sells a jokers-git pack. A bought pack opens on the spot:\n\
+         pick its cards, or skip it. Themes and commands are used on the spot\n\
+         (coreutils draws a hand from the deck for its commands), cards join the\n\
+         deck, jokers the row.",
     );
     doc += "| Id | Pack | Holds | Quip |\n|---|---|---|---|\n";
     for kind in PackKind::ALL {

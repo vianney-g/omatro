@@ -54,9 +54,9 @@ Hidden jokers only show up once their achievement is done (see
 | `plugin_manager` | Plugin Manager | core | $4 | +3 mult per joker | *lazy.nvim, 87 plugins, 12 ms startup.* |
 | `homelab` | Homelab | core | $4 | Adds the sell value of your other jokers to mult | *Spare parts, adding up.* |
 | `paru` | paru | core | $4 | One free reroll per shop | *Free reroll, now in Rust.* |
-| `ruby_gem` | Ruby Gem | core | $5 | +2 mult for each scoring diamond | *Optimized for programmer happiness.* |
+| `ruby_gem` | Ruby Gem | core | $5 | +3 mult for each scoring diamond | *Optimized for programmer happiness.* |
 | `fan_mail` | Fan Mail | core | $5 | +15 chips for each scoring heart | *HEY, someone loves your pull request.* |
-| `rails_world` | Rails World | core | $5 | +20 chips for each scoring face card | *Everyone came for the keynote. And the opinions.* |
+| `rails_world` | Rails World | core | $5 | +30 chips for each scoring face card | *Everyone came for the keynote. And the opinions.* |
 | `tiling_manager` | Tiling Manager | core | $5 | +12 mult if the hand is a straight | *Floating windows are a lifestyle choice.* |
 | `cloud_exit` | Cloud Exit | core | $5 | +$1 per discard left at the end of the blind | *Why rent what you can own?* |
 | `open_source_love` | Open Source Love | core | $5 | +3 mult for each scoring heart | *Made with ♥ and too much coffee.* |
@@ -153,7 +153,7 @@ Hidden jokers only show up once their achievement is done (see
 | `minimal_waybar` | Minimal Waybar | extra | $8 | ×1 mult per empty joker slot (Minimal Waybar counts as empty) | *Less widgets, more wallpaper.* |
 | `senior_engineer` | Senior Engineer | AUR | $7 | ×3 mult if the deck holds at least 16 enhanced cards | *Has seen every config.* |
 | `bloatware` | Bloatware | AUR | $7 | +250 chips, −2 hand size | *Huge numbers. No room for anything.* |
-| `hotwire` | Hotwire | AUR | $8 | ×3 mult if the hand is a three of a kind | *Three frameworks walk into a monolith.* |
+| `hotwire` | Hotwire | AUR | $8 | ×3 mult if the hand contains a Three of a Kind | *Three frameworks walk into a monolith.* |
 | `code_review` | Code Review | AUR | $8 | ×2 mult if the hand contains a Pair | *Looks good to me. Ship it.* |
 | `quad_core` | Quad Core | AUR | $8 | ×4 mult if the hand contains a Four of a Kind | *All cores busy compiling Rust.* |
 | `git_bisect` | Git Bisect | AUR | $8 | ×3 mult if the hand contains a Straight | *Good, bad, good, bad… found it.* |

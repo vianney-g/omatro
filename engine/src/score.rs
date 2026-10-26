@@ -438,16 +438,18 @@ mod tests {
 
     #[test]
     fn card_jokers_trigger_per_scoring_card() {
-        // Three queens, two of them diamonds: 30 + 3×10 + 3×20 chips, 3 + 2×2 mult.
+        // Three queens, two of them diamonds: 30 + 3×10 + 3×30 chips, 3 + 2×3 mult.
         let b = setup(&[Joker::RubyGem, Joker::RailsWorld]).play("QD QH 2D QD");
-        assert_eq!((b.chips, b.mult), (120, 7.0));
-        assert_eq!(b.total, 840.0);
+        assert_eq!((b.chips, b.mult), (150, 9.0));
+        assert_eq!(b.total, 1350.0);
     }
 
     #[test]
     fn hand_kind_jokers() {
         // Three of a kind: (30 + 3×5) × 3, then ×3 for Hotwire.
         assert_eq!(total("5H 5D 5S", &[Joker::Hotwire]), 405.0);
+        // A full house contains a three of a kind: (40 + 3×5 + 2×3) × 4 × 3.
+        assert_eq!(total("5H 5D 5S 3C 3D", &[Joker::Hotwire]), 732.0);
         // Straight: (30 + 2+3+4+5+6) × (4 + 12).
         assert_eq!(total("2H 3D 4S 5C 6H", &[Joker::TilingManager]), 800.0);
         assert!(setup(&[Joker::TilingManager]).play("2H 2D 4S").steps.len() == 2);

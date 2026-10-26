@@ -2,10 +2,11 @@
 
 <!-- Generated from the engine code by `make docs`: do not edit by hand. -->
 
-Each shop sells 2 packs besides its cards; rerolls keep them. A bought pack
-opens on the spot: pick its cards, or skip it. Themes and commands are used
-on the spot (coreutils draws a hand from the deck for its commands), cards
-join the deck, jokers the row.
+Each shop sells 2 packs besides its cards; rerolls keep them. The first shop
+of a game always sells a jokers-git pack. A bought pack opens on the spot:
+pick its cards, or skip it. Themes and commands are used on the spot
+(coreutils draws a hand from the deck for its commands), cards join the
+deck, jokers the row.
 
 | Id | Pack | Holds | Quip |
 |---|---|---|---|

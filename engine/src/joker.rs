@@ -771,13 +771,13 @@ impl Joker {
         match self {
             Joker::Dotfiles => "+30 chips",
             Joker::Omakase => "+5 mult",
-            Joker::RubyGem => "+2 mult for each scoring diamond",
+            Joker::RubyGem => "+3 mult for each scoring diamond",
             Joker::FanMail => "+15 chips for each scoring heart",
-            Joker::RailsWorld => "+20 chips for each scoring face card",
+            Joker::RailsWorld => "+30 chips for each scoring face card",
             Joker::SuperKey => "+2 mult for each scoring card",
             Joker::TilingManager => "+12 mult if the hand is a straight",
             Joker::NoBuild => "×2 mult if the played hand has 3 cards or fewer",
-            Joker::Hotwire => "×3 mult if the hand is a three of a kind",
+            Joker::Hotwire => "×3 mult if the hand contains a Three of a Kind",
             Joker::CloudExit => "+$1 per discard left at the end of the blind",
             Joker::PairProgramming => "+8 mult if the hand contains a Pair",
             Joker::DualMonitors => "+10 mult if the hand contains a Two Pair",
@@ -1497,9 +1497,9 @@ impl Joker {
             {
                 vec![Effect::XMult(2.0)]
             }
-            Joker::RubyGem if card.is_suit(Suit::Diamonds) => vec![Effect::Mult(2.0)],
+            Joker::RubyGem if card.is_suit(Suit::Diamonds) => vec![Effect::Mult(3.0)],
             Joker::FanMail if card.is_suit(Suit::Hearts) => vec![Effect::Chips(15)],
-            Joker::RailsWorld if face => vec![Effect::Chips(20)],
+            Joker::RailsWorld if face => vec![Effect::Chips(30)],
             Joker::SuperKey => vec![Effect::Mult(2.0)],
             Joker::OpenSourceLove if card.is_suit(Suit::Hearts) => vec![Effect::Mult(3.0)],
             Joker::RabbitHole if card.is_suit(Suit::Spades) => vec![Effect::Mult(3.0)],
@@ -1615,7 +1615,7 @@ impl Joker {
                 Effect::Mult(12.0)
             }
             Joker::NoBuild if hand.played.len() <= 3 => Effect::XMult(2.0),
-            Joker::Hotwire if kind == HandKind::ThreeOfAKind => Effect::XMult(3.0),
+            Joker::Hotwire if has(HandKind::ThreeOfAKind) => Effect::XMult(3.0),
             Joker::PairProgramming if has(HandKind::Pair) => Effect::Mult(8.0),
             Joker::DualMonitors if has(HandKind::TwoPair) => Effect::Mult(10.0),
             Joker::ThreeWayMerge if has(HandKind::ThreeOfAKind) => Effect::Mult(12.0),
