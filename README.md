@@ -3,6 +3,8 @@
 A Balatro-like card game for Omarchy: play poker hands to beat blinds, while jokers
 multiply the score (chips × mult).
 
+![A game of omatro: the first blind, five jokers, two aces and a jack selected](docs/screenshot.png)
+
 A standalone Qt Quick application, like omawrite or omacut, but written in Rust
 (Qt binding with [cxx-qt](https://github.com/KDAB/cxx-qt)):
 
