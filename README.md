@@ -16,6 +16,8 @@ A standalone Qt Quick application, like omawrite or omacut, but written in Rust
   it changes.
 - `pkgbuild/`: launcher entry and icon.
 
+![The game following the Omarchy theme as it changes, through ten themes](docs/themes.gif)
+
 A personal project, unaffiliated with Balatro: the mechanics are borrowed, but not the
 name, the artwork, the text or the code. The content is themed around Omarchy, Arch and
 Hyprland, with affectionate jokes about DHH; it is unaffiliated with them too.
