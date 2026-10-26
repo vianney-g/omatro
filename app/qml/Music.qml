@@ -20,6 +20,7 @@ Item {
     { file: "just-one-more-blind", title: "Just One More Blind", song: true },
     { file: "omakase-shuffle", title: "Omakase Shuffle", song: true },
     { file: "tiling-rain", title: "Tiling Rain", song: true },
+    { file: "vingt-quatre-heures-trente-cinq-heures", title: "Vingt-quatre heures, trente-cinq heures", song: true },
     { file: "omatro-1", title: "Omatro 1", song: false },
     { file: "omatro-2", title: "Omatro 2", song: false },
     { file: "omatro-3", title: "Omatro 3", song: false },
