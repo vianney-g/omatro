@@ -1,6 +1,6 @@
 [package]
 name = "omatro"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 description = "Balatro-like card game for Omarchy, in Qt Quick"
 license = "MIT"
