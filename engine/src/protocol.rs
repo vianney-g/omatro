@@ -764,9 +764,8 @@ mod tests {
             ..Session::default()
         };
         // What the app reads: handle_json adds the changes to the response.
-        let mut json = |line: &str| -> Value {
-            serde_json::from_str(&session.handle_json(line)).unwrap()
-        };
+        let mut json =
+            |line: &str| -> Value { serde_json::from_str(&session.handle_json(line)).unwrap() };
         json(r#"{"cmd":"new_game","seed":1}"#);
         let r = json(r#"{"cmd":"select_blind"}"#);
         assert!(r.get("card_changes").is_none());

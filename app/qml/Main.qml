@@ -354,12 +354,16 @@ Window {
   function playCardChanges(changes) {
     var shown = false
     var broke = false
+    var dropped = false
     changes.forEach(function(c) {
       var view = cardView(c.card.id)
       if (!view || c.change === "added") return
       if (c.change === "destroyed") {
         view.vanish()
         broke = true
+      } else if (c.change === "discarded") {
+        view.drop()
+        dropped = true
       } else if (sameFace(view.card, c.card)) {
         // Only chips gained (Incremental Build), or already shown.
         var chips = (c.card.bonus_chips || 0) - (view.card.bonus_chips || 0)
@@ -372,7 +376,7 @@ Window {
       if (source) source.flash("", Colors.accent)
       shown = true
     })
-    if (shown) sound(broke ? "card-break" : "card-change")
+    if (shown) sound(broke ? "card-break" : dropped ? "discard" : "card-change")
     return shown
   }
   // The cards added to the hand come in.

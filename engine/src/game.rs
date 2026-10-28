@@ -683,7 +683,8 @@ enum Offer {
 
 /// A card destroyed, changed or added by a command, a joker or a boss, so that
 /// the interface can show it happen (`Game::take_card_changes`). Cards drawn,
-/// played or discarded are not changes.
+/// played or discarded by the player are not changes; those a boss throws out
+/// of the hand are.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct CardChange {
     pub change: CardChangeKind,
@@ -700,6 +701,8 @@ pub enum CardChangeKind {
     Destroyed,
     Changed,
     Added,
+    /// Thrown out of the hand by The OOM Killer, back to the deck.
+    Discarded,
 }
 
 /// Something that happened in the game, for the profile: the collection
@@ -1122,8 +1125,11 @@ impl Game {
             Some(known) => {
                 known.card = change.card;
                 known.from = change.from.or(known.from);
-                if change.change == CardChangeKind::Destroyed {
-                    known.change = CardChangeKind::Destroyed;
+                if matches!(
+                    change.change,
+                    CardChangeKind::Destroyed | CardChangeKind::Discarded
+                ) {
+                    known.change = change.change;
                 }
             }
             None => self.card_changes.push(change),
@@ -2310,7 +2316,17 @@ impl Game {
                 let mut ids: Vec<u32> = self.hand.iter().map(|c| c.id).collect();
                 self.boss_rng.shuffle(&mut ids);
                 ids.truncate(2);
-                self.hand.retain(|c| !ids.contains(&c.id));
+                let (gone, kept) = std::mem::take(&mut self.hand)
+                    .into_iter()
+                    .partition(|c| ids.contains(&c.id));
+                self.hand = kept;
+                for card in gone {
+                    self.card_changed(CardChange {
+                        change: CardChangeKind::Discarded,
+                        card,
+                        from: None,
+                    });
+                }
                 breakdown
                     .notes
                     .push(format!("The OOM Killer discarded {} cards.", ids.len()));
@@ -4932,7 +4948,11 @@ mod tests {
         let changes = game.take_card_changes();
         let destroyed: Vec<Card> = changes.iter().map(|c| c.card).collect();
         assert_eq!(destroyed, gone);
-        assert!(changes.iter().all(|c| c.change == CardChangeKind::Destroyed));
+        assert!(
+            changes
+                .iter()
+                .all(|c| c.change == CardChangeKind::Destroyed)
+        );
         assert!(game.take_card_changes().is_empty());
 
         let mut game = with_command(44, Command::CpF, vec![]);
@@ -5383,6 +5403,10 @@ mod tests {
             (game.hand.len(), game.draw_pile.len()),
             (HAND_SIZE, left - 3)
         );
+        let changes = game.take_card_changes();
+        assert_eq!(changes.len(), 2);
+        assert!(changes.iter().all(|c| c.change == CardChangeKind::Discarded
+            && !game.hand.iter().any(|h| h.id == c.card.id)));
 
         let mut game = boss_game(100, Boss::RateLimiter, vec![]);
         game.play(&[0, 1, 2, 3, 4]).unwrap();

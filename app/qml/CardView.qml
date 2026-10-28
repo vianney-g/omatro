@@ -68,10 +68,11 @@ Item {
   }
 
   // What a command, a joker or a boss did to the card (Main.showCardChanges):
-  // it breaks apart, turns over to its new face, or comes in.
+  // it breaks apart, turns over to its new face, comes in, or falls away.
   property var nextCard: null
   property color glowColor: Colors.accent
   function vanish() { vanishAnim.restart() }
+  function drop() { dropAnim.restart() }
   function morph(card) {
     nextCard = card
     morphAnim.restart()
@@ -307,6 +308,17 @@ Item {
       NumberAnimation { target: root; property: "opacity"; to: 0; duration: 340; easing.type: Easing.InCubic }
       NumberAnimation { target: face; property: "scale"; to: 0.4; duration: 340; easing.type: Easing.InBack }
       NumberAnimation { target: face; property: "rotation"; to: 18; duration: 340; easing.type: Easing.InQuad }
+    }
+  }
+
+  // Thrown out of the hand (The OOM Killer): it falls away, greyed.
+  SequentialAnimation {
+    id: dropAnim
+    ScriptAction { script: root.glowColor = Colors.muted }
+    NumberAnimation { target: glow; property: "opacity"; to: 1; duration: 90 }
+    ParallelAnimation {
+      NumberAnimation { target: fly; property: "y"; to: root.height * 0.8; duration: 380; easing.type: Easing.InCubic }
+      NumberAnimation { target: root; property: "opacity"; to: 0; duration: 380; easing.type: Easing.InQuad }
     }
   }
 
