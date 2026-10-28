@@ -1582,6 +1582,8 @@ impl Joker {
                 if hand
                     .held
                     .iter()
+                    // Binary Blobs have no suit: they don't count either way.
+                    .filter(|c| c.has_rank())
                     .all(|c| c.is_suit(Suit::Spades) || c.is_suit(Suit::Clubs)) =>
             {
                 Effect::XMult(3.0)

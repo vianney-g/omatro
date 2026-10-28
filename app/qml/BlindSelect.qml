@@ -90,8 +90,11 @@ Row {
         }
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
-          text: I18n.tr("Reward: {money}", { money: Labels.money(modelData.reward) })
-          color: Colors.accent
+          // Track Day and up: the small blind pays nothing.
+          text: modelData.reward > 0
+            ? I18n.tr("Reward: {money}", { money: Labels.money(modelData.reward) })
+            : I18n.tr("No reward")
+          color: modelData.reward > 0 ? Colors.accent : Colors.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.body
         }

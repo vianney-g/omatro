@@ -652,6 +652,10 @@ mod tests {
         assert_eq!(s.play("AS").mult, 3.0);
         s.held = cards("KS 2H");
         assert_eq!(s.play("AS").mult, 1.0);
+        // A Binary Blob held has no suit: it neither counts nor breaks it.
+        s.held = cards("KS 2H");
+        s.held[1].enhancement = Some(Enhancement::BinaryBlob);
+        assert_eq!(s.play("AS").mult, 3.0);
     }
 
     #[test]

@@ -2568,6 +2568,16 @@ impl Game {
         Ok(())
     }
 
+    /// Money for beating a blind of this ante.
+    fn blind_reward(&self, kind: BlindKind) -> u32 {
+        match kind {
+            BlindKind::Boss => self.boss.reward(),
+            // Track Day: the small blind pays nothing.
+            BlindKind::Small if self.stake >= Stake::TrackDay => 0,
+            kind => kind.reward(),
+        }
+    }
+
     fn reward(&self) -> Reward {
         let cron_jobs = 1 + self.abilities(Joker::CronJob) as u32;
         let enterprise = self
@@ -2576,12 +2586,7 @@ impl Game {
             .filter(|c| c.is(Enhancement::Enterprise))
             .count() as u32;
         let cards = 3 * enterprise * cron_jobs;
-        let blind = match self.blind {
-            BlindKind::Boss => self.boss.reward(),
-            // Track Day: the small blind pays nothing.
-            BlindKind::Small if self.stake >= Stake::TrackDay => 0,
-            kind => kind.reward(),
-        };
+        let blind = self.blind_reward(self.blind);
         // Raspberry Pi: $2 per hand and $1 per discard left, but no interest.
         let pi = self.deck_is(Deck::RaspberryPi);
         let hands = self.hands_left * if pi { 2 } else { 1 };
@@ -3913,7 +3918,7 @@ impl Game {
                         description: boss.map_or("", Boss::description),
                         quip: boss.map_or(kind.quip(), Boss::quip),
                         target: self.target_of(kind),
-                        reward: boss.map_or(kind.reward(), Boss::reward),
+                        reward: self.blind_reward(kind),
                         status: self.blind_status(kind),
                         tag: match kind {
                             BlindKind::Small => Some(self.blind_tag_info(0)),
@@ -6126,6 +6131,9 @@ mod tests {
         assert_eq!(le_mans.target_of(BlindKind::Small), 200_000.0);
 
         let mut track = Game::with_stake(1, vec![], None, Stake::TrackDay);
+        // The blind selection shows what the blinds pay.
+        let rewards: Vec<u32> = track.state().blinds.iter().map(|b| b.reward).collect();
+        assert_eq!(rewards, [0, 4, track.boss.reward()]);
         track.select_blind().unwrap();
         track.score = track.target();
         track.win_blind();
