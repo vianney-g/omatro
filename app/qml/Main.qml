@@ -52,6 +52,7 @@ Window {
       else showNews(r.news)
     }
     var changes = r.card_changes || []
+    if (r.state) showDeckChanges(changes, r.state)
     if (r.event === "state") applyChangedState(r.state, changes)
     else if (r.event === "collection") collection = r.collection
     else if (r.event === "preview") showPreview(r)
@@ -412,6 +413,24 @@ Window {
     changing = false
     applyState(c.state)
     showAddedCards(c.changes)
+  }
+  // Changes to cards neither on view nor coming into the hand (a card
+  // bought, a Binary Blob left in the draw pile) show by the deck count.
+  property var deckChanges: []
+  function showDeckChanges(changes, s) {
+    var offView = changes.filter(function(c) {
+      return !cardView(c.card.id) && !s.hand.some(function(h) { return h.id === c.card.id })
+    })
+    if (offView.length === 0) return
+    deckChangesFade.stop()
+    deckChangesFlow.opacity = 1
+    deckChanges = offView.slice(0, 8)
+    deckChangesTimer.restart()
+  }
+  Timer {
+    id: deckChangesTimer
+    interval: 1800
+    onTriggered: deckChangesFade.restart()
   }
   Timer {
     id: changeTimer
@@ -1253,6 +1272,34 @@ Window {
           }
 
           Caption { text: root.game ? I18n.tr("Deck: {a} / {b}", { a: root.game.remaining.length, b: root.game.deck_size }) : "" }
+          // The deck's cards that changed out of view, small.
+          Flow {
+            id: deckChangesFlow
+            Layout.fillWidth: true
+            visible: root.deckChanges.length > 0
+            SequentialAnimation {
+              id: deckChangesFade
+              NumberAnimation { target: deckChangesFlow; property: "opacity"; to: 0; duration: 300 }
+              ScriptAction { script: { root.deckChanges = []; deckChangesFlow.opacity = 1 } }
+            }
+            spacing: Style.spacing.sm
+            Repeater {
+              model: root.deckChanges
+              Item {
+                width: mini.width * mini.scale
+                height: mini.height * mini.scale
+                CardView {
+                  id: mini
+                  scale: 0.5
+                  transformOrigin: Item.TopLeft
+                  modifiers: root.game ? root.game.modifiers : null
+                  card: modelData.card
+                  interactive: false
+                  Component.onCompleted: modelData.change === "destroyed" ? vanish() : appear()
+                }
+              }
+            }
+          }
 
           // Badges won, waiting for their moment.
           Column {
