@@ -215,7 +215,7 @@ Responses:
   `status`, and the `tag` skipping it gives), the ante's `boss` and `boss_active`, `target`, `score`,
   hands and discards left (in the `pack` phase, the hand is the one a coreutils pack
   drew; `face_down`, `debuffed` and `forced` follow the hand's cards), `remaining` (cards left to draw, or the whole deck between
-  blinds), `deck_size`, `sort_by` (`rank` or `suit`), `hands` (each hand type's `level`, `chips`, `mult` and `played`
+  blinds), `deck` (the whole deck, sorted the same way), `deck_size`, `sort_by` (`rank` or `suit`), `hands` (each hand type's `level`, `chips`, `mult` and `played`
   count; secret hands only once played), `phase` = `blind_select` / `playing` / `won` / `shop` /
   `pack` / `lost`, `victory` (the winning ante's boss was just beaten), hand, `hand_size`,
   jokers (`id`, `name`, `description`, `quip`, `rarity`, `edition`, `price`,

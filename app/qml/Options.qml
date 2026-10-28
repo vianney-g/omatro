@@ -33,7 +33,7 @@ Rectangle {
       ["1-5", "install"], ["Shift+1-5", "install, with cards selected"], ["Ctrl+C, Esc", "skip the pack"] ] },
     { title: "Anywhere", keys: [
       ["J, Shift+←/→", "bring a joker forward, move it"], ["Ctrl+1, Ctrl+2", "apply a consumable"],
-      ["I", "fastfetch"], ["C", "collection"], ["Ctrl+N", "new game"], ["O", "settings"], ["Ctrl+Q", "quit"] ] },
+      ["I", "fastfetch"], ["P", "the deck"], ["C", "collection"], ["Ctrl+N", "new game"], ["O", "settings"], ["Ctrl+Q", "quit"] ] },
   ]
 
   // Key names as the keyboard reads in the language (Maj, Entrée…).

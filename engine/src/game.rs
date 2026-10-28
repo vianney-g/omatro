@@ -502,6 +502,8 @@ pub struct State {
     /// Cards left to draw during a blind, the whole deck otherwise; sorted by
     /// suit, then descending rank.
     pub remaining: Vec<Card>,
+    /// The whole deck, sorted the same way.
+    pub deck: Vec<Card>,
     pub deck_size: usize,
     /// Hand types weakest first, without the secret ones never played.
     pub hands: Vec<HandInfo>,
@@ -4083,6 +4085,11 @@ impl Game {
                     Phase::Playing | Phase::Won | Phase::Lost => self.draw_pile.clone(),
                     Phase::BlindSelect | Phase::Shop | Phase::Pack => self.deck.clone(),
                 };
+                cards.sort_by_key(|c| (c.suit as u8, std::cmp::Reverse(c.rank)));
+                cards
+            },
+            deck: {
+                let mut cards = self.deck.clone();
                 cards.sort_by_key(|c| (c.suit as u8, std::cmp::Reverse(c.rank)));
                 cards
             },

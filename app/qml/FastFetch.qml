@@ -8,6 +8,7 @@ Rectangle {
 
   property var game: null
   signal close()
+  signal openDeck()
 
   function copySeed() { seedLabel.copy() }
 
@@ -158,8 +159,17 @@ Rectangle {
             text: I18n.tr("{n} files, no hidden dotfiles. Yet.", { n: root.game ? root.game.deck_size : 52 })
             font.italic: true
           }
-          Label {
-            text: root.game ? I18n.tr("{a} / {b} cards left", { a: root.game.remaining.length, b: root.game.deck_size }) : ""
+          Row {
+            spacing: Style.spacing.lg
+            Label {
+              anchors.verticalCenter: parent.verticalCenter
+              text: root.game ? I18n.tr("{a} / {b} cards left", { a: root.game.remaining.length, b: root.game.deck_size }) : ""
+            }
+            Button {
+              compact: true
+              text: I18n.tr("Deck (P)")
+              onClicked: root.openDeck()
+            }
           }
           Label {
             readonly property int blobs: {

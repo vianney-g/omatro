@@ -22,6 +22,9 @@ Item {
   property bool forced: false
   property bool interactive: true
   property string shortcut: ""
+  // False when the view shows the details itself (the deck in fastfetch).
+  property bool showTip: true
+  readonly property bool hovered: mouse.containsMouse
   signal clicked()
 
   width: Style.space(84)
@@ -231,28 +234,9 @@ Item {
     }
 
     // Face down: the back of the card, over everything.
-    Rectangle {
+    CardBack {
       anchors.fill: parent
       visible: root.faceDown
-      radius: Style.cornerRadius
-      color: Qt.tint(Colors.background, Util.alpha(Colors.accent, 0.25))
-      border.width: Style.space(2)
-      border.color: Util.alpha(Colors.accent, 0.6)
-      Rectangle {
-        anchors { fill: parent; margins: Style.space(6) }
-        radius: Style.cornerRadius
-        color: "transparent"
-        border.width: Style.normalBorderWidth
-        border.color: Util.alpha(Colors.accent, 0.5)
-      }
-      Text {
-        anchors.centerIn: parent
-        text: "?"
-        color: Colors.accent
-        font.family: Style.font.family
-        font.pixelSize: Math.round(root.width * 0.5)
-        font.bold: true
-      }
     }
 
     // Lights up while the card changes.
@@ -356,7 +340,7 @@ Item {
   // What the card carries, while hovered.
   Rectangle {
     z: 10
-    visible: mouse.containsMouse && root.details !== ""
+    visible: root.showTip && mouse.containsMouse && root.details !== ""
     anchors { horizontalCenter: face.horizontalCenter; bottom: face.top; bottomMargin: Style.space(8) }
     width: Math.min(Style.space(260), tip.implicitWidth + 2 * Style.space(8))
     height: tip.implicitHeight + 2 * Style.space(6)

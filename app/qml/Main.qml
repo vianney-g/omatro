@@ -135,6 +135,7 @@ Window {
   }
   property string notice: ""
   property bool infoOpen: false   // fastfetch panel
+  property bool deckOpen: false   // the whole deck (P)
   property bool optionsOpen: false  // settings and keys (O)
 
   // ---- collection and achievements (C), and what they gain (news)
@@ -953,7 +954,12 @@ Window {
         else if (k === Qt.Key_Escape && root.game !== null) root.choosingDeck = false
         else return
       }
-      else if (k === Qt.Key_I) root.infoOpen = !root.infoOpen
+      else if (k === Qt.Key_I) { root.deckOpen = false; root.infoOpen = !root.infoOpen }
+      else if (k === Qt.Key_P && root.game !== null) { root.infoOpen = false; root.deckOpen = !root.deckOpen }
+      else if (root.deckOpen) {
+        if (k === Qt.Key_Escape) root.deckOpen = false
+        else return
+      }
       else if (root.infoOpen) {
         if (k === Qt.Key_Escape) root.infoOpen = false
         else if (k === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) fastFetch.copySeed()
@@ -2016,6 +2022,57 @@ Window {
       anchors.fill: parent
     }
 
+    // ---- the draw pile, bottom right, beside the buttons: a click shows
+    // the whole deck (P)
+    Item {
+      id: pile
+      visible: root.game !== null && !root.choosingDeck
+      anchors { right: parent.right; bottom: parent.bottom; margins: Style.spacing.huge }
+      readonly property real cardWidth: Style.space(46)
+      width: pileCount.width + Style.spacing.md + cardWidth
+      height: Math.round(cardWidth * 1.4)
+      readonly property int count: root.game ? root.game.remaining.length : 0
+      scale: pileMouse.containsMouse ? 1.06 : 1
+      Behavior on scale { NumberAnimation { duration: 120 } }
+      Text {
+        id: pileCount
+        anchors { left: parent.left; bottom: parent.bottom }
+        text: root.game ? root.game.remaining.length + " / " + root.game.deck_size : ""
+        color: Colors.muted
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+      }
+      // A thicker stack while it is full.
+      Repeater {
+        model: pile.count === 0 ? 0 : Math.min(3, Math.ceil(pile.count / 18))
+        CardBack {
+          x: pile.width - pile.cardWidth - index * Style.space(3)
+          y: -index * Style.space(3)
+          z: index
+          width: pile.cardWidth
+          height: pile.height
+        }
+      }
+      // An empty pile: its outline.
+      Rectangle {
+        visible: pile.count === 0
+        x: pile.width - pile.cardWidth
+        width: pile.cardWidth
+        height: pile.height
+        radius: Style.cornerRadius
+        color: "transparent"
+        border.width: Style.normalBorderWidth
+        border.color: Style.normalBorderColor
+      }
+      MouseArea {
+        id: pileMouse
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: { root.infoOpen = false; root.deckOpen = true }
+      }
+    }
+
     // ---- fastfetch: run info over everything
     FastFetch {
       id: fastFetch
@@ -2023,6 +2080,15 @@ Window {
       visible: root.infoOpen
       game: root.game
       onClose: root.infoOpen = false
+      onOpenDeck: { root.infoOpen = false; root.deckOpen = true }
+    }
+
+    // ---- the whole deck
+    DeckView {
+      anchors.fill: parent
+      visible: root.deckOpen
+      game: root.game
+      onClose: root.deckOpen = false
     }
 
     // ---- new game: the deck to play with
