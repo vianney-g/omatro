@@ -77,6 +77,22 @@ Item {
     morphAnim.restart()
   }
   function appear() { appearAnim.restart() }
+  // Played: the card comes from where it was in the hand (dx, dy away).
+  function flyFrom(dx, dy, delay) {
+    fly.x = dx
+    fly.y = dy
+    flyAnim.delay = delay
+    flyAnim.restart()
+  }
+  SequentialAnimation {
+    id: flyAnim
+    property int delay: 0
+    PauseAnimation { duration: flyAnim.delay }
+    ParallelAnimation {
+      NumberAnimation { target: fly; property: "x"; to: 0; duration: 260; easing.type: Easing.OutCubic }
+      NumberAnimation { target: fly; property: "y"; to: 0; duration: 260; easing.type: Easing.OutCubic }
+    }
+  }
 
   Rectangle {
     id: face
@@ -92,10 +108,13 @@ Item {
       : root.edition ? Util.alpha(Colors.accent, 0.6) : Style.normalBorderColor
     opacity: root.dimmed || (root.disabledBy && !root.faceDown) ? 0.45 : 1
     Behavior on opacity { NumberAnimation { duration: 150 } }
-    transform: Scale {
-      id: flip
-      origin.x: face.width / 2
-    }
+    transform: [
+      Scale {
+        id: flip
+        origin.x: face.width / 2
+      },
+      Translate { id: fly }
+    ]
 
     Column {
       x: Style.space(7)

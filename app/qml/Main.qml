@@ -106,6 +106,10 @@ Window {
   // Cards the hand changed (Overclocked broken, Quine…), shown once scored.
   property var scoringChanges: []
   property bool changesShown: false
+  // The played cards as they left the hand: they turn over to the face they
+  // scored with (Enterprise Sales…) before the steps.
+  property var tableCards: []
+  property bool turnedOver: false
   property int stepIndex: -1
   property int chipSteps: 0      // chips steps sounded, a note higher each
   property bool showTotal: false
@@ -357,8 +361,9 @@ Window {
         view.vanish()
         broke = true
       } else if (sameFace(view.card, c.card)) {
-        // Only chips gained (Incremental Build).
+        // Only chips gained (Incremental Build), or already shown.
         var chips = (c.card.bonus_chips || 0) - (view.card.bonus_chips || 0)
+        if (chips <= 0 && c.from === undefined) return
         view.flash(chips > 0 ? "+" + chips : "", Colors.accent)
       } else {
         view.morph(c.card)
@@ -668,10 +673,17 @@ Window {
     finishCardChanges()
     scoringChanges = changes
     changesShown = false
+    turnedOver = false
+    // Where each played card was, to fly from there, and its face then.
+    var from = {}
     var rest = []
-    for (var i = 0; i < hand.length; i++)
-      if (selected.indexOf(i) < 0) rest.push(hand[i])
+    for (var i = 0; i < hand.length; i++) {
+      if (selected.indexOf(i) < 0) { rest.push(hand[i]); continue }
+      var view = handRepeater.itemAt(i)
+      from[hand[i].id] = { card: hand[i], at: view ? view.mapToItem(null, 0, 0) : null }
+    }
     hand = rest
+    tableCards = r.score.cards.map(function(c) { return from[c.id] ? from[c.id].card : c })
     selected = []
     preview = null
     scoring = r.score
@@ -685,9 +697,36 @@ Window {
     chipSteps = 0
     stepTimer.interval = 600
     stepTimer.start()
+    tableRow.forceLayout()
+    for (var t = 0; t < tableRepeater.count; t++) {
+      var card = tableRepeater.itemAt(t)
+      var start = from[tableCards[t].id]
+      if (!card || !start || !start.at) continue
+      var here = card.mapToItem(null, 0, 0)
+      card.flyFrom(start.at.x - here.x, start.at.y - here.y, 40 * t)
+    }
+  }
+
+  // The played cards that a joker changed before scoring turn over; true when any did.
+  function turnOverTable() {
+    var shown = false
+    for (var i = 0; i < tableRepeater.count; i++) {
+      var view = tableRepeater.itemAt(i)
+      var scored = scoring.cards[i]
+      if (view && !sameFace(view.card, scored)) {
+        view.morph(scored)
+        shown = true
+      }
+    }
+    if (shown) sound("card-change")
+    return shown
   }
 
   function nextStep() {
+    if (!turnedOver) {
+      turnedOver = true
+      if (turnOverTable()) { stepTimer.interval = 620; return }
+    }
     stepTimer.interval = 420
     var steps = scoring.steps
     stepIndex++
@@ -1655,15 +1694,17 @@ Window {
         Item {
           Layout.fillWidth: true
           Layout.fillHeight: true
+          z: 1  // played cards fly over the hand
           visible: !root.shopping && !root.choosing && !root.inPack
 
           Row {
+            id: tableRow
             anchors.centerIn: parent
             spacing: Style.spacing.xxl
             visible: root.scoring !== null
             Repeater {
               id: tableRepeater
-              model: root.scoring ? root.scoring.cards : []
+              model: root.scoring ? root.tableCards : []
               CardView {
                 modifiers: root.game ? root.game.modifiers : null
                 card: modelData
