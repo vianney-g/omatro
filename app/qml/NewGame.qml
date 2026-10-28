@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import omatro
 import "Labels.js" as Labels
 
@@ -87,20 +88,27 @@ Rectangle {
       font.pixelSize: Style.font.body
     }
 
-    // The decks in a carousel: the chosen one in front, its neighbours
-    // around it, smaller (click one to bring it forward).
+    // The decks in a carousel, as Omarchy's theme picker: the chosen one in
+    // front, the others as slanted slices on each side (click one to bring
+    // it forward).
     Item {
       id: carousel
       anchors.horizontalCenter: parent.horizontalCenter
       width: Style.space(980)
-      height: Style.space(140)
+      height: expandedHeight
       clip: true
-      // Distance from the centre of the first and second neighbours.
-      readonly property real near: Style.space(300)
-      readonly property real far: Style.space(490)
+      readonly property real expandedWidth: Style.space(400)
+      readonly property real expandedHeight: Style.space(150)
+      readonly property real sliceWidth: Style.space(64)
+      readonly property real sliceHeight: Style.space(128)
+      readonly property real sliceSpacing: -Style.space(12)
+      readonly property real skew: Style.space(24)
+      readonly property real step: sliceWidth + sliceSpacing
+      readonly property real previewX: (width - expandedWidth) / 2
       Repeater {
         model: root.decks
-        Rectangle {
+        Item {
+          id: slice
           readonly property bool chosen: index === root.current
           // Its place from the chosen one, the shortest way round.
           readonly property int offset: {
@@ -108,102 +116,143 @@ Rectangle {
             var d = ((index - root.current) % n + n) % n
             return d > n / 2 ? d - n : d
           }
-          readonly property int distance: Math.abs(offset)
-          visible: distance <= 2
-          x: carousel.width / 2 + (offset === 0 ? 0 : (offset > 0 ? 1 : -1) * (distance === 1 ? carousel.near : carousel.far)) - width / 2
-          y: (carousel.height - height) / 2
-          z: 3 - distance
-          scale: distance === 0 ? 1 : distance === 1 ? 0.8 : 0.62
-          opacity: distance === 0 ? 1 : distance === 1 ? 0.7 : 0.35
-          Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-          Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-          Behavior on opacity { NumberAnimation { duration: 180 } }
           // A hidden deck, until its achievement.
           readonly property bool locked: !!modelData.achievement
-          width: Style.space(320)
-          height: Style.space(120)
-          radius: Style.cornerRadius
-          color: chosen ? Qt.tint(Colors.background, Util.alpha(Colors.accent, 0.15)) : Style.normalFill
-          border.width: chosen ? Style.space(2) : Style.normalBorderWidth
-          border.color: chosen ? Colors.accent : Style.normalBorderColor
-          Column {
-            visible: locked
-            anchors { fill: parent; margins: Style.space(8) }
-            spacing: Style.space(3)
-            Text {
-              text: "?????"
-              color: Colors.urgent
-              font.family: Style.font.family
-              font.pixelSize: Style.font.subtitle
-              font.bold: true
-            }
-            Text {
-              width: parent.width
-              wrapMode: Text.WordWrap
-              maximumLineCount: 3
-              elide: Text.ElideRight
-              text: locked ? I18n.tr("Hidden: {achievement}", { achievement: modelData.achievement })
-                + " · " + I18n.tr(modelData.condition) : ""
-              color: Colors.muted
-              font.family: Style.font.family
-              font.pixelSize: Style.font.caption
+          visible: Math.abs(offset) <= 7
+          x: chosen ? carousel.previewX
+            : offset < 0 ? carousel.previewX + offset * carousel.step
+            : carousel.previewX + carousel.expandedWidth + carousel.sliceSpacing + (offset - 1) * carousel.step
+          y: (carousel.height - height) / 2
+          z: chosen ? 100 : 50 - Math.abs(offset)
+          width: chosen ? carousel.expandedWidth : carousel.sliceWidth
+          height: chosen ? carousel.expandedHeight : carousel.sliceHeight
+          Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+          Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+          Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+
+          // The slanted card: top edge pushed right by the skew.
+          Shape {
+            anchors.fill: parent
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+              fillColor: slice.chosen ? Qt.tint(Colors.background, Util.alpha(Colors.accent, 0.15))
+                : Qt.tint(Colors.background, Util.alpha(Colors.foreground, 0.05))
+              strokeColor: slice.chosen ? Colors.accent : Style.normalBorderColor
+              strokeWidth: slice.chosen ? Style.space(2) : Style.normalBorderWidth
+              startX: carousel.skew; startY: 0
+              PathLine { x: slice.width; y: 0 }
+              PathLine { x: slice.width - carousel.skew; y: slice.height }
+              PathLine { x: 0; y: slice.height }
+              PathLine { x: carousel.skew; y: 0 }
             }
           }
-          Column {
-            visible: !locked
-            anchors { fill: parent; margins: Style.space(8) }
-            spacing: Style.space(3)
-            Row {
+
+          // A slice: the deck's name, upwards.
+          Text {
+            anchors.centerIn: parent
+            width: slice.height - 2 * Style.space(10)
+            rotation: -90
+            opacity: slice.chosen ? 0 : 1
+            Behavior on opacity { NumberAnimation { duration: 120 } }
+            horizontalAlignment: Text.AlignHCenter
+            elide: Text.ElideRight
+            text: slice.locked ? "?????" : modelData.name
+            color: slice.locked ? Util.alpha(Colors.urgent, 0.7) : Colors.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.bold: true
+          }
+
+          // In front: the whole deck.
+          Item {
+            anchors {
+              fill: parent
+              leftMargin: carousel.skew + Style.space(4); rightMargin: carousel.skew + Style.space(4)
+              topMargin: Style.space(10); bottomMargin: Style.space(10)
+            }
+            opacity: slice.chosen ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: 160 } }
+            Column {
+              visible: slice.locked
               width: parent.width
+              spacing: Style.space(3)
               Text {
-                width: parent.width - bestText.width
-                elide: Text.ElideRight
-                text: modelData.name
-                color: chosen ? Colors.accent : Colors.foreground
+                text: "?????"
+                color: Colors.urgent
                 font.family: Style.font.family
                 font.pixelSize: Style.font.subtitle
                 font.bold: true
               }
-              // The highest level won with it.
               Text {
-                id: bestText
-                anchors.baseline: parent.children[0].baseline
-                text: modelData.best_stake ? root.stakes[root.stakeIndex(modelData.best_stake)].name : ""
-                color: Colors.warm
+                width: parent.width
+                wrapMode: Text.WordWrap
+                maximumLineCount: 4
+                elide: Text.ElideRight
+                text: slice.locked ? I18n.tr("Hidden: {achievement}", { achievement: modelData.achievement })
+                  + " · " + I18n.tr(modelData.condition) : ""
+                color: Colors.muted
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
-                font.bold: true
               }
             }
-            Text {
+            Column {
+              visible: !slice.locked
               width: parent.width
-              wrapMode: Text.WordWrap
-              maximumLineCount: 3
-              elide: Text.ElideRight
-              textFormat: Text.StyledText
-              text: Labels.highlight(modelData.description, Hints.terms, modelData.name)
-              color: Colors.foreground
-              font.family: Style.font.family
-              font.pixelSize: Style.font.caption
-            }
-            Text {
-              width: parent.width
-              elide: Text.ElideRight
-              text: modelData.quip
-              color: Colors.muted
-              font.family: Style.font.family
-              font.pixelSize: Style.font.caption
-              font.italic: true
+              spacing: Style.space(3)
+              Row {
+                width: parent.width
+                Text {
+                  id: nameText
+                  width: parent.width - bestText.width
+                  elide: Text.ElideRight
+                  text: modelData.name
+                  color: Colors.accent
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.subtitle
+                  font.bold: true
+                }
+                // The highest level won with it.
+                Text {
+                  id: bestText
+                  anchors.baseline: nameText.baseline
+                  text: modelData.best_stake ? root.stakes[root.stakeIndex(modelData.best_stake)].name : ""
+                  color: Colors.warm
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+              }
+              Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                maximumLineCount: 4
+                elide: Text.ElideRight
+                textFormat: Text.StyledText
+                text: Labels.highlight(modelData.description, Hints.terms, modelData.name)
+                color: Colors.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+              }
+              Text {
+                width: parent.width
+                elide: Text.ElideRight
+                text: modelData.quip
+                color: Colors.muted
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.italic: true
+              }
             }
           }
           MouseArea {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.current === index && !parent.locked ? root.startChosen() : root.current = index
+            onClicked: slice.chosen && !slice.locked ? root.startChosen() : root.current = index
             // Its terms explained beside it (Glossary).
-            onContainsMouseChanged: containsMouse && !parent.locked
-              ? Hints.show(parent, modelData.description, modelData.name) : Hints.hide(parent)
+            onContainsMouseChanged: containsMouse && slice.chosen && !slice.locked
+              ? Hints.show(slice, modelData.description, modelData.name) : Hints.hide(slice)
           }
         }
       }
