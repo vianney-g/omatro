@@ -268,6 +268,10 @@ Responses:
 - Any response may carry `news`: what the profile just gained, each with its `kind`
   (`found`, `achievement`, or `unlocked` for a hidden item), `name` and `text` (the
   item's family, or what the achievement took).
+- Any response may carry `card_changes`: the cards a command, a joker or a boss
+  destroyed, changed or added, each with its `change` (`destroyed`, `changed` or
+  `added`), the `card` as it is now (as it was, once destroyed) and, for a copy, the
+  id of the card it copies (`from`). Cards drawn, played or discarded are not changes.
 - `{"event":"glossary","terms":[…]}` after `glossary`: each term's `name`, `kind`
   (`edition`, `pull request`, `joker · AUR`…) and `description` (empty for hand
   types, listed only so that a shorter name never matches inside them).

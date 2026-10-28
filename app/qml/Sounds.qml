@@ -18,6 +18,7 @@ Item {
     "blind-won": 0.6, "victory": 0.6, "game-over": 0.3, "boss": 0.8,
     "cash-out": 1, "buy": 0.5, "sell": 1, "reroll": 1, "pack": 1, "pick": 1, "skip": 0.5,
     "use": 0.5, "merge": 0.7, "achievement": 0.7, "found": 0.7, "error": 0.5,
+    "card-break": 0.6, "card-change": 0.5,
   })
   // The chips steps climb a scale: chips-0 to chips-11.
   readonly property int chipNotes: 12

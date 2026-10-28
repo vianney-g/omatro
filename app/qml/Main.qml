@@ -51,10 +51,11 @@ Window {
       if (r.event === "scored") pendingNews = pendingNews.concat(r.news)
       else showNews(r.news)
     }
-    if (r.event === "state") applyState(r.state)
+    var changes = r.card_changes || []
+    if (r.event === "state") applyChangedState(r.state, changes)
     else if (r.event === "collection") collection = r.collection
     else if (r.event === "preview") showPreview(r)
-    else if (r.event === "scored") startScoring(r)
+    else if (r.event === "scored") startScoring(r, changes)
     else if (r.event === "error") notice = r.message
     else if (r.event === "glossary") Hints.terms = r.terms
     else if (r.event === "language") {
@@ -102,6 +103,9 @@ Window {
   property var preview: null
   property var scoring: null     // score breakdown being animated
   property var pendingState: null
+  // Cards the hand changed (Overclocked broken, Quine…), shown once scored.
+  property var scoringChanges: []
+  property bool changesShown: false
   property int stepIndex: -1
   property int chipSteps: 0      // chips steps sounded, a note higher each
   property bool showTotal: false
@@ -170,7 +174,7 @@ Window {
   }
   Timer { id: fireOut; interval: 1800; onTriggered: root.fireHeat = 0 }
 
-  readonly property bool busy: scoring !== null
+  readonly property bool busy: scoring !== null || changing
   readonly property bool playing: game !== null && game.phase === "playing" && !busy
   readonly property bool shopping: game !== null && game.phase === "shop" && !busy
   readonly property bool choosing: game !== null && game.phase === "blind_select"
@@ -250,7 +254,7 @@ Window {
   function act(command, name) {
     var before = game
     send(command)
-    sound(game !== before ? name : "error")
+    sound(game !== before || changing ? name : "error")
   }
   Loader {
     id: soundsPlayer
@@ -322,6 +326,88 @@ Window {
     // Typed again for the next game, so that none is seeded by mistake.
     newGameScreen.seed = ""
     keyCatcher.forceActiveFocus()
+  }
+
+  // ---- card changes: destroyed cards break, changed ones turn over to
+  // their new face, new ones come in (the response's card_changes); the
+  // state waits for them
+  property bool changing: false
+  property var changedState: null
+  function cardView(id) {
+    var repeaters = [handRepeater, tableRepeater]
+    for (var r = 0; r < repeaters.length; r++)
+      for (var i = 0; i < repeaters[r].count; i++) {
+        var view = repeaters[r].itemAt(i)
+        if (view && view.card && view.card.id === id) return view
+      }
+    return null
+  }
+  function sameFace(a, b) {
+    return a.rank === b.rank && a.suit === b.suit && a.enhancement === b.enhancement
+      && a.seal === b.seal && a.edition === b.edition
+  }
+  // Breaks and turns over the cards on view; true when there was any.
+  function playCardChanges(changes) {
+    var shown = false
+    var broke = false
+    changes.forEach(function(c) {
+      var view = cardView(c.card.id)
+      if (!view || c.change === "added") return
+      if (c.change === "destroyed") {
+        view.vanish()
+        broke = true
+      } else if (sameFace(view.card, c.card)) {
+        // Only chips gained (Incremental Build).
+        var chips = (c.card.bonus_chips || 0) - (view.card.bonus_chips || 0)
+        view.flash(chips > 0 ? "+" + chips : "", Colors.accent)
+      } else {
+        view.morph(c.card)
+      }
+      var source = c.from !== undefined ? cardView(c.from) : null
+      if (source) source.flash("", Colors.accent)
+      shown = true
+    })
+    if (shown) sound(broke ? "card-break" : "card-change")
+    return shown
+  }
+  // The cards added to the hand come in.
+  function showAddedCards(changes) {
+    var shown = false
+    changes.forEach(function(c) {
+      var view = c.change === "added" ? cardView(c.card.id) : null
+      if (!view) return
+      view.appear()
+      var source = c.from !== undefined ? cardView(c.from) : null
+      if (source) source.flash("", Colors.accent)
+      shown = true
+    })
+    if (shown) sound("card-change")
+  }
+  function applyChangedState(s, changes) {
+    finishCardChanges()
+    if (!playCardChanges(changes)) {
+      applyState(s)
+      showAddedCards(changes)
+      return
+    }
+    changedState = { state: s, changes: changes }
+    changing = true
+    changeTimer.restart()
+  }
+  // Applies the state the changes were waiting with (now, if another comes).
+  function finishCardChanges() {
+    if (changedState === null) return
+    var c = changedState
+    changeTimer.stop()
+    changedState = null
+    changing = false
+    applyState(c.state)
+    showAddedCards(c.changes)
+  }
+  Timer {
+    id: changeTimer
+    interval: 620
+    onTriggered: root.finishCardChanges()
   }
 
   function applyState(s) {
@@ -578,7 +664,10 @@ Window {
   // ---- score animation ---------------------------------------------------
   // The played cards move to the table, then each breakdown step (card or
   // joker) bounces and updates chips × mult.
-  function startScoring(r) {
+  function startScoring(r, changes) {
+    finishCardChanges()
+    scoringChanges = changes
+    changesShown = false
     var rest = []
     for (var i = 0; i < hand.length; i++)
       if (selected.indexOf(i) < 0) rest.push(hand[i])
@@ -632,6 +721,9 @@ Window {
       if (heatFor(scoring.total) > 0) sound("fire")
       fireHeat = Math.max(fireHeat, heatFor(scoring.total))
       stepTimer.interval = 900
+    } else if (!changesShown && playCardChanges(scoringChanges)) {
+      changesShown = true
+      stepTimer.interval = 620
     } else {
       stepTimer.stop()
       notice = I18n.tr("{hand}: {points} points", { hand: scoring.hand_name, points: Labels.number(scoring.total) })
@@ -641,6 +733,8 @@ Window {
       pendingState = null
       showTotal = false
       applyState(s)
+      showAddedCards(scoringChanges)
+      scoringChanges = []
       if (s.phase === "playing") sound("draw")
       if (pendingNews.length) {
         showNews(pendingNews)

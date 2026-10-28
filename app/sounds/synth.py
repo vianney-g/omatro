@@ -96,3 +96,14 @@ crackle = [random.uniform(-1, 1) * math.exp(-5 * i / RATE) * 0.35 for i in range
 beep = lambda s: tone(880, s, decay=0.5, wave_shape="square", attack=0.002)
 write("game-over", beep(0.42) + silence(0.12) + beep(0.11) + silence(0.09) + beep(0.11)
       + silence(0.1) + crackle)
+
+# A card destroyed: glass cracking, a noise burst over a falling sweep.
+random.seed(7)
+shards = [random.uniform(-1, 1) * math.exp(-28 * i / RATE) for i in range(int(0.25 * RATE))]
+write("card-break", mix((0, shards), (0, sweep(1800, 500, 0.25, decay=14)),
+                        (0.03, tone(note(88), 0.2, decay=25, wave_shape="bell"))))
+
+# A card changed or added: a quick rising shimmer.
+write("card-change", mix((0, tone(note(79), 0.25, decay=14, wave_shape="bell")),
+                         (0.05, tone(note(86), 0.3, decay=12, wave_shape="bell")),
+                         (0.1, tone(note(91), 0.35, decay=10, wave_shape="bell"))))

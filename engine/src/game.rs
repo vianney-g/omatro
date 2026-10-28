@@ -681,6 +681,27 @@ enum Offer {
     Card(Card),
 }
 
+/// A card destroyed, changed or added by a command, a joker or a boss, so that
+/// the interface can show it happen (`Game::take_card_changes`). Cards drawn,
+/// played or discarded are not changes.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct CardChange {
+    pub change: CardChangeKind,
+    /// The card as it is now (as it was, once destroyed).
+    pub card: Card,
+    /// The card it was copied from (cp -f, Quine, Stock Split).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CardChangeKind {
+    Destroyed,
+    Changed,
+    Added,
+}
+
 /// Something that happened in the game, for the profile: the collection
 /// and the achievements (`Game::take_events`).
 #[derive(Debug, Clone, PartialEq)]
@@ -853,6 +874,9 @@ pub struct Game {
     /// The first shop of the game was opened, with its jokers-git pack.
     #[serde(default)]
     first_shop_done: bool,
+    /// Cards changed since the interface last looked.
+    #[serde(skip)]
+    card_changes: Vec<CardChange>,
 }
 
 impl Game {
@@ -949,6 +973,7 @@ impl Game {
             events: Vec::new(),
             stake,
             first_shop_done: false,
+            card_changes: Vec::new(),
         };
         game.set_up_deck();
         game.starting_deck = game.deck.len();
@@ -1082,6 +1107,27 @@ impl Game {
     pub(crate) fn won_for_tests(&mut self) {
         self.won = true;
         self.events = vec![Event::GameOver { won: true }];
+    }
+
+    /// The cards destroyed, changed or added since the last call.
+    pub fn take_card_changes(&mut self) -> Vec<CardChange> {
+        std::mem::take(&mut self.card_changes)
+    }
+
+    /// Notes a card change; a card met again keeps one entry: added stays
+    /// added, destroyed wins.
+    fn card_changed(&mut self, change: CardChange) {
+        let id = change.card.id;
+        match self.card_changes.iter_mut().find(|c| c.card.id == id) {
+            Some(known) => {
+                known.card = change.card;
+                known.from = change.from.or(known.from);
+                if change.change == CardChangeKind::Destroyed {
+                    known.change = CardChangeKind::Destroyed;
+                }
+            }
+            None => self.card_changes.push(change),
+        }
     }
 
     /// What happened since the last call.
@@ -1695,6 +1741,7 @@ impl Game {
 
     /// Changes a card for good: in the deck, and in the draw pile or the hand.
     fn modify_card(&mut self, id: u32, change: impl Fn(&mut Card)) {
+        let mut changed = None;
         for card in self
             .deck
             .iter_mut()
@@ -1702,7 +1749,18 @@ impl Game {
             .chain(&mut self.hand)
             .filter(|c| c.id == id)
         {
+            let before = *card;
             change(card);
+            if *card != before {
+                changed = Some(*card);
+            }
+        }
+        if let Some(card) = changed {
+            self.card_changed(CardChange {
+                change: CardChangeKind::Changed,
+                card,
+                from: None,
+            });
         }
     }
 
@@ -1779,10 +1837,17 @@ impl Game {
         }
     }
 
-    /// Cards were added to the deck: Pacman Cache grows.
-    fn cards_added(&mut self, cards: usize) {
+    /// Cards were added to the deck (copies of `from`): Pacman Cache grows.
+    fn cards_added(&mut self, cards: &[Card], from: Option<u32>) {
         for joker in &mut self.jokers {
-            joker.on_cards_added(cards);
+            joker.on_cards_added(cards.len());
+        }
+        for &card in cards {
+            self.card_changed(CardChange {
+                change: CardChangeKind::Added,
+                card,
+                from,
+            });
         }
     }
 
@@ -1845,7 +1910,7 @@ impl Game {
             let blob = self.new_card().with_enhancement(Enhancement::BinaryBlob);
             self.deck.push(blob);
             self.draw_pile.push(blob);
-            self.cards_added(1);
+            self.cards_added(&[blob], None);
         }
         self.deck_rng.shuffle(&mut self.draw_pile);
         self.phase = Phase::Playing;
@@ -1875,7 +1940,7 @@ impl Game {
             let card = self.new_card().with_seal(seal);
             self.deck.push(card);
             self.hand.push(card);
-            self.cards_added(1);
+            self.cards_added(&[card], None);
         }
         self.sort_hand();
         self.pick_forced_card();
@@ -2360,6 +2425,7 @@ impl Game {
         let first = self.blind_hands.len() == 1;
         let quines = self.abilities(Joker::Quine);
         if first && played.len() == 1 && quines > 0 {
+            let mut copies = Vec::new();
             for _ in 0..quines {
                 self.next_card_id += 1;
                 let copy = Card {
@@ -2369,8 +2435,9 @@ impl Game {
                 };
                 self.deck.push(copy);
                 self.hand.push(copy);
+                copies.push(copy);
             }
-            self.cards_added(quines);
+            self.cards_added(&copies, Some(played[0].id));
             self.sort_hand();
             notes.push(format!("Quine: {} copied.", card_label(&played[0])));
         }
@@ -2888,8 +2955,9 @@ impl Game {
             Offer::Card(card) => {
                 self.spend(self.offer_price(index))?;
                 self.next_card_id += 1;
-                self.deck.push(card.with_id(self.next_card_id - 1));
-                self.cards_added(1);
+                let card = card.with_id(self.next_card_id - 1);
+                self.deck.push(card);
+                self.cards_added(&[card], None);
             }
             Offer::Consumable(consumable) => {
                 if !self.clipboard_room() {
@@ -3029,6 +3097,20 @@ impl Game {
     /// Destroys cards for good (deck, draw pile, hand); ThePrimeagen grows with
     /// the face cards among them.
     fn destroy_cards(&mut self, ids: &[u32]) {
+        let destroyed: Vec<Card> = self
+            .deck
+            .iter()
+            .chain(&self.hand)
+            .filter(|c| ids.contains(&c.id))
+            .copied()
+            .collect();
+        for card in destroyed {
+            self.card_changed(CardChange {
+                change: CardChangeKind::Destroyed,
+                card,
+                from: None,
+            });
+        }
         let faces = self
             .deck
             .iter()
@@ -3068,7 +3150,7 @@ impl Game {
             .with_enhancement(enhancement);
         self.deck.push(card);
         self.hand.push(card);
-        self.cards_added(1);
+        self.cards_added(&[card], None);
     }
 
     /// A random joker of this rarity not owned yet.
@@ -3177,13 +3259,15 @@ impl Game {
             }
             Oligarchy::StockSplit => {
                 if let Some(card) = self.hand.iter().find(|c| Some(c.id) == target).copied() {
+                    let mut copies = Vec::new();
                     for _ in 0..2 {
                         self.next_card_id += 1;
                         let copy = card.with_id(self.next_card_id - 1);
                         self.deck.push(copy);
                         self.hand.push(copy);
+                        copies.push(copy);
                     }
-                    self.cards_added(2);
+                    self.cards_added(&copies, Some(card.id));
                 }
             }
             Oligarchy::AspiringBillionaire => {
@@ -3447,6 +3531,11 @@ impl Game {
             Command::CpF => {
                 let (left, right) = (self.hand[targets[0]], self.hand[targets[1]]);
                 self.modify_card(left.id, |card| *card = right.with_id(left.id));
+                self.card_changed(CardChange {
+                    change: CardChangeKind::Changed,
+                    card: right.with_id(left.id),
+                    from: Some(right.id),
+                });
                 self.sort_hand();
             }
             Command::DuSh => {
@@ -3641,8 +3730,9 @@ impl Game {
             }
             PackItem::Card(card) => {
                 self.next_card_id += 1;
-                self.deck.push(card.with_id(self.next_card_id - 1));
-                self.cards_added(1);
+                let card = card.with_id(self.next_card_id - 1);
+                self.deck.push(card);
+                self.cards_added(&[card], None);
             }
         }
         let opened = self.opened.as_mut().ok_or(GameError::NotInPack)?;
@@ -4834,17 +4924,34 @@ mod tests {
     #[test]
     fn rm_rf_and_cp_f() {
         let mut game = with_command(43, Command::RmRf, vec![]);
+        let gone = [game.hand[0], game.hand[1]];
+        game.take_card_changes();
         game.use_consumable(0, &[0, 1]).unwrap();
         assert_eq!((game.hand.len(), game.deck.len()), (6, 6));
+        // The interface hears of each card destroyed, once.
+        let changes = game.take_card_changes();
+        let destroyed: Vec<Card> = changes.iter().map(|c| c.card).collect();
+        assert_eq!(destroyed, gone);
+        assert!(changes.iter().all(|c| c.change == CardChangeKind::Destroyed));
+        assert!(game.take_card_changes().is_empty());
 
         let mut game = with_command(44, Command::CpF, vec![]);
         game.hand[7] = game.hand[7].with_seal(Seal::Retry);
         game.deck = game.hand.clone();
         game.use_consumable(0, &[2, 7]).unwrap();
-        let copy = game.hand.iter().find(|c| c.id == 102).unwrap();
+        let copy = *game.hand.iter().find(|c| c.id == 102).unwrap();
         assert_eq!(
             (copy.rank, copy.suit, copy.seal),
             (2, Suit::Clubs, Some(Seal::Retry))
+        );
+        let source = game.hand[7].id;
+        assert_eq!(
+            game.take_card_changes(),
+            [CardChange {
+                change: CardChangeKind::Changed,
+                card: copy,
+                from: Some(source),
+            }]
         );
     }
 
@@ -5991,6 +6098,13 @@ mod tests {
         let card = game.hand[0];
         let b = game.play(&[0]).unwrap();
         assert_eq!(game.deck.len(), 53);
+        let changes = game.take_card_changes();
+        assert_eq!(changes.len(), 1);
+        assert_eq!(
+            (changes[0].change, changes[0].from),
+            (CardChangeKind::Added, Some(card.id))
+        );
+        assert!(game.hand.contains(&changes[0].card));
         assert!(
             game.deck
                 .iter()

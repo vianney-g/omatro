@@ -67,6 +67,17 @@ Item {
     flashAnim.restart()
   }
 
+  // What a command, a joker or a boss did to the card (Main.showCardChanges):
+  // it breaks apart, turns over to its new face, or comes in.
+  property var nextCard: null
+  property color glowColor: Colors.accent
+  function vanish() { vanishAnim.restart() }
+  function morph(card) {
+    nextCard = card
+    morphAnim.restart()
+  }
+  function appear() { appearAnim.restart() }
+
   Rectangle {
     id: face
     width: parent.width
@@ -81,6 +92,10 @@ Item {
       : root.edition ? Util.alpha(Colors.accent, 0.6) : Style.normalBorderColor
     opacity: root.dimmed || (root.disabledBy && !root.faceDown) ? 0.45 : 1
     Behavior on opacity { NumberAnimation { duration: 150 } }
+    transform: Scale {
+      id: flip
+      origin.x: face.width / 2
+    }
 
     Column {
       x: Style.space(7)
@@ -219,6 +234,17 @@ Item {
         font.bold: true
       }
     }
+
+    // Lights up while the card changes.
+    Rectangle {
+      id: glow
+      anchors.fill: parent
+      opacity: 0
+      radius: Style.cornerRadius
+      color: Util.alpha(root.glowColor, 0.25)
+      border.width: Style.space(3)
+      border.color: root.glowColor
+    }
   }
 
   Text {
@@ -249,6 +275,43 @@ Item {
     NumberAnimation { target: face; property: "scale"; to: 1; duration: 180; easing.type: Easing.OutBack }
     PauseAnimation { duration: 220 }
     NumberAnimation { target: popup; property: "opacity"; to: 0; duration: 200 }
+  }
+
+  SequentialAnimation {
+    id: vanishAnim
+    ScriptAction { script: root.glowColor = Colors.urgent }
+    ParallelAnimation {
+      NumberAnimation { target: glow; property: "opacity"; to: 1; duration: 90 }
+      NumberAnimation { target: face; property: "scale"; to: 1.1; duration: 90 }
+    }
+    ParallelAnimation {
+      NumberAnimation { target: root; property: "opacity"; to: 0; duration: 340; easing.type: Easing.InCubic }
+      NumberAnimation { target: face; property: "scale"; to: 0.4; duration: 340; easing.type: Easing.InBack }
+      NumberAnimation { target: face; property: "rotation"; to: 18; duration: 340; easing.type: Easing.InQuad }
+    }
+  }
+
+  SequentialAnimation {
+    id: morphAnim
+    ScriptAction { script: root.glowColor = Colors.accent }
+    ParallelAnimation {
+      NumberAnimation { target: flip; property: "xScale"; to: 0; duration: 150; easing.type: Easing.InQuad }
+      NumberAnimation { target: glow; property: "opacity"; to: 1; duration: 150 }
+    }
+    ScriptAction { script: if (root.nextCard) root.card = root.nextCard }
+    NumberAnimation { target: flip; property: "xScale"; to: 1; duration: 220; easing.type: Easing.OutBack }
+    NumberAnimation { target: glow; property: "opacity"; to: 0; duration: 260 }
+  }
+
+  SequentialAnimation {
+    id: appearAnim
+    ScriptAction { script: root.glowColor = Colors.accent }
+    ParallelAnimation {
+      NumberAnimation { target: root; property: "opacity"; from: 0; to: 1; duration: 200 }
+      NumberAnimation { target: face; property: "scale"; from: 0.4; to: 1; duration: 340; easing.type: Easing.OutBack }
+      NumberAnimation { target: glow; property: "opacity"; from: 1; to: 1; duration: 200 }
+    }
+    NumberAnimation { target: glow; property: "opacity"; to: 0; duration: 400 }
   }
 
   MouseArea {

@@ -337,6 +337,14 @@ impl Session {
         if !news.is_empty() {
             value["news"] = serde_json::to_value(news).expect("news serialize");
         }
+        let changes = self
+            .game
+            .as_mut()
+            .map(Game::take_card_changes)
+            .unwrap_or_default();
+        if !changes.is_empty() {
+            value["card_changes"] = serde_json::to_value(changes).expect("changes serialize");
+        }
         translate_response(&mut value, self.lang);
         value.to_string()
     }
@@ -747,6 +755,35 @@ mod tests {
         );
         let r = send(&mut session, r#"{"cmd":"debug","mony":1}"#);
         assert_eq!(r["event"], "error");
+    }
+
+    #[test]
+    fn responses_tell_the_cards_changed() {
+        let mut session = Session {
+            debug: true,
+            ..Session::default()
+        };
+        // What the app reads: handle_json adds the changes to the response.
+        let mut json = |line: &str| -> Value {
+            serde_json::from_str(&session.handle_json(line)).unwrap()
+        };
+        json(r#"{"cmd":"new_game","seed":1}"#);
+        let r = json(r#"{"cmd":"select_blind"}"#);
+        assert!(r.get("card_changes").is_none());
+        let r = json(r#"{"cmd":"debug","enhance_hand":true}"#);
+        let changes = r["card_changes"].as_array().unwrap();
+        assert!(!changes.is_empty());
+        assert_eq!(changes[0]["change"], "changed");
+        let ids: Vec<&Value> = r["state"]["hand"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| &c["id"])
+            .collect();
+        assert!(changes.iter().all(|c| ids.contains(&&c["card"]["id"])));
+        // Told once.
+        let r = json(r#"{"cmd":"state"}"#);
+        assert!(r.get("card_changes").is_none());
     }
 
     #[test]
