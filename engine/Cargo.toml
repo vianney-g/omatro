@@ -1,6 +1,6 @@
 [package]
 name = "omatro-engine"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 description = "omatro game engine: deck, poker hands, chips × mult scoring, jokers"
 license = "MIT"
