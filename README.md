@@ -192,7 +192,7 @@ One JSON command per line on standard input, one JSON response per line on outpu
 | `{"cmd":"cash_out"}` | Cashes out a won blind's reward and opens the shop |
 | `{"cmd":"buy","offer":0}` | Buys a shop offer |
 | `{"cmd":"buy_and_use","offer":0}` | Buys a theme or command of the shop and uses it at once (not those that need cards in hand) |
-| `{"cmd":"sell","joker":0}` | Sells a joker (in the shop, before or during a blind) |
+| `{"cmd":"sell","joker":0}` | Sells a joker (in the shop, in an open pack, before or during a blind) |
 | `{"cmd":"move_joker","from":0,"to":2}` | Moves a joker within the row |
 | `{"cmd":"move_card","from":7,"to":0}` | Moves a card of the hand (the hand then keeps this order) |
 | `{"cmd":"sort_hand","by":"suit"}` | Sorts the hand by `rank` or `suit`, and new hands from now on |

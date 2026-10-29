@@ -3020,9 +3020,10 @@ impl Game {
     /// Sells a joker: in the shop, before a blind or during it (Rollback, sold
     /// in the boss blind, disables the boss; any sale unlocks The Vendor Lock-in).
     pub fn sell(&mut self, index: usize) -> Result<(), GameError> {
+        // In a pack too: sell a joker to make room for the one picked.
         if !matches!(
             self.phase,
-            Phase::Shop | Phase::BlindSelect | Phase::Playing
+            Phase::Shop | Phase::BlindSelect | Phase::Playing | Phase::Pack
         ) {
             return Err(GameError::NotInShop);
         }
@@ -5087,6 +5088,18 @@ mod tests {
         game.reroll().unwrap();
         assert_eq!(game.packs, packs);
         assert_eq!(game.state().packs.len(), 2);
+    }
+
+    #[test]
+    fn a_joker_sold_in_a_pack_makes_room_for_one_picked() {
+        let jokers = vec![Joker::Uptime; MAX_JOKERS];
+        let mut game = shopping(62, jokers);
+        game.packs = vec![pack(PackKind::JokersGit, PackSize::Normal)];
+        game.buy_pack(0).unwrap();
+        assert_eq!(game.pick(0, &[]), Err(GameError::JokerSlotsFull));
+        game.sell(0).unwrap();
+        game.pick(0, &[]).unwrap();
+        assert_eq!(game.jokers.len(), MAX_JOKERS);
     }
 
     #[test]
