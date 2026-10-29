@@ -3020,12 +3020,9 @@ impl Game {
     /// Sells a joker: in the shop, before a blind or during it (Rollback, sold
     /// in the boss blind, disables the boss; any sale unlocks The Vendor Lock-in).
     pub fn sell(&mut self, index: usize) -> Result<(), GameError> {
-        // In a pack too: sell a joker to make room for the one picked.
-        if !matches!(
-            self.phase,
-            Phase::Shop | Phase::BlindSelect | Phase::Playing | Phase::Pack
-        ) {
-            return Err(GameError::NotInShop);
+        // At any time (in a pack: to make room for the joker picked).
+        if self.phase == Phase::Lost {
+            return Err(GameError::NotPlaying);
         }
         if index >= self.jokers.len() {
             return Err(GameError::BadSelection(format!("no joker #{index}")));
@@ -5100,6 +5097,14 @@ mod tests {
         game.sell(0).unwrap();
         game.pick(0, &[]).unwrap();
         assert_eq!(game.jokers.len(), MAX_JOKERS);
+    }
+
+    #[test]
+    fn jokers_sell_at_any_time_until_the_game_is_lost() {
+        let mut game = won_game(63, vec![Joker::Uptime, Joker::Uptime]);
+        game.sell(0).unwrap();
+        game.phase = Phase::Lost;
+        assert_eq!(game.sell(0), Err(GameError::NotPlaying));
     }
 
     #[test]

@@ -184,9 +184,8 @@ Window {
   readonly property bool playing: game !== null && game.phase === "playing" && !busy
   readonly property bool shopping: game !== null && game.phase === "shop" && !busy
   readonly property bool choosing: game !== null && game.phase === "blind_select"
-  // Jokers can be sold or moved between hands, in the shop and before a blind.
-  readonly property bool jokerControls: game !== null
-    && (game.phase === "playing" || game.phase === "shop" || game.phase === "blind_select")
+  // Jokers can be sold or moved at any time, until the game is lost.
+  readonly property bool jokerControls: game !== null && game.phase !== "lost"
   readonly property bool jokersEditable: jokerControls && !busy
   // A pack is open; coreutils packs draw a hand to select cards from.
   readonly property bool inPack: game !== null && game.phase === "pack"
