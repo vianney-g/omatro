@@ -212,8 +212,10 @@ Window {
     .map(function(c) { return c.id }) : []
   readonly property int forcedId: game && game.forced !== null ? game.hand[game.forced].id : -1
   readonly property int handLevel: scoring ? scoring.hand_level
+    : levelShown ? levelShownLevel
     : (preview && preview.hand ? preview.hand_level : 0)
   readonly property string handName: scoring ? scoring.hand_name
+    : levelShown ? levelShown.name
     : (preview && preview.hand ? preview.hand_name : "")
 
   // ---- new game: pick the deck first ------------------------------------
@@ -447,6 +449,7 @@ Window {
       shownMoney = s.money
       moneyCounts = true
     }
+    var leveled = game !== null && game.seed_code === s.seed_code ? levelUps(game.hands, s.hands) : []
     game = s
     hand = s.hand
     // The Clippy's card stays selected.
@@ -456,6 +459,90 @@ Window {
     liveMult = 0
     shownScore = s.score
     showMoney(s.money)
+    if (leveled.length) showLevelUps(leveled)
+  }
+
+  // ---- hand levels gained (themes, Auto Update…): the hand box shows each
+  // hand going up a level, its chips × mult counting up to the new values
+  property var levelQueue: []
+  property var levelShown: null   // { name, from, to } on show, or null
+  property int levelShownLevel: 0
+  property bool levelRaised: false
+  // The hand types whose level went up from one state to the next.
+  function levelUps(before, after) {
+    var ups = []
+    after.forEach(function(h) {
+      var old = before.find(function(b) { return b.kind === h.kind })
+      if (old && h.level > old.level) ups.push({ name: h.name, from: old, to: h })
+    })
+    // Many at once: one line for them all.
+    if (ups.length > 3)
+      return [{ name: I18n.tr("{n} hands leveled up", { n: ups.length }), from: null, to: null }]
+    return ups
+  }
+  function showLevelUps(ups) {
+    levelQueue = levelQueue.concat(ups)
+    if (levelShown === null) nextLevelUp()
+  }
+  function nextLevelUp() {
+    levelTimer.stop()
+    levelCount.stop()
+    if (levelQueue.length === 0) { stopLevelUps(); return }
+    levelShown = levelQueue[0]
+    levelQueue = levelQueue.slice(1)
+    levelRaised = false
+    levelShownLevel = levelShown.from ? levelShown.from.level : 0
+    liveChips = levelShown.from ? levelShown.from.chips : 0
+    liveMult = levelShown.from ? levelShown.from.mult : 0
+    levelTimer.interval = levelShown.from ? 350 : 0
+    levelTimer.restart()
+  }
+  function raiseLevel() {
+    levelRaised = true
+    var up = levelShown
+    if (up.to) {
+      levelShownLevel = up.to.level
+      levelCount.fromChips = up.from.chips
+      levelCount.fromMult = up.from.mult
+      levelCount.restart()
+    }
+    levelPop.restart()
+    chipsCounter.pulse(); sparks.burst(chipsCounter, "chips")
+    multCounter.pulse(); sparks.burst(multCounter, "mult")
+    sound("mult")
+    levelTimer.interval = up.to ? 1000 : 1400
+    levelTimer.restart()
+  }
+  // Ends the show (now, if a hand is played): the box shows the selection.
+  function stopLevelUps() {
+    levelTimer.stop()
+    levelCount.stop()
+    levelQueue = []
+    if (levelShown === null) return
+    levelShown = null
+    liveChips = preview && preview.hand ? preview.base_chips : 0
+    liveMult = preview && preview.hand ? preview.base_mult : 0
+  }
+  Timer {
+    id: levelTimer
+    onTriggered: root.levelRaised ? root.nextLevelUp() : root.raiseLevel()
+  }
+  // Counts chips and mult up together, then lands on the exact values.
+  NumberAnimation {
+    id: levelCount
+    property real fromChips: 0
+    property real fromMult: 0
+    target: levelCount
+    property: "t"
+    property real t: 0
+    from: 0; to: 1
+    duration: 500
+    easing.type: Easing.OutCubic
+    onTChanged: if (root.levelShown && root.levelShown.to) {
+      var up = root.levelShown
+      root.liveChips = Math.round(fromChips + (up.to.chips - fromChips) * t)
+      root.liveMult = t < 1 ? Math.round(fromMult + (up.to.mult - fromMult) * t) : up.to.mult
+    }
   }
 
   // What a phase change sounds like.
@@ -506,6 +593,8 @@ Window {
   function showPreview(r) {
     if (JSON.stringify(r.cards) !== JSON.stringify(selected)) return
     preview = r
+    // A level up on show keeps the counters; they come back to it after.
+    if (levelShown !== null) return
     liveChips = r.base_chips
     liveMult = r.base_mult
   }
@@ -695,6 +784,7 @@ Window {
   // joker) bounces and updates chips × mult.
   function startScoring(r, changes) {
     finishCardChanges()
+    stopLevelUps()
     scoringChanges = changes
     changesShown = false
     turnedOver = false
@@ -954,7 +1044,6 @@ Window {
         else if (k === Qt.Key_Escape && root.game !== null) root.choosingDeck = false
         else return
       }
-      else if (k === Qt.Key_I) { root.deckOpen = false; root.infoOpen = !root.infoOpen }
       else if (k === Qt.Key_P && root.game !== null) { root.infoOpen = false; root.deckOpen = !root.deckOpen }
       else if (root.deckOpen) {
         if (k === Qt.Key_Escape) root.deckOpen = false
@@ -995,7 +1084,6 @@ Window {
       else if (k === Qt.Key_F11) root.cheat({ enhance_hand: true })
       else if (k === Qt.Key_F10) root.cheat({ random_theme: true })
       else if (k === Qt.Key_F9) root.cheat({ random_joker: true })
-      else if (k === Qt.Key_F8) root.cheat({ level_up: root.game.hands.map(function(h) { return h.kind }) })
       else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) root.confirm()
       else if (k === Qt.Key_D || k === Qt.Key_Delete) root.discard()
       // Ctrl+N, not N alone: too easy to hit in the middle of a game.
@@ -1196,7 +1284,7 @@ Window {
           Box {
             Layout.fillWidth: true
             implicitHeight: calcCol.implicitHeight + 2 * Style.spacing.xxl
-            border.color: root.fireHeat > 0 ? Colors.warm : Style.normalBorderColor
+            border.color: root.fireHeat > 0 ? Colors.warm : root.levelShown ? Colors.accent : Style.normalBorderColor
             Behavior on border.color { ColorAnimation { duration: 300 } }
             // Behind the hand name and the counters.
             ScoreFire {
@@ -1223,6 +1311,12 @@ Window {
                   anchors.baseline: handNameText.baseline
                   visible: root.handLevel > 0
                   text: I18n.tr("lvl.{n}", { n: root.handLevel })
+                  // Pops as a theme raises it.
+                  NumberAnimation on scale {
+                    id: levelPop
+                    running: false
+                    from: 1.8; to: 1; duration: 400; easing.type: Easing.OutBack
+                  }
                   color: Colors.accent
                   font.family: Style.font.family
                   font.pixelSize: Style.font.body
