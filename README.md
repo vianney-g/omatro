@@ -24,6 +24,12 @@ Hyprland, with affectionate jokes about DHH; it is unaffiliated with them too.
 Names of real people, products and companies belong to their owners; they appear
 as affectionate parody.
 
+The jokes are a tribute, and so is this game. It owes its playground to
+[DHH](https://github.com/dhh), whose Omarchy makes a Linux desktop a joy to tinker with,
+and much of its spirit to [ThePrimeagen](https://github.com/ThePrimeagen), whose
+enthusiasm keeps making programmers want to get better at their craft, blazingly fast.
+Thanks to both for the work they share.
+
 The code and the music (`app/music`, made by the maintainer with Suno) are under the
 MIT license (see [LICENSE](LICENSE)); the license does not cover the names and
 trademarks the game mentions. The sound effects (`app/sounds`) come from
