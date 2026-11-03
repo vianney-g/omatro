@@ -13,7 +13,9 @@
 //! profile: hidden items must stay out, and the achievements done are listed.
 
 use omatro_engine::consumable::Theme;
-use omatro_engine::game::Game;
+use omatro_engine::game::{Cheat, Game};
+use omatro_engine::joker::Joker;
+use omatro_engine::modifier::Edition;
 use omatro_engine::protocol::Session;
 use omatro_engine::rng::Rng;
 use serde_json::{Value, json};
@@ -28,10 +30,18 @@ const MAX_STEPS: usize = 20_000;
 const ENDLESS_LIMIT: u64 = 14;
 /// Candidate hands the bot scores for real, on a copy of the game.
 const SIMULATED: usize = 12;
-/// Share of the hand's score under which a joker is replaced by one on offer
-/// (by a rarer one under `RARE_WEAK`).
-const WEAK: f64 = 0.05;
-const RARE_WEAK: f64 = 0.2;
+/// Share of the hand's score under which a joker is worth rerolling for a
+/// better one.
+const WEAK: f64 = 0.2;
+/// Hands the bot remembers to try the jokers on offer on, and the best
+/// selections it keeps for each.
+const BENCH: usize = 8;
+const BENCH_PLAYS: usize = 4;
+/// Score gain a joker on offer must bring: to fill a free slot, to replace
+/// the weakest joker, to be bought out of the money kept for interest.
+const GAIN_FREE: f64 = 0.02;
+const GAIN_SWAP: f64 = 0.15;
+const GAIN_SPLURGE: f64 = 0.3;
 
 /// What became of one game.
 #[derive(Default)]
@@ -66,6 +76,9 @@ struct Bot {
     save: Option<std::path::PathBuf>,
     /// Share of the hand's score each joker brought, last weighed (by id).
     worth: BTreeMap<String, f64>,
+    /// Recent hands (the game just before each, as JSON) and their best
+    /// selections, to try the jokers on offer on.
+    bench: Vec<(String, Vec<Vec<usize>>)>,
     out: Outcome,
 }
 
@@ -387,8 +400,14 @@ impl Bot {
             for c in &mut candidates {
                 c.2 = Self::simulate(&snapshot, &c.0).unwrap_or(0.0);
             }
+            candidates.sort_by(|a, b| b.2.total_cmp(&a.2));
+            let plays = candidates.iter().take(BENCH_PLAYS).map(|c| c.0.clone());
+            self.bench.push((snapshot, plays.collect()));
+            if self.bench.len() > BENCH {
+                self.bench.remove(0);
+            }
         }
-        candidates.into_iter().max_by(|a, b| a.2.total_cmp(&b.2))
+        candidates.into_iter().next()
     }
 
     /// Hand cards to discard: all but a draw, the cards worth keeping: four
@@ -466,17 +485,68 @@ impl Bot {
         }
     }
 
-    /// The joker that last brought the least, among those that can be sold
-    /// (not Welded) and were weighed.
+    /// The best score among a bench hand's selections, on copies of the
+    /// game `snapshot`.
+    fn best_of(snapshot: &str, plays: &[Vec<usize>]) -> f64 {
+        plays
+            .iter()
+            .filter_map(|cards| Self::simulate(snapshot, cards))
+            .fold(0.0, f64::max)
+    }
+
+    /// What a joker on offer would add to the recent hands' scores, as a
+    /// share of the score with it: the hands played again on copies of the
+    /// game, with the joker (in place of the joker `instead`, sold first,
+    /// when that copy has it).
+    fn gain_of(&self, offer: &Value, instead: Option<&str>) -> f64 {
+        let Ok(joker) = serde_json::from_value::<Joker>(offer["id"].clone()) else {
+            return 0.0;
+        };
+        let edition = serde_json::from_value::<Edition>(offer["edition"]["id"].clone()).ok();
+        let (mut with, mut without) = (0.0, 0.0);
+        for (snapshot, plays) in &self.bench {
+            let Ok(mut other) = serde_json::from_str::<Game>(snapshot) else {
+                continue;
+            };
+            let sold = instead.and_then(|id| {
+                let id: Joker = serde_json::from_value(json!(id)).ok()?;
+                other.joker_list().iter().position(|&j| j == id)
+            });
+            if sold.is_some_and(|i| other.sell(i).is_err()) {
+                continue;
+            }
+            let cheat = Cheat {
+                jokers: vec![joker],
+                edition,
+                ..Cheat::default()
+            };
+            if other.cheat(cheat).is_err() {
+                continue;
+            }
+            let Ok(other) = serde_json::to_string(&other) else {
+                continue;
+            };
+            without += Self::best_of(snapshot, plays);
+            with += Self::best_of(&other, plays);
+        }
+        if with <= 0.0 {
+            return 0.0;
+        }
+        (with - without) / with
+    }
+
+    /// The joker that last brought the least, among those whose sale makes
+    /// room (not Welded, not Transparent) and were weighed.
     fn weakest_joker(&self) -> Option<(usize, f64)> {
         let jokers = self.state["jokers"].as_array()?;
         jokers
             .iter()
             .enumerate()
             .filter(|(_, j)| {
-                !j["stickers"]
-                    .as_array()
-                    .is_some_and(|s| s.iter().any(|s| s["id"] == "welded"))
+                j["edition"]["id"] != "transparent"
+                    && !j["stickers"]
+                        .as_array()
+                        .is_some_and(|s| s.iter().any(|s| s["id"] == "welded"))
             })
             .filter_map(|(i, j)| Some((i, *self.worth.get(j["id"].as_str()?)?)))
             .min_by(|a, b| a.1.total_cmp(&b.1))
@@ -511,8 +581,78 @@ impl Bot {
         all
     }
 
+    /// The hand cards a consumable should work on, or None when it should
+    /// wait (or never be used): enhancements and seals on the cards worth
+    /// most, destruction on those worth least, suits towards the deck's main
+    /// suit; nothing that destroys jokers while there are several.
+    fn targets(&mut self, item: &Value) -> Option<Vec<usize>> {
+        if self.unwanted(item) {
+            return None;
+        }
+        let hand = self.state["hand"].as_array().cloned().unwrap_or_default();
+        let max = item["max_cards"].as_u64().unwrap_or(0) as usize;
+        let min = item["min_cards"].as_u64().unwrap_or(0) as usize;
+        let worth = |i: usize| {
+            let c = &hand[i];
+            Self::card_chips(c)
+                + if c["enhancement"].is_null() {
+                    0.0
+                } else {
+                    20.0
+                }
+        };
+        let mut best: Vec<usize> = (0..hand.len()).collect();
+        best.sort_by(|&a, &b| worth(b).total_cmp(&worth(a)));
+        let mut worst = best.clone();
+        worst.reverse();
+        let id = item["id"].as_str().unwrap_or("");
+        let take = |order: &[usize], n: usize| order.iter().take(n).copied().collect::<Vec<_>>();
+        let cards = match id {
+            "leveraged_buyout" if self.money() > 5 => return None,
+            "rm_rf" | "strip" => take(&worst, max),
+            "cp_f" => {
+                let (&bad, &good) = (worst.first()?, best.first()?);
+                if bad == good {
+                    return None;
+                }
+                vec![bad, good]
+            }
+            id if id.starts_with("mv_") => {
+                let suit = &id[3..];
+                let others: Vec<usize> = worst
+                    .iter()
+                    .copied()
+                    .filter(|&i| hand[i]["suit"] != suit)
+                    .collect();
+                take(&others, max)
+            }
+            _ => take(&best, max),
+        };
+        (cards.len() >= min).then_some(cards)
+    }
+
+    /// The suit the deck has most cards of.
+    fn main_suit(&self) -> Option<String> {
+        let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+        for card in self.state["deck"].as_array().into_iter().flatten() {
+            if let Some(s) = card["suit"].as_str() {
+                *counts.entry(s.to_string()).or_default() += 1;
+            }
+        }
+        counts.into_iter().max_by_key(|c| c.1).map(|c| c.0)
+    }
+
+    /// Whether the bot will never use this consumable: it would destroy
+    /// jokers, or turn cards to a suit the deck is short of.
+    fn unwanted(&self, item: &Value) -> bool {
+        let id = item["id"].as_str().unwrap_or("");
+        let suit = id.strip_prefix("mv_");
+        (matches!(id, "merger" | "restructuring") && self.len("jokers") > 1)
+            || suit.is_some_and(|s| self.main_suit().is_some_and(|m| m != s))
+    }
+
     /// Uses what can be used from the clipboard (themes right away, commands
-    /// on random cards during a blind).
+    /// on chosen cards during a blind).
     fn use_consumables(&mut self) {
         let mut index = self.len("consumables");
         while index > 0 {
@@ -523,7 +663,14 @@ impl Bot {
             if needs_hand && self.phase() != "playing" {
                 continue;
             }
-            let cards = self.random_cards(min);
+            let c = c.clone();
+            let Some(cards) = (if needs_hand || min > 0 {
+                self.targets(&c)
+            } else {
+                Some(Vec::new())
+            }) else {
+                continue;
+            };
             self.probe(json!({"cmd": "use_consumable", "index": index, "cards": cards}));
             if self.phase() != "playing" && self.phase() != "shop" && self.phase() != "blind_select"
             {
@@ -586,25 +733,36 @@ impl Bot {
                 .as_array()
                 .cloned()
                 .unwrap_or_default();
-            // A theme for a main hand first, then a joker with room for it.
+            // A theme for a main hand first, then the joker that adds most
+            // to the recent hands, with room for it.
             let mains = self.main_hands();
             let room = self.len("jokers") < self.state["max_jokers"].as_u64().unwrap_or(0) as usize;
-            let mut order: Vec<usize> = (0..choices.len()).collect();
-            order.sort_by_key(|&i| {
-                let item = &choices[i];
-                std::cmp::Reverse(
+            let rank: Vec<f64> = choices
+                .iter()
+                .map(|item| {
                     if Self::theme_hand(item).is_some_and(|h| mains.contains(&h)) {
-                        2
+                        2.0
+                    } else if item["kind"] == "joker" && room {
+                        1.0 + self.gain_of(item, None)
                     } else {
-                        u8::from(item["kind"] == "joker" && room)
-                    },
-                )
-            });
+                        0.0
+                    }
+                })
+                .collect();
+            let mut order: Vec<usize> = (0..choices.len()).collect();
+            order.sort_by(|&a, &b| rank[b].total_cmp(&rank[a]));
             let mut picked = false;
             for choice in order {
                 let item = &choices[choice];
                 let min = item["min_cards"].as_u64().unwrap_or(0) as usize;
-                let cards = self.random_cards(min);
+                let cards = if item["needs_hand"] == true || min > 0 {
+                    match self.targets(item) {
+                        Some(cards) => cards,
+                        None => continue,
+                    }
+                } else {
+                    Vec::new()
+                };
                 let r = self.probe(json!({"cmd": "pick", "choice": choice, "cards": cards}));
                 if r["event"] != "error" {
                     picked = true;
@@ -632,10 +790,17 @@ impl Bot {
             }
         }
         self.use_consumables();
+        // What the bot won't use makes room in the clipboard.
+        for index in (0..self.len("consumables")).rev() {
+            if self.unwanted(&self.state["consumables"][index]) {
+                self.send(json!({"cmd": "sell_consumable", "index": index}));
+            }
+        }
         let mut rerolls = 0;
         loop {
-            // Jokers first, whatever they cost; the rest only with money to
-            // spare above the reserve.
+            // Jokers first, the one that adds most to the recent hands (in
+            // place of the weakest when the row is full); the rest only with
+            // money to spare above the reserve.
             let offers = self.state["shop"].as_array().cloned().unwrap_or_default();
             let jokers = self.len("jokers");
             let slots = self.state["max_jokers"].as_u64().unwrap_or(0) as usize;
@@ -643,11 +808,32 @@ impl Bot {
             let clip_slots = self.state["consumable_slots"].as_u64().unwrap_or(0) as usize;
             let reserve = self.reserve();
             let spare = |o: &Value| self.money() - o["price"].as_i64().unwrap_or(0) >= reserve;
-            let joker = offers.iter().position(|o| {
-                o["kind"] == "joker"
-                    && (jokers < slots || o["edition"]["id"] == "transparent")
-                    && self.money() >= o["price"].as_i64().unwrap_or(0)
-            });
+            let weakest = self.weakest_joker();
+            let joker = offers
+                .iter()
+                .enumerate()
+                .filter(|(_, o)| {
+                    o["kind"] == "joker" && self.money() >= o["price"].as_i64().unwrap_or(0)
+                })
+                .filter_map(|(i, o)| {
+                    let room = jokers < slots || o["edition"]["id"] == "transparent";
+                    let instead = if room { None } else { Some(weakest?.0) };
+                    let id = instead.and_then(|i| self.state["jokers"][i]["id"].as_str());
+                    let gain = self.gain_of(o, id);
+                    let enough = if spare(o) {
+                        // A joker that scores nothing yet (money, rules) still
+                        // fills a free slot when money is no object.
+                        if room {
+                            gain >= GAIN_FREE || gain == 0.0
+                        } else {
+                            gain >= GAIN_SWAP
+                        }
+                    } else {
+                        gain >= GAIN_SPLURGE
+                    };
+                    enough.then_some((i, instead, gain))
+                })
+                .max_by(|a, b| a.2.total_cmp(&b.2));
             let other = offers.iter().position(|o| {
                 let fits = match o["kind"].as_str() {
                     Some("joker") => false,
@@ -656,7 +842,18 @@ impl Bot {
                 };
                 fits && spare(o)
             });
-            if let Some(offer) = joker {
+            if let Some((offer, instead, _)) = joker {
+                if let Some(index) = instead {
+                    if let Some(id) = self.state["jokers"][index]["id"].as_str() {
+                        self.worth.remove(id);
+                    }
+                    self.send(json!({"cmd": "sell", "joker": index}));
+                    // A joker may leave another in its place when sold.
+                    if self.len("jokers") >= self.state["max_jokers"].as_u64().unwrap_or(0) as usize
+                    {
+                        break;
+                    }
+                }
                 self.send(json!({"cmd": "buy", "offer": offer}));
                 continue;
             }
@@ -686,26 +883,6 @@ impl Bot {
                 if r["event"] != "error" {
                     continue;
                 }
-            }
-            // Full row: a joker that brings little makes room for one on
-            // offer (for a rarer one, one that brings a bit more).
-            let weakest = self.weakest_joker();
-            let replace = offers.iter().any(|o| {
-                let bar = if o["rarity"] == "aur" {
-                    RARE_WEAK
-                } else {
-                    WEAK
-                };
-                o["kind"] == "joker"
-                    && self.money() >= o["price"].as_i64().unwrap_or(0)
-                    && weakest.is_some_and(|(_, worth)| worth < bar)
-            });
-            if let (true, true, Some((index, _))) = (replace, jokers >= slots, weakest) {
-                if let Some(id) = self.state["jokers"][index]["id"].as_str() {
-                    self.worth.remove(id);
-                }
-                self.send(json!({"cmd": "sell", "joker": index}));
-                continue;
             }
             // Reroll for jokers while the row has room, or a weak joker.
             let weak = weakest.is_some_and(|(_, worth)| worth < WEAK);
@@ -819,6 +996,7 @@ fn run_game(seed: u64, deck: Option<String>, endless: bool, chaos: bool, save: b
             rng: Rng::stream(seed, "bot"),
             state: Value::Null,
             worth: BTreeMap::new(),
+            bench: Vec::new(),
             endless,
             chaos,
             out: Outcome {
