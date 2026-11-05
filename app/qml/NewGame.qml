@@ -233,7 +233,9 @@ Rectangle {
                   Text {
                     id: bestText
                     anchors.baseline: nameText.baseline
-                    text: modelData.best_stake ? root.stakes[root.stakeIndex(modelData.best_stake)].name : ""
+                    // The levels may not have come yet when the decks do.
+                    text: modelData.best_stake && root.stakes.length > 0
+                      ? root.stakes[root.stakeIndex(modelData.best_stake)].name : ""
                     color: Colors.warm
                     font.family: Style.font.family
                     font.pixelSize: Style.font.caption
