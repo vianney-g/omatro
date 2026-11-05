@@ -130,6 +130,26 @@ pub fn theme_dir() -> PathBuf {
     home().join(".local/state/omarchy/current/theme")
 }
 
+/// The link to the current wallpaper (the theme's, or one of the user's).
+pub fn wallpaper_link() -> PathBuf {
+    home().join(".local/state/omarchy/current/background")
+}
+
+/// The wallpaper as a file URL for QML, "" without one. The URL names the
+/// file the link points to and its modification time, so that a new
+/// wallpaper is loaded rather than taken from the image cache.
+pub fn wallpaper_url(link: &Path) -> String {
+    let Ok(file) = link.canonicalize() else {
+        return String::new();
+    };
+    let modified = std::fs::metadata(&file)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_secs());
+    format!("file://{}?{modified}", file.display())
+}
+
 fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_default()
 }
@@ -140,6 +160,8 @@ pub struct Theme {
     pub palette: Palette,
     pub font_base_size: i32,
     pub corner_radius: i32,
+    /// File URL of the wallpaper, "" without one.
+    pub wallpaper: String,
 }
 
 impl Theme {
@@ -154,6 +176,7 @@ impl Theme {
                 .or_else(|| font_base_size(&theme_shell))
                 .unwrap_or(12),
             corner_radius: hyprland_rounding().unwrap_or(0),
+            wallpaper: wallpaper_url(&wallpaper_link()),
         }
     }
 }
@@ -182,6 +205,7 @@ pub fn fingerprint() -> Vec<(PathBuf, Option<SystemTime>)> {
         dir.join("colors.toml"),
         dir.join("shell.toml"),
         home().join(".config/omarchy/shell.toml"),
+        wallpaper_link(),
     ];
     files
         .into_iter()
@@ -213,6 +237,21 @@ mod tests {
                 ..Palette::default()
             }
         );
+    }
+
+    #[test]
+    fn the_wallpaper_url_follows_the_link() {
+        let dir = std::env::temp_dir().join(format!("omatro-wallpaper-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let link = dir.join("background");
+        assert_eq!(wallpaper_url(&link), "");
+        let image = dir.join("BG1.png");
+        std::fs::write(&image, b"png").unwrap();
+        std::os::unix::fs::symlink(&image, &link).unwrap();
+        let url = wallpaper_url(&link);
+        let file = image.canonicalize().unwrap();
+        assert!(url.starts_with(&format!("file://{}?", file.display())), "{url}");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

@@ -1,5 +1,6 @@
 import QtCore
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Layouts
 import omatro
 import "Labels.js" as Labels
@@ -254,6 +255,8 @@ Window {
     property real musicVolume: 0.5
     property bool sounds: true
     property real soundVolume: 0.5
+    // The Omarchy wallpaper, blurred, behind the game (W).
+    property bool wallpaper: true
   }
 
   // ---- music (M switches it on and off); none in scripted runs, unless
@@ -1028,6 +1031,7 @@ Window {
       else if (k === Qt.Key_L) root.nextLanguage()
       else if (k === Qt.Key_M && (event.modifiers & Qt.ShiftModifier)) root.toggleSounds()
       else if (k === Qt.Key_M) root.toggleMusic()
+      else if (k === Qt.Key_W) settings.wallpaper = !settings.wallpaper
       else if (root.resuming) {
         if (k === Qt.Key_Return || k === Qt.Key_Enter) root.resumeGame()
         else if (k === Qt.Key_N) root.declineResume()
@@ -1165,6 +1169,35 @@ Window {
       else console.warn("script: unknown step", step)
       scriptTimer.interval = wait
       scriptTimer.start()
+    }
+
+    // ---- the Omarchy wallpaper, blurred, behind everything, under a veil
+    // of the theme's background so that the game stays readable
+    Item {
+      anchors.fill: parent
+      visible: settings.wallpaper && wallpaperImage.status === Image.Ready
+      Image {
+        id: wallpaperImage
+        anchors.fill: parent
+        visible: false
+        source: settings.wallpaper ? OmarchyTheme.wallpaper : ""
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        // Blurred anyway: no need for the full resolution.
+        sourceSize: Qt.size(Math.max(1, root.width / 2), Math.max(1, root.height / 2))
+      }
+      MultiEffect {
+        anchors.fill: parent
+        source: wallpaperImage
+        blurEnabled: true
+        blur: 1
+        blurMax: 64
+        saturation: -0.2
+      }
+      Rectangle {
+        anchors.fill: parent
+        color: Util.alpha(Colors.background, 0.72)
+      }
     }
 
     // ---- the boss's scenery, behind the play area
@@ -2285,6 +2318,8 @@ Window {
       musicVolume: settings.musicVolume
       sounds: settings.sounds
       soundVolume: settings.soundVolume
+      wallpaper: settings.wallpaper
+      onToggleWallpaper: settings.wallpaper = !settings.wallpaper
       onClose: root.optionsOpen = false
       onLanguage: function(lang) { root.setLanguage(lang) }
       onToggleMusic: root.toggleMusic()

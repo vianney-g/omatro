@@ -1,8 +1,8 @@
 import QtQuick
 import omatro
 
-// Settings (O, from anywhere): language, music and sound volumes; then every
-// key of the game.
+// Settings (O, from anywhere): language, music and sound volumes, the
+// wallpaper; then every key of the game.
 Rectangle {
   id: root
 
@@ -10,6 +10,8 @@ Rectangle {
   property real musicVolume: 0.5
   property bool sounds: true
   property real soundVolume: 0.5
+  property bool wallpaper: true
+  signal toggleWallpaper()
   signal close()
   signal language(string lang)
   signal toggleMusic()
@@ -137,6 +139,13 @@ Rectangle {
           volume: root.soundVolume
           onToggled: root.toggleSounds()
           onVolumeChosen: function(v) { root.soundVolumeSet(v) }
+        }
+        Label { text: I18n.tr("Wallpaper (W)"); color: Colors.muted }
+        Button {
+          compact: true
+          bordered: root.wallpaper
+          text: I18n.tr(root.wallpaper ? "Shown" : "Hidden")
+          onClicked: root.toggleWallpaper()
         }
       }
 

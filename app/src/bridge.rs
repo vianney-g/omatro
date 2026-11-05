@@ -42,6 +42,7 @@ pub mod qobject {
         #[qproperty(QColor, orange)]
         #[qproperty(i32, font_base_size, cxx_name = "fontBaseSize")]
         #[qproperty(i32, corner_radius, cxx_name = "cornerRadius")]
+        #[qproperty(QString, wallpaper)]
         type OmarchyTheme = super::ThemeRust;
 
         /// Reloads the theme if its files have changed.
@@ -110,6 +111,7 @@ pub struct ThemeRust {
     orange: QColor,
     font_base_size: i32,
     corner_radius: i32,
+    wallpaper: QString,
     fingerprint: Vec<(PathBuf, Option<SystemTime>)>,
 }
 
@@ -128,6 +130,7 @@ impl Default for ThemeRust {
             orange: QColor::default(),
             font_base_size: 12,
             corner_radius: 0,
+            wallpaper: QString::default(),
             fingerprint: Vec::new(),
         }
     }
@@ -154,6 +157,7 @@ impl qobject::OmarchyTheme {
             palette,
             font_base_size,
             corner_radius,
+            wallpaper,
         } = Theme::load();
         self.as_mut().set_background(color(&palette.background));
         self.as_mut().set_foreground(color(&palette.foreground));
@@ -167,5 +171,6 @@ impl qobject::OmarchyTheme {
         self.as_mut().set_orange(color(&palette.orange));
         self.as_mut().set_font_base_size(font_base_size);
         self.as_mut().set_corner_radius(corner_radius);
+        self.as_mut().set_wallpaper(QString::from(&wallpaper));
     }
 }
