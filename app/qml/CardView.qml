@@ -147,6 +147,16 @@ Item {
     autoPaddingEnabled: true
   }
 
+  // The edition's shadow, under the card (EditionLayer).
+  EditionLayer {
+    x: face.x; y: face.y
+    width: face.width; height: face.height
+    scale: face.scale
+    behind: true
+    visible: !root.faceDown
+    kind: root.card && root.card.edition ? root.card.edition : ""
+  }
+
   Rectangle {
     id: face
     width: parent.width
@@ -170,6 +180,14 @@ Item {
       },
       Translate { id: fly }
     ]
+
+    // The edition, under the card's content.
+    EditionLayer {
+      anchors.fill: parent
+      visible: !root.faceDown
+      lively: root.lively
+      kind: root.card && root.card.edition ? root.card.edition : ""
+    }
 
     Column {
       x: Style.space(7)

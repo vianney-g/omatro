@@ -21,6 +21,9 @@ Item {
   // A Worn joker past its blinds does nothing.
   readonly property bool wornOut: stickers.some(function(s) { return s.id === "worn" && s.blinds_left === 0 })
 
+  // The edition moves (off where many jokers show at once).
+  property bool lively: true
+
   // The Windows Update: this joker does nothing this hand.
   property bool disabled: false
   // What a growing joker gives right now: {kind, text}.
@@ -40,6 +43,16 @@ Item {
     flashAnim.restart()
   }
 
+  // The edition's shadow, under the joker (EditionLayer).
+  EditionLayer {
+    anchors.fill: parent
+    scale: face.scale
+    rotation: face.rotation
+    behind: true
+    visible: !root.hidden
+    kind: root.edition ? root.edition.id : ""
+  }
+
   Rectangle {
     id: face
     anchors.fill: parent
@@ -48,6 +61,14 @@ Item {
     border.width: root.edition ? Style.space(2) : Style.normalBorderWidth
     border.color: root.edition ? Colors.accent : Util.alpha(Colors.accent, Style.normalBorderAlpha)
     opacity: (root.disabled || root.wornOut) && !root.hidden ? 0.4 : 1
+
+    // The edition, under the joker's text.
+    EditionLayer {
+      anchors.fill: parent
+      visible: !root.hidden
+      lively: root.lively
+      kind: root.edition ? root.edition.id : ""
+    }
 
     Column {
       anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(8) }
