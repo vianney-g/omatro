@@ -52,9 +52,6 @@ Item {
   readonly property var edition: card ? info("editions", card.edition) : null
   readonly property int bonusChips: card && card.bonus_chips ? card.bonus_chips : 0
 
-  readonly property string sealSymbol: !card || !card.seal ? ""
-    : card.seal === "gold_star" ? "★" : card.seal === "retry" ? "↻"
-    : card.seal === "theme_sync" ? "◐" : "❯"
   readonly property string details: {
     if (faceDown) return I18n.tr("Face down: dealt by the boss.")
     var lines = []
@@ -77,6 +74,10 @@ Item {
       band.activate()
       enhancedAnim.restart()
     }
+    // The seal acts: Retry as the card scores again, Gold Star as it pays.
+    if (card && ((effect === "again" && card.seal === "retry")
+        || (typeof effect === "object" && effect !== null && effect.money === 3 && card.seal === "gold_star")))
+      sealMark.activate()
   }
   function fromEnhancement(e) {
     if (!card || !card.enhancement || typeof e !== "object" || e === null) return false
@@ -211,15 +212,13 @@ Item {
       }
     }
 
-    // Seal, top right.
-    Text {
+    // Seal, top right (SealMark: its motion, its burst as it acts).
+    SealMark {
+      id: sealMark
       anchors { right: parent.right; top: parent.top; rightMargin: Style.space(6); topMargin: Style.space(4) }
-      visible: root.sealSymbol !== ""
-      text: root.sealSymbol
-      color: root.card && root.card.seal === "retry" ? Colors.urgent : Colors.accent
-      font.family: Style.font.family
-      font.pixelSize: Style.font.heading
-      font.bold: true
+      visible: kind !== "" && !root.faceDown
+      kind: root.card && root.card.seal ? root.card.seal : ""
+      lively: root.lively
     }
 
     Text {
