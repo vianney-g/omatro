@@ -1043,6 +1043,7 @@ Window {
         else if (k === Qt.Key_Escape && root.game !== null) root.choosingDeck = false
         else return
       }
+      else if (k === Qt.Key_I) { root.deckOpen = false; root.infoOpen = !root.infoOpen }
       else if (k === Qt.Key_P && root.game !== null) { root.infoOpen = false; root.deckOpen = !root.deckOpen }
       else if (root.deckOpen) {
         if (k === Qt.Key_Escape) root.deckOpen = false
@@ -1083,6 +1084,7 @@ Window {
       else if (k === Qt.Key_F11) root.cheat({ enhance_hand: true })
       else if (k === Qt.Key_F10) root.cheat({ random_theme: true })
       else if (k === Qt.Key_F9) root.cheat({ random_joker: true })
+      else if (k === Qt.Key_F8) root.cheat({ level_up: root.game.hands.map(function(h) { return h.kind }) })
       else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) root.confirm()
       else if (k === Qt.Key_D || k === Qt.Key_Delete) root.discard()
       // Ctrl+N, not N alone: too easy to hit in the middle of a game.
