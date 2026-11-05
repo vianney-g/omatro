@@ -1,8 +1,11 @@
 import QtQuick
+import QtQuick.Shapes
 import omatro
 import "Labels.js" as Labels
 
 // A joker: rarity, name, effect, what it adds now, its quip and its edition.
+// Hovered, it leans towards the pointer in perspective, a light following
+// the pointer on it; at rest, it breathes (each joker at its own pace).
 Item {
   id: root
 
@@ -12,6 +15,7 @@ Item {
   // Hovered, its terms are explained beside it (Glossary).
   // Its stickers are explained too.
   HoverHandler {
+    id: hover
     onHoveredChanged: hovered && !root.hidden ? Hints.show(root, root.joker ? root.joker.description
       + root.stickers.map(function(s) { return " " + s.name }).join("") : "", root.joker ? root.joker.name : "") : Hints.hide(root)
   }
@@ -36,6 +40,42 @@ Item {
   readonly property color rarityColor: !joker ? Colors.muted
     : joker.rarity === "extra" ? Colors.accent
     : joker.rarity === "core" ? Colors.muted : Colors.urgent
+
+  // Leaning towards the pointer: from -1 to 1 across the joker, 0 at rest.
+  readonly property real leanX: hover.hovered ? Math.max(-1, Math.min(1, (hover.point.position.x - width / 2) / (width / 2))) : 0
+  readonly property real leanY: hover.hovered ? Math.max(-1, Math.min(1, (hover.point.position.y - height / 2) / (height / 2))) : 0
+  transform: [
+    Rotation {
+      origin.x: root.width / 2; origin.y: root.height / 2
+      axis { x: 0; y: 1; z: 0 }
+      angle: 14 * root.leanX
+      Behavior on angle { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
+    },
+    Rotation {
+      origin.x: root.width / 2; origin.y: root.height / 2
+      axis { x: 1; y: 0; z: 0 }
+      angle: -10 * root.leanY
+      Behavior on angle { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
+    },
+    // Breathing: a slow swell and float.
+    Scale {
+      origin.x: root.width / 2; origin.y: root.height / 2
+      xScale: 1 + 0.012 * root.breath; yScale: xScale
+    },
+    Translate { y: -Style.space(2) * root.breath }
+  ]
+  property real breath: 0
+  SequentialAnimation on breath {
+    running: root.lively && root.visible && !root.hidden
+    loops: Animation.Infinite
+    // Each joker starts at its own moment, so that they don't breathe together.
+    PauseAnimation { duration: Math.random() * 2500 }
+    SequentialAnimation {
+      loops: Animation.Infinite
+      NumberAnimation { to: 1; duration: 1800; easing.type: Easing.InOutSine }
+      NumberAnimation { to: 0; duration: 1800; easing.type: Easing.InOutSine }
+    }
+  }
 
   function flash(text, color) {
     popup.text = text
@@ -194,6 +234,25 @@ Item {
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
       font.bold: true
+    }
+
+    // The light on it, following the pointer.
+    Shape {
+      anchors.fill: parent
+      visible: hover.hovered && !root.hidden
+      opacity: 0.5
+      ShapePath {
+        strokeWidth: -1
+        fillGradient: RadialGradient {
+          centerX: hover.point.position.x; centerY: hover.point.position.y
+          focalX: centerX; focalY: centerY
+          centerRadius: root.width * 0.9
+          focalRadius: 0
+          GradientStop { position: 0; color: Qt.rgba(1, 1, 1, 0.3) }
+          GradientStop { position: 1; color: "transparent" }
+        }
+        PathRectangle { x: 0; y: 0; width: root.width; height: root.height; radius: Style.cornerRadius }
+      }
     }
 
     // The Kernel Panic: face down.
