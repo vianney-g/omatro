@@ -38,6 +38,7 @@ fn main() {
         QmlFile::from("qml/EnhancementBand.qml"),
         QmlFile::from("qml/BossScene.qml"),
         QmlFile::from("qml/EditionLayer.qml"),
+        QmlFile::from("qml/Odometer.qml"),
         QmlFile::from("qml/JokerView.qml"),
         QmlFile::from("qml/Button.qml"),
         QmlFile::from("qml/SeedLabel.qml"),

@@ -210,14 +210,26 @@ Window {
   readonly property bool bossDark: game !== null && game.score === 0
     && game.face_down.some(function(f) { return f })
 
-  // The whole screen shakes for a moment.
-  function quake() { quakeAnim.restart() }
+  // The whole screen shakes for a moment: `strength` 1 (a jolt) to 3 (an
+  // earthquake), 2 by default.
+  property real quakeAmplitude: 0
+  function quake(strength) {
+    var s = strength || 2
+    quakeAmplitude = Style.space(3 + 3 * s)
+    quakeAnim.loops = 2 + 2 * s
+    quakeAnim.restart()
+  }
   SequentialAnimation {
     id: quakeAnim
-    loops: 4
-    NumberAnimation { target: quakeShift; property: "x"; to: Style.space(8); duration: 40 }
-    NumberAnimation { target: quakeShift; property: "x"; to: -Style.space(8); duration: 80 }
-    NumberAnimation { target: quakeShift; property: "x"; to: 0; duration: 40 }
+    NumberAnimation { target: quakeShift; property: "x"; to: root.quakeAmplitude; duration: 35 }
+    ParallelAnimation {
+      NumberAnimation { target: quakeShift; property: "x"; to: -root.quakeAmplitude; duration: 70 }
+      NumberAnimation { target: quakeShift; property: "y"; to: root.quakeAmplitude / 2; duration: 70 }
+    }
+    ParallelAnimation {
+      NumberAnimation { target: quakeShift; property: "x"; to: 0; duration: 35 }
+      NumberAnimation { target: quakeShift; property: "y"; to: 0; duration: 35 }
+    }
   }
   // The ante's boss is still ahead, or being played.
   readonly property bool upcomingBoss: game !== null && game.phase !== "lost"
@@ -920,6 +932,8 @@ Window {
       shownScore = pendingState.score
       if (heatFor(scoring.total) > 0) sound("fire")
       fireHeat = Math.max(fireHeat, heatFor(scoring.total))
+      // A hand far beyond the blind shakes the screen.
+      if (heatFor(scoring.total) >= 2) quake(heatFor(scoring.total) - 1)
       stepTimer.interval = 900
     } else if (!changesShown && playCardChanges(scoringChanges)) {
       changesShown = true
@@ -1346,7 +1360,8 @@ Window {
               anchors { fill: parent; margins: Style.spacing.xxl }
               spacing: Style.spacing.xs
               Caption { text: I18n.tr("Blind score") }
-              Value { text: Labels.number(root.shownScore) }
+              // Rolls like a mechanical counter as the hand's points come in.
+              Odometer { text: Labels.number(Math.round(root.shownScore)) }
             }
           }
 
