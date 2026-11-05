@@ -15,6 +15,12 @@ pub struct Palette {
     pub muted: String,
     /// The theme's yellow (`yellow`, else `color3`), for fire and sparks.
     pub warm: String,
+    /// More hues of the theme (`green`, `cyan`, `magenta`, else `color2`,
+    /// `color6`, `color5`; `orange`, else the yellow), one per card enhancement.
+    pub green: String,
+    pub cyan: String,
+    pub magenta: String,
+    pub orange: String,
 }
 
 impl Default for Palette {
@@ -27,6 +33,10 @@ impl Default for Palette {
             urgent: "#a55555".into(),
             muted: "#707880".into(),
             warm: "#c8a050".into(),
+            green: "#7a9a60".into(),
+            cyan: "#5a9aa0".into(),
+            magenta: "#9a6a9a".into(),
+            orange: "#c87a40".into(),
         }
     }
 }
@@ -50,6 +60,7 @@ impl Palette {
         let mut p = Palette::default();
         let (mut accent, mut muted, mut fg, mut bg) = (None, None, None, None);
         let (mut c0, mut c4, mut c7, mut c8) = (None, None, None, None);
+        let (mut orange, mut yellow) = (None, None);
         for (key, value) in colors(text) {
             let hex = Some(value.to_string());
             match key {
@@ -62,7 +73,14 @@ impl Palette {
                 "color7" => c7 = hex,
                 "color8" => c8 = hex,
                 "red" | "color1" => p.urgent = value.to_string(),
-                "yellow" | "color3" => p.warm = value.to_string(),
+                "yellow" | "color3" => {
+                    p.warm = value.to_string();
+                    yellow = hex;
+                }
+                "green" | "color2" => p.green = value.to_string(),
+                "cyan" | "color6" => p.cyan = value.to_string(),
+                "magenta" | "color5" => p.magenta = value.to_string(),
+                "orange" => orange = hex,
                 _ => {}
             }
         }
@@ -76,6 +94,9 @@ impl Palette {
             p.accent = v;
         }
         p.muted = muted.or(c8).unwrap_or_else(|| p.foreground.clone());
+        if let Some(v) = orange.or(yellow) {
+            p.orange = v;
+        }
         p
     }
 }
@@ -189,8 +210,22 @@ mod tests {
                 urgent: "#d1512f".into(),
                 muted: "#8a6f52".into(),
                 warm: Palette::default().warm,
+                ..Palette::default()
             }
         );
+    }
+
+    #[test]
+    fn parses_the_enhancement_hues() {
+        let p = Palette::parse(
+            "green = \"#00ff00\"\ncolor6 = \"#00ffff\"\nmagenta = \"#ff00ff\"\nyellow = \"#ffff00\"\n",
+        );
+        assert_eq!(
+            [p.green, p.cyan, p.magenta, p.orange],
+            ["#00ff00", "#00ffff", "#ff00ff", "#ffff00"]
+        );
+        let p = Palette::parse("orange = \"#ff8800\"\nyellow = \"#ffff00\"\n");
+        assert_eq!(p.orange, "#ff8800");
     }
 
     #[test]

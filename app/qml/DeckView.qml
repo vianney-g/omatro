@@ -116,6 +116,7 @@ Rectangle {
                 card: modelData
                 interactive: false
                 showTip: false
+                lively: false
                 dimmed: !root.inPile[modelData.id]
                 onHoveredChanged: if (hovered) root.hovered = view
                   else if (root.hovered === view) root.hovered = null

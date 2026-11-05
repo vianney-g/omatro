@@ -871,7 +871,7 @@ Window {
         : step.source.kind === "joker" ? jokerRepeater.itemAt(step.source.index)
         : null
       if (step.effect === "balance") notice = I18n.tr("Hyprland Dwindle balanced chips and mult")
-      if (view) view.flash(Labels.effect(step.effect), color)
+      if (view) view.flash(Labels.effect(step.effect), color, step.effect)
     } else if (stepIndex === steps.length) {
       showTotal = true
       // The blind score counts up with the total, not after it.

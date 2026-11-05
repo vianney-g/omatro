@@ -36,6 +36,10 @@ pub mod qobject {
         #[qproperty(QColor, urgent)]
         #[qproperty(QColor, muted)]
         #[qproperty(QColor, warm)]
+        #[qproperty(QColor, green)]
+        #[qproperty(QColor, cyan)]
+        #[qproperty(QColor, magenta)]
+        #[qproperty(QColor, orange)]
         #[qproperty(i32, font_base_size, cxx_name = "fontBaseSize")]
         #[qproperty(i32, corner_radius, cxx_name = "cornerRadius")]
         type OmarchyTheme = super::ThemeRust;
@@ -100,6 +104,10 @@ pub struct ThemeRust {
     urgent: QColor,
     muted: QColor,
     warm: QColor,
+    green: QColor,
+    cyan: QColor,
+    magenta: QColor,
+    orange: QColor,
     font_base_size: i32,
     corner_radius: i32,
     fingerprint: Vec<(PathBuf, Option<SystemTime>)>,
@@ -114,6 +122,10 @@ impl Default for ThemeRust {
             urgent: QColor::default(),
             muted: QColor::default(),
             warm: QColor::default(),
+            green: QColor::default(),
+            cyan: QColor::default(),
+            magenta: QColor::default(),
+            orange: QColor::default(),
             font_base_size: 12,
             corner_radius: 0,
             fingerprint: Vec::new(),
@@ -149,6 +161,10 @@ impl qobject::OmarchyTheme {
         self.as_mut().set_urgent(color(&palette.urgent));
         self.as_mut().set_muted(color(&palette.muted));
         self.as_mut().set_warm(color(&palette.warm));
+        self.as_mut().set_green(color(&palette.green));
+        self.as_mut().set_cyan(color(&palette.cyan));
+        self.as_mut().set_magenta(color(&palette.magenta));
+        self.as_mut().set_orange(color(&palette.orange));
         self.as_mut().set_font_base_size(font_base_size);
         self.as_mut().set_corner_radius(corner_radius);
     }
