@@ -1225,6 +1225,8 @@ Window {
                 textFormat: Text.StyledText
                 text: visible
                   ? "<b>" + I18n.tr("Boss: {name}", { name: root.game.boss.name }) + "</b><br>" + root.game.boss.description
+                    // What the boss holds the player to now (The Style Guide's hand type).
+                    + (root.game.boss.current ? "<br><b>" + root.game.boss.current + "</b>" : "")
                   : ""
                 color: root.bossName !== "" && root.game.phase === "playing" ? Colors.urgent : Colors.muted
                 font.family: Style.font.family

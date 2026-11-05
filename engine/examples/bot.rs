@@ -306,6 +306,7 @@ impl Bot {
             if s["boss_active"] == true
                 || s["jokers_hidden"] == true
                 || !s["disabled_joker"].is_null()
+                || !s["boss"]["current"].is_null()
             {
                 broken.push("boss still at work outside its blind".into());
             }

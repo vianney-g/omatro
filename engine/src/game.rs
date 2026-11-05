@@ -243,6 +243,9 @@ pub struct BossInfo {
     pub name: &'static str,
     pub description: &'static str,
     pub quip: &'static str,
+    /// What the boss holds the player to right now (The Style Guide: the
+    /// hand type allowed).
+    pub current: Option<String>,
 }
 
 /// One of the three blinds of the current ante.
@@ -1637,6 +1640,17 @@ impl Game {
             && !self.boss_disabled
             && self.count(Joker::Kill9) == 0;
         on.then_some(self.boss)
+    }
+
+    /// What the boss holds the player to, while its effect applies.
+    fn boss_current(&self) -> Option<String> {
+        match self.boss_effect()? {
+            Boss::StyleGuide => self
+                .blind_hands
+                .first()
+                .map(|k| format!("Allowed hand: {}", k.name())),
+            _ => None,
+        }
     }
 
     /// Undoes what the boss did to the hand and the jokers (won, or
@@ -4056,6 +4070,7 @@ impl Game {
                 name: self.boss.name(),
                 description: self.boss.description(),
                 quip: self.boss.quip(),
+                current: self.boss_current(),
             },
             boss_active: self.boss_effect().is_some(),
             jokers_hidden: self.jokers_hidden,
@@ -5390,6 +5405,18 @@ mod tests {
         let game = boss_game(93, Boss::BlackScreen, vec![]);
         assert!(game.state().face_down.iter().all(|&f| f));
         assert_eq!(game.preview(&[0, 1]).unwrap(), None);
+    }
+
+    #[test]
+    fn the_style_guide_shows_the_hand_type_allowed() {
+        let mut game = boss_game(95, Boss::StyleGuide, vec![]);
+        assert_eq!(game.state().boss.current, None);
+        game.hand = cards("KH KS 9S 9C 5H 5D 3S 2C");
+        game.play(&[0, 1]).unwrap();
+        assert_eq!(
+            game.state().boss.current.as_deref(),
+            Some("Allowed hand: Pair")
+        );
     }
 
     #[test]
