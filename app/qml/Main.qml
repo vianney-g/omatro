@@ -679,7 +679,11 @@ Window {
     if (busy || !game) return
     notice = ""
     if (game.phase === "blind_select") send({ cmd: "select_blind" })
-    else if (game.phase === "won") send({ cmd: "cash_out" })
+    else if (game.phase === "won") {
+      // The reward flies from the panel to the money.
+      if (game.reward) coins.fly(endBox, moneyValue, game.reward.total)
+      send({ cmd: "cash_out" })
+    }
     else if (game.phase === "shop") send({ cmd: "next_blind" })
     else if (game.phase === "lost") newGame()
     else play()
@@ -730,6 +734,8 @@ Window {
   }
   function sell(i) {
     if (jokersEditable) {
+      // The sale flies from the joker, read before it goes.
+      if (i < game.jokers.length) coins.fly(jokerRepeater.itemAt(i), moneyValue, game.jokers[i].sell_value)
       keepingSelection({ cmd: "sell", joker: i })
       sound("sell")
     }
@@ -930,6 +936,8 @@ Window {
         : null
       if (step.effect === "balance") notice = I18n.tr("Hyprland Dwindle balanced chips and mult")
       if (view) view.flash(Labels.effect(step.effect), color, step.effect)
+      // Money flies from what pays.
+      if (view && Labels.isMoney(step.effect)) coins.fly(view, moneyValue, step.effect.money)
     } else if (stepIndex === steps.length) {
       showTotal = true
       // The blind score counts up with the total, not after it.
@@ -1379,7 +1387,18 @@ Window {
               Caption { text: I18n.tr("Money") }
               Row {
                 spacing: Style.spacing.lg
-                Value { text: root.game ? Labels.money(Math.round(root.shownMoney)) : "–"; color: Colors.accent }
+                Value {
+                  id: moneyValue
+                  text: root.game ? Labels.money(Math.round(root.shownMoney)) : "–"
+                  color: Colors.accent
+                  // A coin lands in it.
+                  function bump() { moneyBump.restart() }
+                  SequentialAnimation {
+                    id: moneyBump
+                    NumberAnimation { target: moneyValue; property: "scale"; to: 1.15; duration: 50 }
+                    NumberAnimation { target: moneyValue; property: "scale"; to: 1; duration: 160; easing.type: Easing.OutBack }
+                  }
+                }
                 // The last change, rising and fading.
                 Text {
                   id: moneyDelta
@@ -2146,6 +2165,7 @@ Window {
       MouseArea { anchors.fill: parent }
 
       Box {
+        id: endBox
         anchors.centerIn: parent
         width: Style.space(420)
         height: endCol.implicitHeight + 2 * Style.spacing.huge
@@ -2271,6 +2291,14 @@ Window {
       blindName: root.currentBlind ? root.currentBlind.name : ""
       onNewGame: root.confirm()
       onVisibleChanged: if (visible) root.quake(1)
+    }
+
+    // ---- coins flying to the money, over the panels
+    Coins {
+      id: coins
+      anchors.fill: parent
+      z: 6
+      onLanded: moneyValue.bump()
     }
 
     // ---- the game won: confetti, over the panel

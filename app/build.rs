@@ -41,6 +41,7 @@ fn main() {
         QmlFile::from("qml/Odometer.qml"),
         QmlFile::from("qml/KernelPanic.qml"),
         QmlFile::from("qml/Confetti.qml"),
+        QmlFile::from("qml/Coins.qml"),
         QmlFile::from("qml/JokerView.qml"),
         QmlFile::from("qml/Button.qml"),
         QmlFile::from("qml/SeedLabel.qml"),
