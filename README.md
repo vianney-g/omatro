@@ -42,7 +42,7 @@ On Arch Linux and Omarchy, each [release](https://github.com/vianney-g/omatro/re
 comes with a pacman package, which brings Qt 6 along:
 
 ```sh
-sudo pacman -U https://github.com/vianney-g/omatro/releases/download/v0.5.1/omatro-0.5.1-1-x86_64.pkg.tar.zst
+sudo pacman -U https://github.com/vianney-g/omatro/releases/download/v0.6.0/omatro-0.6.0-1-x86_64.pkg.tar.zst
 ```
 
 Or build the package from the latest release's source, with pacman tracking it:
