@@ -135,6 +135,8 @@ pub enum Response {
         base_mult: f64,
         /// Each joker's badge if this hand were played (empty without a hand).
         bonuses: Vec<Option<Bonus>>,
+        /// Why the boss would refuse this hand, which would score nothing.
+        warning: Option<String>,
     },
     Error {
         message: String,
@@ -542,7 +544,12 @@ impl Session {
                 let (base_chips, base_mult) = evaluated
                     .as_ref()
                     .map_or((0, 0.0), |e| game.levels().values(e.kind));
+                let warning = evaluated
+                    .as_ref()
+                    .and_then(|e| game.refused_by(e.kind, cards.len()))
+                    .map(|boss| crate::game::refusal(Some(boss)));
                 return Ok(Response::Preview {
+                    warning,
                     hand: evaluated.as_ref().map(|e| e.kind),
                     hand_name: evaluated.as_ref().map(|e| e.kind.name()),
                     hand_level: evaluated.as_ref().map(|e| game.levels().level(e.kind)),
@@ -654,6 +661,24 @@ mod tests {
             (r["base_chips"].as_u64(), r["base_mult"].as_f64()),
             (Some(10), Some(2.0))
         );
+    }
+
+    #[test]
+    fn the_preview_warns_of_a_hand_the_boss_would_refuse() {
+        let mut session = Session::default();
+        session.handle(r#"{"cmd":"new_game","seed":1}"#);
+        let game = session.game.as_mut().unwrap();
+        game.cheat(crate::game::Cheat {
+            blind: Some(crate::blind::BlindKind::Boss),
+            boss: Some(crate::boss::Boss::MandatoryMeeting),
+            ..Default::default()
+        })
+        .unwrap();
+        session.handle(r#"{"cmd":"select_blind"}"#);
+        let r = send(&mut session, r#"{"cmd":"preview","cards":[0,1]}"#);
+        assert_eq!(r["warning"], "Not allowed by The Mandatory Meeting.");
+        let r = send(&mut session, r#"{"cmd":"preview","cards":[0,1,2,3,4]}"#);
+        assert!(r["warning"].is_null());
     }
 
     #[test]

@@ -213,6 +213,12 @@ Window {
   readonly property int handLevel: scoring ? scoring.hand_level
     : levelShown ? levelShownLevel
     : (preview && preview.hand ? preview.hand_level : 0)
+  // Why the boss would refuse the selected hand (it would score nothing).
+  readonly property string handWarning: !scoring && !levelShown && preview && preview.warning
+    ? preview.warning : ""
+  // Bosses that refuse some hands: the warning line keeps its room in their blind.
+  readonly property bool refusingBoss: game !== null && game.boss_active
+    && ["mandatory_meeting", "code_reviewer", "style_guide"].indexOf(game.boss.id) >= 0
   readonly property string handName: scoring ? scoring.hand_name
     : levelShown ? levelShown.name
     : (preview && preview.hand ? preview.hand_name : "")
@@ -1287,7 +1293,8 @@ Window {
           Box {
             Layout.fillWidth: true
             implicitHeight: calcCol.implicitHeight + 2 * Style.spacing.xxl
-            border.color: root.fireHeat > 0 ? Colors.warm : root.levelShown ? Colors.accent : Style.normalBorderColor
+            border.color: root.fireHeat > 0 ? Colors.warm : root.levelShown ? Colors.accent
+              : root.handWarning ? Colors.urgent : Style.normalBorderColor
             Behavior on border.color { ColorAnimation { duration: 300 } }
             // Behind the hand name and the counters.
             ScoreFire {
@@ -1345,6 +1352,18 @@ Window {
                   tint: Colors.urgent
                   value: Labels.mult(root.liveMult)
                 }
+              }
+              // The boss would refuse the selection: said before it is played.
+              Text {
+                width: parent.width
+                visible: root.refusingBoss
+                // A space keeps the line's height while nothing is refused.
+                text: root.handWarning || " "
+                wrapMode: Text.WordWrap
+                color: Colors.urgent
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
               }
             }
           }

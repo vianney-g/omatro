@@ -39,8 +39,9 @@ impl Lang {
 
 /// Fields holding text to translate; `name` only when the catalog has it
 /// word for word (hand types, the small and big blinds: card names stay).
-const TEXT_FIELDS: [&str; 7] = [
+const TEXT_FIELDS: [&str; 8] = [
     "description",
+    "warning",
     "text",
     "current",
     "hand_name",

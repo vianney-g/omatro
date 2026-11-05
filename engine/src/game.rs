@@ -236,6 +236,11 @@ pub struct CardOffer {
     pub price: u32,
 }
 
+/// The note of a hand the boss refused, and the preview's warning.
+pub fn refusal(boss: Option<Boss>) -> String {
+    format!("Not allowed by {}.", boss.map_or("the boss", Boss::name))
+}
+
 /// The boss of the ante.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct BossInfo {
@@ -1642,6 +1647,19 @@ impl Game {
         on.then_some(self.boss)
     }
 
+    /// The boss that would refuse a hand of this type and this many cards
+    /// (it then scores nothing).
+    pub fn refused_by(&self, kind: HandKind, cards: usize) -> Option<Boss> {
+        let boss = self.boss_effect()?;
+        let refused = match boss {
+            Boss::MandatoryMeeting => cards < 5,
+            Boss::CodeReviewer => self.blind_hands.contains(&kind),
+            Boss::StyleGuide => self.blind_hands.first().is_some_and(|&k| k != kind),
+            _ => false,
+        };
+        refused.then_some(boss)
+    }
+
     /// What the boss holds the player to, while its effect applies.
     fn boss_current(&self) -> Option<String> {
         match self.boss_effect()? {
@@ -2162,15 +2180,7 @@ impl Game {
         let most_played = HandKind::ALL
             .iter()
             .all(|&k| self.plays.get(evaluated.kind) >= self.plays.get(k));
-        let refused = match boss {
-            Some(Boss::MandatoryMeeting) => played.len() < 5,
-            Some(Boss::CodeReviewer) => self.blind_hands.contains(&evaluated.kind),
-            Some(Boss::StyleGuide) => self
-                .blind_hands
-                .first()
-                .is_some_and(|&k| k != evaluated.kind),
-            _ => false,
-        };
+        let refused = self.refused_by(evaluated.kind, played.len()).is_some();
         self.plays.add(evaluated.kind);
         self.hands_played += 1;
         self.blind_hands.push(evaluated.kind);
@@ -2297,10 +2307,7 @@ impl Game {
             mult: 0.0,
             total: 0.0,
             money: 0,
-            notes: vec![format!(
-                "Not allowed by {}.",
-                boss.map_or("the boss", Boss::name)
-            )],
+            notes: vec![refusal(boss)],
             lucky_hits: 0,
             broken: Vec::new(),
         }
@@ -5405,6 +5412,37 @@ mod tests {
         let game = boss_game(93, Boss::BlackScreen, vec![]);
         assert!(game.state().face_down.iter().all(|&f| f));
         assert_eq!(game.preview(&[0, 1]).unwrap(), None);
+    }
+
+    #[test]
+    fn bosses_tell_which_hands_they_would_refuse() {
+        let game = boss_game(94, Boss::MandatoryMeeting, vec![]);
+        assert_eq!(
+            game.refused_by(HandKind::Pair, 2),
+            Some(Boss::MandatoryMeeting)
+        );
+        assert_eq!(game.refused_by(HandKind::Pair, 5), None);
+
+        for boss in [Boss::CodeReviewer, Boss::StyleGuide] {
+            let mut game = boss_game(95, boss, vec![]);
+            game.hand = cards("KH KS 9S 9C 5H 5D 3S 2C");
+            assert_eq!(game.refused_by(HandKind::Pair, 2), None);
+            game.play(&[0, 1]).unwrap();
+            let (pair, flush) = (HandKind::Pair, HandKind::Flush);
+            let expected = if boss == Boss::CodeReviewer {
+                (Some(boss), None)
+            } else {
+                (None, Some(boss))
+            };
+            assert_eq!(
+                (game.refused_by(pair, 2), game.refused_by(flush, 5)),
+                expected
+            );
+        }
+        // No boss, no refusal.
+        let mut game = Game::new(1, vec![]);
+        game.select_blind().unwrap();
+        assert_eq!(game.refused_by(HandKind::Pair, 2), None);
     }
 
     #[test]

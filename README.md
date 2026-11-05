@@ -249,7 +249,8 @@ Responses:
   `money` is what the hand earned, `notes` what happened to the jokers.
 - `{"event":"preview","cards":[…],"hand":"pair","hand_name":"Pair","hand_level":1,"scoring":[…],"base_chips":10,"base_mult":2.0}`
   (`hand` is `null` when nothing is chosen, `scoring` holds hand indices), with
-  `bonuses`: each joker's badge if this hand were played.
+  `bonuses`: each joker's badge if this hand were played, and `warning`: why the
+  boss would refuse the hand (`null` otherwise; a refused hand scores nothing).
 - `{"event":"decks","decks":[…]}` after `decks`: each deck's `id`, `name`,
   `description` and `quip`; a hidden deck not unlocked yet has the `achievement` it
   waits for and its `condition` (otherwise `null`), and `new_game` refuses it; its
