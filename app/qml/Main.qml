@@ -378,8 +378,12 @@ Window {
     return a.rank === b.rank && a.suit === b.suit && a.enhancement === b.enhancement
       && a.seal === b.seal && a.edition === b.edition
   }
+  // How long the last card changes take to show (an Overclocked card takes
+  // its time to burst).
+  property int cardChangesTime: 620
   // Breaks and turns over the cards on view; true when there was any.
   function playCardChanges(changes) {
+    cardChangesTime = 620
     var shown = false
     var broke = false
     var dropped = false
@@ -387,7 +391,13 @@ Window {
       var view = cardView(c.card.id)
       if (!view || c.change === "added") return
       if (c.change === "destroyed") {
-        view.vanish()
+        // An Overclocked card breaks into pieces, sparks flying.
+        if (c.card.enhancement === "overclocked") {
+          view.shatter()
+          shatterSparks.views = shatterSparks.views.concat([view])
+          shatterSparks.restart()
+          cardChangesTime = 1300
+        } else view.vanish()
         broke = true
       } else if (c.change === "discarded") {
         view.drop()
@@ -406,6 +416,18 @@ Window {
     })
     if (shown) sound(broke ? "card-break" : dropped ? "discard" : "card-change")
     return shown
+  }
+  // Sparks as an Overclocked card bursts (after it overheats).
+  SequentialAnimation {
+    id: shatterSparks
+    property var views: []
+    PauseAnimation { duration: 500 }
+    ScriptAction {
+      script: {
+        shatterSparks.views.forEach(function(v) { sparks.burst(v, "warm", 28, true) })
+        shatterSparks.views = []
+      }
+    }
   }
   // The cards added to the hand come in.
   function showAddedCards(changes) {
@@ -429,6 +451,7 @@ Window {
     }
     changedState = { state: s, changes: changes }
     changing = true
+    changeTimer.interval = cardChangesTime
     changeTimer.restart()
   }
   // Applies the state the changes were waiting with (now, if another comes).
@@ -900,7 +923,7 @@ Window {
       stepTimer.interval = 900
     } else if (!changesShown && playCardChanges(scoringChanges)) {
       changesShown = true
-      stepTimer.interval = 620
+      stepTimer.interval = cardChangesTime
     } else {
       stepTimer.stop()
       notice = I18n.tr("{hand}: {points} points", { hand: scoring.hand_name, points: Labels.number(scoring.total) })

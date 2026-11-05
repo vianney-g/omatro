@@ -98,6 +98,8 @@ Item {
   property var nextCard: null
   property color glowColor: Colors.accent
   function vanish() { vanishAnim.restart() }
+  // An Overclocked card breaks: it overheats, then bursts into pieces.
+  function shatter() { shatterAnim.restart() }
   function drop() { dropAnim.restart() }
   function morph(card) {
     nextCard = card
@@ -349,6 +351,59 @@ Item {
       NumberAnimation { target: face; property: "rotation"; to: 0; duration: 40 }
     }
     NumberAnimation { target: root; property: "enhancedGlow"; to: 0; duration: 500; easing.type: Easing.InQuad }
+  }
+
+  // The pieces of a broken card: snapshots of the face, 3 × 4, flying apart
+  // (their own way and spin each), falling and fading as `burst` goes 0 → 1.
+  Item {
+    id: shards
+    x: face.x; y: face.y
+    width: face.width; height: face.height
+    visible: false
+    property real burst: 0
+    readonly property int columns: 3
+    readonly property int rows: 4
+    Repeater {
+      model: shards.visible ? shards.columns * shards.rows : 0
+      ShaderEffectSource {
+        required property int index
+        readonly property real w: shards.width / shards.columns
+        readonly property real h: shards.height / shards.rows
+        readonly property real baseX: (index % shards.columns) * w
+        readonly property real baseY: Math.floor(index / shards.columns) * h
+        // Away from the middle, with some chance in it.
+        readonly property real dx: (baseX + w / 2 - shards.width / 2) * (1.5 + Math.random()) + (Math.random() - 0.5) * w
+        readonly property real dy: (baseY + h / 2 - shards.height / 2) * (1.2 + Math.random()) - h * Math.random()
+        readonly property real spin: (Math.random() - 0.5) * 540
+        sourceItem: face
+        sourceRect: Qt.rect(baseX, baseY, w, h)
+        live: false
+        hideSource: shards.visible
+        width: w; height: h
+        x: baseX + dx * shards.burst
+        // Then they fall.
+        y: baseY + dy * shards.burst + shards.height * 0.9 * shards.burst * shards.burst
+        rotation: spin * shards.burst
+        opacity: 1 - shards.burst * shards.burst
+      }
+    }
+  }
+
+  SequentialAnimation {
+    id: shatterAnim
+    // It overheats: the halo, a shake.
+    ScriptAction { script: root.glowColor = Colors.orange }
+    NumberAnimation { target: root; property: "enhancedGlow"; to: 1; duration: 80 }
+    SequentialAnimation {
+      loops: 3
+      NumberAnimation { target: face; property: "rotation"; to: 5; duration: 35 }
+      NumberAnimation { target: face; property: "rotation"; to: -5; duration: 70 }
+      NumberAnimation { target: face; property: "rotation"; to: 0; duration: 35 }
+    }
+    // It bursts.
+    ScriptAction { script: { shards.burst = 0; shards.visible = true; root.enhancedGlow = 0 } }
+    NumberAnimation { target: shards; property: "burst"; to: 1; duration: 650; easing.type: Easing.OutQuad }
+    ScriptAction { script: { root.opacity = 0; shards.visible = false } }
   }
 
   SequentialAnimation {

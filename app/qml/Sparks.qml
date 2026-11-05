@@ -41,11 +41,12 @@ Item {
   Burst { id: mult; group: "mult" }
   Burst { id: warm; group: "warm" }
 
-  // `kind`: "chips", "mult" or "warm"; sparks fly from the item's top edge.
-  function burst(item, kind) {
+  // `kind`: "chips", "mult" or "warm"; sparks fly from the item's top edge,
+  // or from its middle; `count` of them (14 by default).
+  function burst(item, kind, count, middle) {
     if (!item) return
-    var p = item.mapToItem(root, item.width / 2, 0)
+    var p = item.mapToItem(root, item.width / 2, middle ? item.height / 2 : 0)
     var emitter = kind === "chips" ? chips : kind === "mult" ? mult : warm
-    emitter.burst(14, p.x, p.y)
+    emitter.burst(count || 14, p.x, p.y)
   }
 }
