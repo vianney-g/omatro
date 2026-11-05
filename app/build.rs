@@ -36,6 +36,7 @@ fn main() {
         QmlFile::from("qml/Sparks.qml"),
         QmlFile::from("qml/CardView.qml"),
         QmlFile::from("qml/EnhancementBand.qml"),
+        QmlFile::from("qml/BossScene.qml"),
         QmlFile::from("qml/JokerView.qml"),
         QmlFile::from("qml/Button.qml"),
         QmlFile::from("qml/SeedLabel.qml"),

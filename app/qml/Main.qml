@@ -202,6 +202,22 @@ Window {
   // The boss at work: cards it hides or disables, by card id (the hand shown
   // during the score animation is not the state's hand).
   readonly property string bossName: game !== null && game.boss_active ? game.boss.name : ""
+  // The boss whose scenery shows (BossScene): during its blind only.
+  readonly property string bossScene: game !== null && game.boss_active && game.phase === "playing"
+    ? game.boss.id : ""
+  // The Black Screen, until its first hand (dealt face down) has scored.
+  readonly property bool bossDark: game !== null && game.score === 0
+    && game.face_down.some(function(f) { return f })
+
+  // The whole screen shakes for a moment.
+  function quake() { quakeAnim.restart() }
+  SequentialAnimation {
+    id: quakeAnim
+    loops: 4
+    NumberAnimation { target: quakeShift; property: "x"; to: Style.space(8); duration: 40 }
+    NumberAnimation { target: quakeShift; property: "x"; to: -Style.space(8); duration: 80 }
+    NumberAnimation { target: quakeShift; property: "x"; to: 0; duration: 40 }
+  }
   // The ante's boss is still ahead, or being played.
   readonly property bool upcomingBoss: game !== null && game.phase !== "lost"
     && game.blinds.some(function(b) { return b.kind === "boss" && b.status !== "defeated" })
@@ -1151,9 +1167,23 @@ Window {
       scriptTimer.start()
     }
 
+    // ---- the boss's scenery, behind the play area
+    BossScene {
+      id: bossBack
+      x: mainRow.x + playArea.x
+      y: mainRow.y + playArea.y
+      width: playArea.width
+      height: playArea.height
+      boss: root.bossScene
+      dark: root.bossDark
+    }
+
     RowLayout {
+      id: mainRow
       anchors { fill: parent; margins: Style.spacing.huge }
       spacing: Style.spacing.huge
+      // Shaken by root.quake().
+      transform: Translate { id: quakeShift }
 
       // ---- left column: blind, score, running calculation
       // Fixed width: a nested layout stretches by default and the column
@@ -2005,6 +2035,20 @@ Window {
           }
         }
       }
+    }
+
+    // ---- the boss over the play area: its entrance, what covers the screen
+    BossScene {
+      x: mainRow.x + playArea.x
+      y: mainRow.y + playArea.y
+      width: playArea.width
+      height: playArea.height
+      front: true
+      boss: root.bossScene
+      dark: root.bossDark
+      bossName: root.game ? root.game.boss.name : ""
+      bossDescription: root.game ? root.game.boss.description : ""
+      onQuake: root.quake()
     }
 
     // ---- end of blind: won or lost
