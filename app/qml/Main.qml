@@ -1172,27 +1172,38 @@ Window {
     }
 
     // ---- the Omarchy wallpaper, blurred, behind everything, under a veil
-    // of the theme's background so that the game stays readable
+    // of the theme's background so that the game stays readable. Blurred once
+    // at a fixed size (in its proportions), then scaled to cover the window:
+    // resizing never blurs it again, nor stretches it.
     Item {
       anchors.fill: parent
       visible: settings.wallpaper && wallpaperImage.status === Image.Ready
-      Image {
-        id: wallpaperImage
-        anchors.fill: parent
-        visible: false
-        source: settings.wallpaper ? OmarchyTheme.wallpaper : ""
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        // Blurred anyway: no need for the full resolution.
-        sourceSize: Qt.size(Math.max(1, root.width / 2), Math.max(1, root.height / 2))
-      }
-      MultiEffect {
-        anchors.fill: parent
-        source: wallpaperImage
-        blurEnabled: true
-        blur: 1
-        blurMax: 64
-        saturation: -0.2
+      clip: true
+      Item {
+        id: wallpaperBlur
+        readonly property real ratio: wallpaperImage.implicitWidth > 0
+          ? wallpaperImage.implicitHeight / wallpaperImage.implicitWidth : 9 / 16
+        width: 960
+        height: Math.round(width * ratio)
+        anchors.centerIn: parent
+        // Covers the window (a little more: blurred edges fade out).
+        scale: 1.08 * Math.max(parent.width / width, parent.height / height)
+        Image {
+          id: wallpaperImage
+          anchors.fill: parent
+          visible: false
+          source: settings.wallpaper ? OmarchyTheme.wallpaper : ""
+          sourceSize.width: wallpaperBlur.width
+          asynchronous: true
+        }
+        MultiEffect {
+          anchors.fill: parent
+          source: wallpaperImage
+          blurEnabled: true
+          blur: 1
+          blurMax: 48
+          saturation: -0.2
+        }
       }
       Rectangle {
         anchors.fill: parent

@@ -128,10 +128,12 @@ Item {
       id: checker
       visible: root.kind === "transparent"
       readonly property real cell: Style.space(8)
+      // Columns only: the rows follow the cells (a fixed row count warns
+      // while a resize changes both).
+      readonly property int lines: Math.ceil(parent.height / cell)
       columns: Math.ceil(parent.width / cell)
-      rows: Math.ceil(parent.height / cell)
       Repeater {
-        model: checker.visible ? checker.columns * checker.rows : 0
+        model: checker.visible ? checker.columns * checker.lines : 0
         Rectangle {
           required property int index
           width: checker.cell
