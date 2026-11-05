@@ -210,6 +210,10 @@ Window {
   readonly property bool bossDark: game !== null && game.score === 0
     && game.face_down.some(function(f) { return f })
 
+  // The game won: confetti rain.
+  readonly property bool victoryShown: game !== null && game.phase === "won" && game.victory && !busy
+  onVictoryShownChanged: if (victoryShown) confetti.start()
+
   // The whole screen shakes for a moment: `strength` 1 (a jolt) to 3 (an
   // earthquake), 2 by default.
   property real quakeAmplitude: 0
@@ -1118,7 +1122,7 @@ Window {
         else return
       }
       else if (k === Qt.Key_C && (event.modifiers & Qt.ControlModifier) && root.game !== null && root.game.phase === "lost")
-        endSeed.copy()
+        kernelPanic.copySeed()
       else if (digit >= 0 && (event.modifiers & Qt.ControlModifier))
         root.useConsumable(digit)
       else if ((k === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) || (k === Qt.Key_Escape && root.inPack))
@@ -2133,10 +2137,10 @@ Window {
       onQuake: root.quake()
     }
 
-    // ---- end of blind: won or lost
+    // ---- end of blind: won (lost: the kernel panic below)
     Rectangle {
       anchors.fill: parent
-      visible: root.game !== null && (root.game.phase === "won" || root.game.phase === "lost") && !root.busy
+      visible: root.game !== null && root.game.phase === "won" && !root.busy
       color: Util.alpha(Colors.background, 0.85)
 
       MouseArea { anchors.fill: parent }
@@ -2256,6 +2260,24 @@ Window {
           }
         }
       }
+    }
+
+    // ---- game over: a kernel panic
+    KernelPanic {
+      id: kernelPanic
+      anchors.fill: parent
+      visible: root.game !== null && root.game.phase === "lost" && !root.busy
+      game: root.game
+      blindName: root.currentBlind ? root.currentBlind.name : ""
+      onNewGame: root.confirm()
+      onVisibleChanged: if (visible) root.quake(1)
+    }
+
+    // ---- the game won: confetti, over the panel
+    Confetti {
+      id: confetti
+      anchors.fill: parent
+      z: 5
     }
 
     // Sparks of the scoring steps, over the game but under the panels.
