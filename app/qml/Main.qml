@@ -2473,6 +2473,7 @@ Window {
       saved: root.savedGame
       onResume: root.resumeGame()
       onNewGame: root.declineResume()
+      onDealt: root.sound("draw")
     }
 
     // What the terms of the hovered card mean, over everything.

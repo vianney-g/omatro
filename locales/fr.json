@@ -694,5 +694,8 @@
   "−1 ante again; −1 discard each blind": "−1 mise de plus ; −1 défausse par blinde",
   "−1 ante; −1 hand each blind": "−1 mise ; −1 main par blinde",
   "−1 discard each blind": "−1 défausse par blinde",
-  "−1 hand size": "−1 taille de main"
+  "−1 hand size": "−1 taille de main",
+  "no joker": "aucun joker",
+  "Resume the game": "Reprendre la partie",
+  "Your game waits where you left it.": "Votre partie attend là où vous l'avez laissée."
 }
