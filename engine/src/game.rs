@@ -3727,6 +3727,8 @@ impl Game {
             self.pack_rng.shuffle(&mut cards);
             cards.truncate(self.hand_size());
             self.hand = cards;
+            // A new hand: the order the player arranged was for the last one.
+            self.arranged = false;
             self.sort_hand();
         }
         for _ in 0..self.abilities(Joker::OptionalDependencies) {
@@ -6100,6 +6102,13 @@ mod tests {
         game.discard(&[1]).unwrap();
         assert!(ranks(&game).is_sorted_by(|a, b| a >= b));
         assert!(game.move_card(0, 99).is_err());
+        // So does the hand a coreutils pack draws, after a rearranged blind.
+        game.move_card(4, 0).unwrap();
+        game.phase = Phase::Shop;
+        game.money = 50;
+        game.packs = vec![pack(PackKind::Coreutils, PackSize::Normal)];
+        game.buy_pack(0).unwrap();
+        assert!(ranks(&game).is_sorted_by(|a, b| a >= b));
         // cp -f copies the right card onto the left one.
         let mut game = with_command(1, Command::CpF, vec![]);
         let last = game.hand.len() - 1;
