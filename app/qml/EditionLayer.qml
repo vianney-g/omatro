@@ -23,24 +23,16 @@ Item {
   readonly property bool running: lively && visible
 
   // ======== under the face: the shadow ========
-  Rectangle {
-    id: plate
-    anchors.fill: parent
-    radius: root.radius
-    color: Colors.background
-    visible: false
-  }
-  MultiEffect {
+  // Drawn by its shape rather than from a texture: a MultiEffect shadow
+  // came out stretched, and light, once the window was resized.
+  RectangularShadow {
     anchors.fill: parent
     visible: root.behind && root.kind === "shadow"
-    source: plate
-    shadowEnabled: true
-    shadowColor: "black"
-    shadowOpacity: 0.55
-    shadowBlur: 0.9
-    shadowHorizontalOffset: Style.space(5)
-    shadowVerticalOffset: Style.space(9)
-    autoPaddingEnabled: true
+    radius: root.radius
+    color: Qt.rgba(0, 0, 0, 0.55)
+    blur: Style.space(22)
+    offset.x: Style.space(5)
+    offset.y: Style.space(9)
   }
 
   // ======== inside the face, under its content ========
