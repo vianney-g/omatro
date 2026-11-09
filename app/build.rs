@@ -1,4 +1,7 @@
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
+use qt_build_utils::QResourceFile;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// The files embedded next to the QML: Labels.js, the music, the sounds.
 fn resources() -> Vec<String> {
@@ -15,6 +18,50 @@ fn resources() -> Vec<String> {
         files.extend(found);
     }
     files
+}
+
+/// Qt's shader tool: next to qmake's host binaries (QMAKE names qmake, as
+/// for cxx-qt), or on the PATH. It comes with qt6-shadertools.
+fn qsb() -> PathBuf {
+    let qmake = std::env::var("QMAKE").unwrap_or_else(|_| "qmake6".to_string());
+    let bins = Command::new(&qmake)
+        .args(["-query", "QT_HOST_BINS"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string());
+    match bins {
+        Some(dir) if Path::new(&dir).join("qsb").exists() => Path::new(&dir).join("qsb"),
+        _ => PathBuf::from("qsb"),
+    }
+}
+
+/// The shaders of `shaders/`, compiled for every graphics API Qt Quick may use,
+/// and embedded as `shaders/<name>.qsb` next to the QML.
+fn shaders() -> Vec<QResourceFile> {
+    println!("cargo:rerun-if-changed=shaders");
+    let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let qsb = qsb();
+    let mut names: Vec<String> = std::fs::read_dir("shaders")
+        .unwrap_or_else(|e| panic!("shaders: {e}"))
+        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .filter(|name| name.ends_with(".frag") || name.ends_with(".vert"))
+        .collect();
+    names.sort();
+    names
+        .into_iter()
+        .map(|name| {
+            let compiled = out.join(format!("{name}.qsb"));
+            let status = Command::new(&qsb)
+                .args(["--glsl", "100es,120,150", "--hlsl", "50", "--msl", "12", "-o"])
+                .arg(&compiled)
+                .arg(format!("shaders/{name}"))
+                .status()
+                .unwrap_or_else(|e| panic!("{}: {e} (qsb comes with qt6-shadertools)", qsb.display()));
+            assert!(status.success(), "qsb could not compile shaders/{name}");
+            QResourceFile::new(compiled).alias(format!("shaders/{name}.qsb"))
+        })
+        .collect()
 }
 
 fn main() {
@@ -35,7 +82,7 @@ fn main() {
         QmlFile::from("qml/ScoreFire.qml"),
         QmlFile::from("qml/Sparks.qml"),
         QmlFile::from("qml/CardView.qml"),
-        QmlFile::from("qml/EnhancementBand.qml"),
+        QmlFile::from("qml/SuitMark.qml"),
         QmlFile::from("qml/BossScene.qml"),
         QmlFile::from("qml/EditionLayer.qml"),
         QmlFile::from("qml/Odometer.qml"),
@@ -62,6 +109,8 @@ fn main() {
     // .js files are not module files: they go next to them, in the resources.
     // So are the music (Music.qml) and the sound effects (Sounds.qml).
     .qrc_resources(resources())
+    // Compiled at build time: the .qsb files are not kept in the repository.
+    .qrc_resources(shaders())
     .files(["src/bridge.rs"])
     .build();
 }

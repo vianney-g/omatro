@@ -12,7 +12,7 @@ QtObject {
   readonly property color muted: OmarchyTheme.muted
   // The theme's yellow: fire and sparks.
   readonly property color warm: OmarchyTheme.warm
-  // More of the theme's hues, one per card enhancement (EnhancementBand).
+  // More of the theme's hues, one per card enhancement (SuitMark).
   readonly property color green: OmarchyTheme.green
   readonly property color cyan: OmarchyTheme.cyan
   readonly property color magenta: OmarchyTheme.magenta

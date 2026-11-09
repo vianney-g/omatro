@@ -55,8 +55,8 @@ Releases also hold a plain archive (binary, launcher entry, icon) for other
 distributions, which needs Qt 6 installed.
 
 To build it by hand, you need Rust and Qt 6 (`qt6-base`, `qt6-declarative`,
-`qt6-multimedia` and its `qt6-multimedia-ffmpeg` backend for the music; without them
-the game is silent).
+`qt6-shadertools` for the build, `qt6-multimedia` and its `qt6-multimedia-ffmpeg`
+backend for the music; without them the game is silent).
 
 ```sh
 make install   # build and install into ~/.local (binary, launcher entry, icon)

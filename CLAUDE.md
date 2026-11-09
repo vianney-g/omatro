@@ -19,8 +19,8 @@ Translations); English numbers read `12,345`, `2.5`, `$4`, French ones `12 345`,
 
 ## Commands
 
-Requires Rust and Qt 6 (`qt6-base`, `qt6-declarative`; `qt6-multimedia` and
-`qt6-multimedia-ffmpeg` for the music).
+Requires Rust and Qt 6 (`qt6-base`, `qt6-declarative`, `qt6-shadertools` at build
+time; `qt6-multimedia` and `qt6-multimedia-ffmpeg` for the music).
 
 ```sh
 make test                          # cargo test --workspace
@@ -94,6 +94,12 @@ than push the play area out.
   underline the terms of their text (`Labels.highlight`) and, hovered, call
   `Hints.show`; `Glossary.qml` explains them beside the card. A new view with a
   description does both.
+- Shaders: `app/shaders/*.frag` are compiled by `build.rs` with `qsb` (from
+  `qt6-shadertools`) and embedded as `shaders/<name>.frag.qsb`; QML reaches them as
+  `"../shaders/<name>.frag.qsb"`. `SuitMark.qml` draws a card's middle symbol
+  after its enhancement (`heat.frag` for Overclocked, `foil.frag` for
+  Enterprise); a new enhancement gets its look there. Check them in a real
+  window: offscreen draws no shader.
 - Sizing: every size goes through `Style.space()` / `Style.fontPx()`, i.e. theme scale ×
   `Style.fit`. `Main.qml` sets `fit` so the whole UI shrinks together when the window is
   smaller than `designWidth` × `designHeight` (tiled Hyprland windows ignore the minimum

@@ -4,8 +4,8 @@ import omatro
 import "Labels.js" as Labels
 
 // A playing card: hearts and diamonds in the theme's urgent color, spades and
-// clubs in its text color. Its enhancement shows as a band at the bottom
-// (EnhancementBand, in its own hue, which also tints the card), its seal as a
+// clubs in its text color. Its enhancement shows in the suit symbol in the
+// middle (SuitMark, which also tints the card in its hue), its seal as a
 // symbol in the corner, its edition as a tag at the top; hovering it explains
 // them.
 Item {
@@ -71,7 +71,7 @@ Item {
     popup.color = color
     flashAnim.restart()
     if (effect !== undefined && fromEnhancement(effect)) {
-      band.activate()
+      suitMark.activate()
       enhancedAnim.restart()
     }
     // The seal acts: Retry as the card scores again, Gold Star as it pays.
@@ -131,7 +131,7 @@ Item {
     x: face.x; y: face.y
     width: face.width; height: face.height
     radius: Style.cornerRadius
-    color: band.hue
+    color: suitMark.hue
     visible: false
   }
   MultiEffect {
@@ -168,7 +168,7 @@ Item {
     Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
     radius: Style.cornerRadius
     color: Qt.tint(Colors.background, Util.alpha(root.edition ? Colors.accent
-        : root.enhancement ? band.hue : Colors.foreground,
+        : root.enhancement ? suitMark.hue : Colors.foreground,
       (mouse.containsMouse && root.interactive ? 0.12 : 0.06) + (root.edition || root.enhancement ? 0.08 : 0)))
 
     border.width: root.selected || root.edition ? Style.space(2) : Style.normalBorderWidth
@@ -221,18 +221,22 @@ Item {
       lively: root.lively
     }
 
-    Text {
-      anchors.centerIn: parent
+    // The suit symbol in the middle, drawn after the enhancement.
+    SuitMark {
+      id: suitMark
+      anchors.fill: parent
+      kind: root.card && root.card.enhancement ? root.card.enhancement : ""
+      suit: root.card && !root.blob ? root.card.suit : ""
       text: root.blob ? "BLOB" : root.suitText
-      color: root.ink
-      font.family: Style.font.family
-      font.pixelSize: root.blob ? Style.font.heading : Math.round(root.width * 0.45)
-      font.bold: root.blob
+      ink: root.ink
+      pixelSize: root.blob ? Style.font.heading : Math.round(root.width * 0.45)
+      bold: root.blob
+      lively: root.lively && !root.faceDown
     }
 
     Column {
       anchors { right: parent.right; bottom: parent.bottom; rightMargin: Style.space(7); bottomMargin: Style.space(5) }
-      visible: band.text === "" && root.edition === null
+      visible: root.bonusChips === 0 && root.edition === null
       rotation: 180
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -251,7 +255,7 @@ Item {
       }
     }
 
-    // Edition, then the enhancement (and chips gained) as a band, at the bottom.
+    // Edition, then the chips gained, at the bottom.
     Column {
       anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: Style.space(3) }
       spacing: Style.space(2)
@@ -269,14 +273,15 @@ Item {
         font.bold: true
       }
 
-      EnhancementBand {
-        id: band
+      Text {
         width: parent.width
-        visible: text !== ""
-        kind: root.card && root.card.enhancement ? root.card.enhancement : ""
-        lively: root.lively && !root.faceDown
-        text: (root.enhancement ? root.enhancement.name : "")
-          + (root.bonusChips ? (root.enhancement ? " " : "") + "+" + root.bonusChips : "")
+        visible: root.bonusChips > 0
+        horizontalAlignment: Text.AlignHCenter
+        text: "+" + root.bonusChips
+        color: Colors.accent
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+        font.bold: true
       }
     }
 
