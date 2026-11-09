@@ -298,7 +298,7 @@ Rectangle {
           spacing: Style.spacing.xl
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: I18n.tr("Clipboard {a} / {b}", { a: root.saved.consumables.length, b: root.saved.consumable_slots })
+            text: root.saved ? I18n.tr("Clipboard {a} / {b}", { a: root.saved.consumables.length, b: root.saved.consumable_slots }) : ""
             color: Colors.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.body
