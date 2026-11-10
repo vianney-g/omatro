@@ -736,9 +736,8 @@ Window {
     if (jokersEditable) {
       // The sale flies from the joker, read before it goes.
       if (i < game.jokers.length) coins.fly(jokerRepeater.itemAt(i), moneyValue, game.jokers[i].sell_value)
-      var before = game.jokers.length
+      jokerRow.removing(i)
       keepingSelection({ cmd: "sell", joker: i })
-      if (game.jokers.length < before) jokerRow.removed(i)
       sound("sell")
     }
   }
@@ -829,9 +828,7 @@ Window {
       sound("error")
       return
     }
-    var before = game.consumables.length
     act({ cmd: "use_consumable", index: i, cards: c.max_cards > 0 ? selected : [] }, "use")
-    if (game.consumables.length < before) clipboardRow.removed(i)
     notice = I18n.tr(c.kind === "theme" ? "Applied {name}." : "Ran {name}.", { name: c.name })
   }
   // X sells only a joker chosen with J or a click, never the last one by
@@ -847,9 +844,7 @@ Window {
   }
   function sellConsumable(i) {
     if (busy || !game || game.phase === "lost" || i >= game.consumables.length) return
-    var before = game.consumables.length
     act({ cmd: "sell_consumable", index: i }, "sell")
-    if (game.consumables.length < before) clipboardRow.removed(i)
   }
   // Moves a joker (Fork copies its right neighbour); a pinned joker stays
   // pinned.
@@ -1606,51 +1601,50 @@ Window {
                 a: root.game.consumables.filter(function(c) { return !c.transparent }).length,
                 b: root.game.consumable_slots }) : ""
             }
-            // Past two cards (Transparent copies take no slot, but room), they
-            // overlap: hover one to bring it to the front, click it to choose
-            // the one the buttons under the row act on.
-            Fan {
-              id: clipboardRow
-              width: implicitWidth
-              // Stacked, the cards lose their buttons and the bar holds them.
-              height: implicitHeight + (stacked ? clipboardBar.height + Style.spacing.sm : 0)
-              count: root.game ? root.game.consumables.length : 0
-              itemWidth: (Style.space(250) - spacing) / 2
-              spacing: Style.spacing.md
-              available: Style.space(250)
+            // One line each, whatever their number: name and buttons; the
+            // card itself shows beside its line when hovered (CardPeek).
+            Column {
+              id: clipboardList
+              width: parent.width
+              spacing: Style.spacing.sm
               Repeater {
                 model: root.game ? root.game.consumables : []
-                Column {
-                  x: clipboardRow.xOf(index)
-                  y: clipboardRow.liftOf(index)
-                  z: clipboardRow.zOf(index)
-                  Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                  Behavior on y { NumberAnimation { duration: 100 } }
-                  spacing: Style.spacing.sm
-                  // Its own controls, while the cards lie side by side.
-                  readonly property bool controls: clipboardRow.showsControls(index)
+                Rectangle {
+                  id: line
+                  readonly property bool oligarchy: modelData.kind === "oligarchy"
+                  width: clipboardList.width
+                  height: lineRow.implicitHeight + 2 * Style.space(5)
+                  radius: Style.cornerRadius
+                  color: lineHover.hovered ? Style.hoverFill : Qt.tint(Colors.background, Util.alpha(oligarchy ? Colors.urgent : Colors.foreground, 0.05))
+                  border.width: oligarchy || modelData.transparent ? Style.space(2) : Style.normalBorderWidth
+                  border.color: oligarchy ? Colors.urgent : modelData.transparent ? Colors.accent
+                    : lineHover.hovered ? Colors.foreground : Style.normalBorderColor
                   HoverHandler {
-                    blocking: true
-                    onHoveredChanged: clipboardRow.hover(index, hovered)
+                    id: lineHover
+                    onHoveredChanged: hovered
+                      ? cardPeek.showConsumable(line, modelData, modelData.max_cards > 0
+                        ? I18n.tr("select {range}", { range: Labels.range(modelData.min_cards, modelData.max_cards) }) : "")
+                      : cardPeek.hide(line)
                   }
-                  ConsumableView {
-                    item: modelData
-                    width: clipboardRow.itemWidth
-                    TapHandler { onTapped: clipboardRow.pin(index) }
-                  }
-                  Caption {
-                    width: clipboardRow.itemWidth
-                    visible: parent.controls && modelData.max_cards > 0
-                    fontSizeMode: Text.HorizontalFit
-                    minimumPixelSize: Style.fontPx(0.6)
-                    horizontalAlignment: Text.AlignHCenter
-                    text: I18n.tr("select {range}", { range: Labels.range(modelData.min_cards, modelData.max_cards) })
-                  }
+                  Component.onDestruction: cardPeek.hide(line)
                   Row {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    visible: parent.controls
+                    id: lineRow
+                    anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
+                      leftMargin: Style.space(8); rightMargin: Style.space(5) }
                     spacing: Style.spacing.xs
+                    Text {
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: lineRow.width - applyButton.width - sellButton.width - 2 * lineRow.spacing
+                      elide: Text.ElideRight
+                      // A command reads as typed at a shell prompt.
+                      text: (modelData.kind === "command" ? "$ " : "") + modelData.name
+                      color: line.oligarchy ? Colors.urgent : Colors.foreground
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                    }
                     Button {
+                      id: applyButton
                       compact: true
                       text: I18n.tr("Apply")
                       enabled: root.canUse(modelData)
@@ -1658,48 +1652,12 @@ Window {
                       onClicked: root.useConsumable(index)
                     }
                     Button {
+                      id: sellButton
                       compact: true
                       text: Labels.money(modelData.sell_value)
                       enabled: !root.busy && root.game.phase !== "lost"
                       onClicked: root.sellConsumable(index)
                     }
-                  }
-                }
-              }
-              // The buttons of the stacked cards, for the lifted one.
-              Column {
-                id: clipboardBar
-                readonly property var item: clipboardRow.stacked && root.game
-                  && clipboardRow.target < root.game.consumables.length
-                  ? root.game.consumables[clipboardRow.target] || null : null
-                visible: item !== null
-                anchors.bottom: parent.bottom
-                width: clipboardRow.available
-                z: clipboardRow.count + 3
-                spacing: Style.spacing.sm
-                Caption {
-                  width: parent.width
-                  elide: Text.ElideRight
-                  horizontalAlignment: Text.AlignHCenter
-                  text: !clipboardBar.item ? "" : clipboardBar.item.max_cards > 0
-                    ? clipboardBar.item.name + " · " + I18n.tr("select {range}", { range: Labels.range(clipboardBar.item.min_cards, clipboardBar.item.max_cards) })
-                    : clipboardBar.item.name
-                }
-                Row {
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  spacing: Style.spacing.xs
-                  Button {
-                    compact: true
-                    text: I18n.tr("Apply")
-                    enabled: clipboardBar.item !== null && root.canUse(clipboardBar.item)
-                    opacity: enabled ? 1 : 0.5
-                    onClicked: root.useConsumable(clipboardRow.target)
-                  }
-                  Button {
-                    compact: true
-                    text: clipboardBar.item ? Labels.money(clipboardBar.item.sell_value) : ""
-                    enabled: clipboardBar.item !== null && !root.busy && root.game.phase !== "lost"
-                    onClicked: root.sellConsumable(clipboardRow.target)
                   }
                 }
               }
@@ -1729,10 +1687,11 @@ Window {
           text: root.game ? I18n.tr("Jokers {a} / {b}", { a: root.game.jokers.length, b: root.game.max_jokers }) : ""
         }
 
-        // Jokers overlap when they no longer fit (Transparent jokers add
-        // slots): hover one to bring it to the front; click one, or press J,
-        // to choose the one the Sell button under the row acts on.
-        Fan {
+        // Jokers narrow when they no longer fit side by side (Transparent
+        // jokers add slots), each keeping its button; hovered, a narrowed
+        // joker shows at full size under the row (CardPeek). Click one, or
+        // press J, to pin it for Shift+←/→ and X.
+        CardRow {
           id: jokerRow
           Layout.alignment: Qt.AlignHCenter
           Layout.preferredWidth: implicitWidth
@@ -1745,12 +1704,13 @@ Window {
             id: jokerRepeater
             model: root.game ? root.game.jokers : []
             Column {
+              id: jokerItem
               x: jokerRow.xOf(index)
-              y: jokerRow.liftOf(index)
-              z: jokerDragger.active ? jokerRow.count + 2 : jokerRow.zOf(index)
+              y: jokerRow.pinned === index ? -Style.space(8) : 0
+              z: jokerDragger.active ? 1 : 0
               Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
               Behavior on y { NumberAnimation { duration: 100 } }
-              width: jokerRow.itemWidth
+              width: jokerRow.cardWidth
               spacing: Style.spacing.md
               // Dragged sideways, the joker moves in the row.
               transform: Translate { x: jokerDragger.active ? jokerDragger.activeTranslation.x : 0 }
@@ -1767,59 +1727,52 @@ Window {
                   dragX = 0
                 }
               }
-              // A joker that triggers comes to the front while it flashes.
-              function flash(text, color) {
-                jokerRow.flash(index)
-                view.flash(text, color)
+              function flash(text, color) { view.flash(text, color) }
+              // The joker at the row's size: its view keeps its full size,
+              // scaled down.
+              Item {
+                id: jokerCard
+                width: jokerRow.cardWidth
+                height: view.height * jokerRow.cardScale
+                HoverHandler {
+                  onHoveredChanged: if (jokerRow.narrow) hovered
+                    ? cardPeek.showJoker(jokerCard, modelData, jokerRow, root.game.jokers_hidden)
+                    : cardPeek.hide(jokerCard)
+                }
+                Component.onDestruction: cardPeek.hide(jokerCard)
+                JokerView {
+                  id: view
+                  joker: modelData
+                  scale: jokerRow.cardScale
+                  transformOrigin: Item.TopLeft
+                  hints: !jokerRow.narrow
+                  TapHandler { onTapped: jokerRow.pin(index) }
+                  hidden: root.game.jokers_hidden
+                  disabled: root.game.disabled_joker === index
+                  // The badge follows the selected hand (Muscle Memory).
+                  bonus: root.preview && root.preview.bonuses.length > index
+                    ? root.preview.bonuses[index] : modelData.bonus
+                }
+                // Pinned (click, J): the one Shift+←/→ and X act on.
+                Rectangle {
+                  anchors { fill: parent; margins: -Style.space(4) }
+                  visible: jokerRow.pinned === index
+                  color: "transparent"
+                  radius: Style.cornerRadius + Style.space(4)
+                  border.width: Style.space(2)
+                  border.color: Colors.accent
+                }
               }
-              HoverHandler {
-                blocking: true
-                onHoveredChanged: jokerRow.hover(index, hovered)
-              }
-              JokerView {
-                id: view
-                joker: modelData
-                width: jokerRow.itemWidth
-                TapHandler { onTapped: jokerRow.pin(index) }
-                hidden: root.game.jokers_hidden
-                disabled: root.game.disabled_joker === index
-                // The badge follows the selected hand (Muscle Memory).
-                bonus: root.preview && root.preview.bonuses.length > index
-                  ? root.preview.bonuses[index] : modelData.bonus
-              }
-              // Sell, while the jokers lie side by side; the bar has it when
-              // they overlap.
               Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                visible: root.jokerControls && jokerRow.showsControls(index)
+                visible: root.jokerControls
                 enabled: root.jokersEditable
                 compact: true
-                text: I18n.tr("Sell {money}", { money: Labels.money(modelData.sell_value) })
+                // Narrowed, the price alone.
+                text: jokerRow.cardWidth < Style.space(95) ? Labels.money(modelData.sell_value)
+                  : I18n.tr("Sell {money}", { money: Labels.money(modelData.sell_value) })
                 onClicked: root.sell(index)
               }
-            }
-          }
-          // Sell for the lifted joker, when they overlap: hovering others on
-          // the way never changes which one.
-          Row {
-            readonly property var joker: jokerRow.stacked && root.game
-              && jokerRow.target < root.game.jokers.length ? root.game.jokers[jokerRow.target] || null : null
-            visible: root.jokerControls && joker !== null
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            z: jokerRow.count + 3
-            spacing: Style.spacing.md
-            // A boss that hides the jokers hides their names too.
-            Caption {
-              anchors.verticalCenter: parent.verticalCenter
-              visible: root.game !== null && !root.game.jokers_hidden
-              text: parent.joker ? parent.joker.name : ""
-            }
-            Button {
-              enabled: root.jokersEditable
-              compact: true
-              text: parent.joker ? I18n.tr("Sell {money}", { money: Labels.money(parent.joker.sell_value) }) : ""
-              onClicked: root.sell(jokerRow.target)
             }
           }
         }
@@ -2557,6 +2510,12 @@ Window {
       onResume: root.resumeGame()
       onNewGame: root.declineResume()
       onDealt: root.sound("draw")
+    }
+
+    // The hovered card at full size, when its own form is small.
+    CardPeek {
+      id: cardPeek
+      anchors.fill: parent
     }
 
     // What the terms of the hovered card mean, over everything.

@@ -238,15 +238,19 @@ Rectangle {
             font.family: Style.font.family
             font.pixelSize: Style.font.body
           }
-          Fan {
+          // Fanned out like a hand when they don't fit (nothing to click
+          // here); the one hovered comes to the front.
+          Item {
             id: jokers
+            readonly property int count: root.saved ? root.saved.jokers.length : 0
+            readonly property real itemWidth: Style.space(120)
+            readonly property real available: Style.space(560)
+            readonly property real step: count > 1
+              ? Math.min(itemWidth + Style.spacing.xl, (available - itemWidth) / (count - 1)) : 0
+            property int hovered: -1
             anchors.horizontalCenter: parent.horizontalCenter
-            width: Math.max(implicitWidth, Style.space(120))
+            width: Math.max(count > 0 ? itemWidth + (count - 1) * step : 0, itemWidth)
             height: Style.space(230)
-            count: root.saved ? root.saved.jokers.length : 0
-            itemWidth: Style.space(120)
-            spacing: Style.spacing.xl
-            available: Style.space(560)
             Repeater {
               model: root.saved ? root.saved.jokers : []
               // Dealt one after the other, from the deck on the left.
@@ -254,9 +258,9 @@ Rectangle {
                 readonly property real dealt: root.outBack(root.step(0.3 + index * 0.07, 0.3))
                 readonly property bool leaving: root.t > 0.3 + index * 0.07
                 onLeavingChanged: if (leaving && entrance.running) root.dealt()
-                x: jokers.xOf(index)
-                y: jokers.liftOf(index)
-                z: jokers.zOf(index)
+                x: index * jokers.step
+                y: jokers.hovered === index ? -Style.space(8) : 0
+                z: jokers.hovered === index ? jokers.count : index
                 Behavior on y { NumberAnimation { duration: 100 } }
                 width: jokers.itemWidth
                 height: card.height
@@ -268,7 +272,10 @@ Rectangle {
                   width: parent.width
                   joker: modelData
                 }
-                HoverHandler { onHoveredChanged: jokers.hover(index, hovered) }
+                HoverHandler {
+                  onHoveredChanged: if (hovered) jokers.hovered = index
+                    else if (jokers.hovered === index) jokers.hovered = -1
+                }
               }
             }
             // No joker yet: an empty slot.

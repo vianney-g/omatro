@@ -106,10 +106,11 @@ than push the play area out.
   size). The window's own size must use `Style.themeScale`, never `Style.space()`, or it
   makes a binding loop. If the layout gets wider or taller (the shop sets the height:
   joker row and offers), raise `designWidth` or `designHeight`. Rows whose length
-  varies narrow their items (the hand, `handRow.cardWidth`) or overlap them
-  (`Fan.qml`: the jokers and the clipboard, where the hovered or flashing card
-  comes to the front; stacked cards lose their own buttons to one action bar under
-  the row, for the pinned card or else the last one, which hovering never changes).
+  varies narrow their items, never overlap them: the hand (`handRow.cardWidth`), the
+  jokers (`CardRow.qml`, which scales each view by `cardScale` and keeps its button
+  under it); the clipboard is a list of lines. A narrowed joker or a clipboard line
+  shows the card at full size while hovered (`CardPeek.qml`, which takes the
+  glossary along).
 
 ## Debugging and screenshots
 

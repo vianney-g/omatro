@@ -119,8 +119,9 @@ to quit. Before a blind: Enter to play it, S to skip it. Ctrl+1 to 9 apply the
 consumables of the clipboard, Ctrl+Shift+1 to 9 sell them. In the shop: 1 to 9 to buy the offers, then the packs,
 then the pull requests, in order; Shift+1 to 9 for Use now, which buys a theme or
 command and uses it at once; R to reroll, Enter for the next blind. The button under
-each joker sells it; when the jokers or the consumables overlap, one bar under the row
-holds the buttons, for the card chosen (lifted), or else the last one. Before a boss, B rerolls it (with Change Request). In an open
+each joker sells it; past the room, jokers narrow (hovered, they show at full size).
+The clipboard lists its consumables, one line each, with their buttons; hovered, a
+line shows its card. Before a boss, B rerolls it (with Change Request). In an open
 pack: 1 to 5 (or Install) take a card, Shift+1 to 5 when the pack drew a hand to
 select from; Ctrl+C (or Escape) skips. Digit keys go by their place on the keyboard,
 so they need no Shift on AZERTY or BÉPO.

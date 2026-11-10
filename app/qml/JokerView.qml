@@ -13,10 +13,12 @@ Item {
   // The Kernel Panic: jokers face down.
   property bool hidden: false
   // Hovered, its terms are explained beside it (Glossary).
-  // Its stickers are explained too.
+  // Its stickers are explained too. Narrowed, its full-size view explains
+  // them instead (CardPeek).
+  property bool hints: true
   HoverHandler {
     id: hover
-    onHoveredChanged: hovered && !root.hidden ? Hints.show(root, root.joker ? root.joker.description
+    onHoveredChanged: if (root.hints) hovered && !root.hidden ? Hints.show(root, root.joker ? root.joker.description
       + root.stickers.map(function(s) { return " " + s.name }).join("") : "", root.joker ? root.joker.name : "") : Hints.hide(root)
   }
 
