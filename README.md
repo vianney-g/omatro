@@ -109,17 +109,18 @@ chips climbing a scale, the PC speaker's beeps when a game is lost…). The sett
 and the language, and list every key.
 
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, Tab to sort the hand
-by rank or suit, Shift+←/→ to move the selected card (or drag it), J to bring the next
-joker to the front when they overlap (or hover or click one), then Shift+←/→ to move it
-(or drag it, in the shop and during a blind), Ctrl+N for a new game (starting it
+by rank or suit, Shift+←/→ to move the selected card (or drag it), J to choose the next
+joker (or click one), then Shift+←/→ to move it (or drag it, in the shop and during a
+blind) and X to sell it, Ctrl+N for a new game (starting it
 asks again while a game is in progress), I for fastfetch (run
 info: the machine and its level, hand levels, cards left), C for the collection, O for the
 settings and the list of keys, M for the music, Shift+M for the sound effects, Ctrl+Q
-to quit. Before a blind: Enter to play it, S to skip it. Ctrl+1 and Ctrl+2 apply the
-consumables of the clipboard. In the shop: 1 to 9 to buy the offers, then the packs,
+to quit. Before a blind: Enter to play it, S to skip it. Ctrl+1 to 9 apply the
+consumables of the clipboard, Ctrl+Shift+1 to 9 sell them. In the shop: 1 to 9 to buy the offers, then the packs,
 then the pull requests, in order; Shift+1 to 9 for Use now, which buys a theme or
 command and uses it at once; R to reroll, Enter for the next blind. The button under
-each joker sells it. Before a boss, B rerolls it (with Change Request). In an open
+each joker sells it; when the jokers or the consumables overlap, one bar under the row
+holds the buttons, for the card chosen (lifted), or else the last one. Before a boss, B rerolls it (with Change Request). In an open
 pack: 1 to 5 (or Install) take a card, Shift+1 to 5 when the pack drew a hand to
 select from; Ctrl+C (or Escape) skips. Digit keys go by their place on the keyboard,
 so they need no Shift on AZERTY or BÉPO.

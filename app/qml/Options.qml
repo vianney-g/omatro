@@ -34,7 +34,8 @@ Rectangle {
     { title: "In a pack", keys: [
       ["1-5", "install"], ["Shift+1-5", "install, with cards selected"], ["Ctrl+C, Esc", "skip the pack"] ] },
     { title: "Anywhere", keys: [
-      ["J, Shift+←/→", "bring a joker forward, move it"], ["Ctrl+1, Ctrl+2", "apply a consumable"],
+      ["J, Shift+←/→", "choose a joker, move it"], ["X", "sell the chosen joker"],
+      ["Ctrl+1-9", "apply a consumable"], ["Ctrl+Shift+1-9", "sell a consumable"],
       ["I", "fastfetch"], ["P", "the deck"], ["C", "collection"], ["Ctrl+N", "new game"], ["O", "settings"], ["Ctrl+Q", "quit"] ] },
   ]
 

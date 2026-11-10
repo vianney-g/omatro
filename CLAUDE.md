@@ -107,8 +107,9 @@ than push the play area out.
   makes a binding loop. If the layout gets wider or taller (the shop sets the height:
   joker row and offers), raise `designWidth` or `designHeight`. Rows whose length
   varies narrow their items (the hand, `handRow.cardWidth`) or overlap them
-  (`Fan.qml`: the jokers and the clipboard, where the hovered, flashing or pinned
-  card comes to the front with its buttons).
+  (`Fan.qml`: the jokers and the clipboard, where the hovered or flashing card
+  comes to the front; stacked cards lose their own buttons to one action bar under
+  the row, for the pinned card or else the last one, which hovering never changes).
 
 ## Debugging and screenshots
 

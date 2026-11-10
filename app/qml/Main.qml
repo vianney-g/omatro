@@ -736,7 +736,9 @@ Window {
     if (jokersEditable) {
       // The sale flies from the joker, read before it goes.
       if (i < game.jokers.length) coins.fly(jokerRepeater.itemAt(i), moneyValue, game.jokers[i].sell_value)
+      var before = game.jokers.length
       keepingSelection({ cmd: "sell", joker: i })
+      if (game.jokers.length < before) jokerRow.removed(i)
       sound("sell")
     }
   }
@@ -827,11 +829,27 @@ Window {
       sound("error")
       return
     }
+    var before = game.consumables.length
     act({ cmd: "use_consumable", index: i, cards: c.max_cards > 0 ? selected : [] }, "use")
+    if (game.consumables.length < before) clipboardRow.removed(i)
     notice = I18n.tr(c.kind === "theme" ? "Applied {name}." : "Ran {name}.", { name: c.name })
   }
+  // X sells only a joker chosen with J or a click, never the last one by
+  // default: a stray key must not sell anything.
+  function sellChosenJoker() {
+    if (!jokersEditable) return
+    if (jokerRow.pinned < 0) {
+      notice = I18n.tr("Choose a joker with J first.")
+      sound("error")
+      return
+    }
+    sell(jokerRow.pinned)
+  }
   function sellConsumable(i) {
-    if (!busy) act({ cmd: "sell_consumable", index: i }, "sell")
+    if (busy || !game || game.phase === "lost" || i >= game.consumables.length) return
+    var before = game.consumables.length
+    act({ cmd: "sell_consumable", index: i }, "sell")
+    if (game.consumables.length < before) clipboardRow.removed(i)
   }
   // Moves a joker (Fork copies its right neighbour); a pinned joker stays
   // pinned.
@@ -1131,6 +1149,8 @@ Window {
       }
       else if (k === Qt.Key_C && (event.modifiers & Qt.ControlModifier) && root.game !== null && root.game.phase === "lost")
         kernelPanic.copySeed()
+      else if (digit >= 0 && (event.modifiers & Qt.ControlModifier) && (event.modifiers & Qt.ShiftModifier))
+        root.sellConsumable(digit)
       else if (digit >= 0 && (event.modifiers & Qt.ControlModifier))
         root.useConsumable(digit)
       else if ((k === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) || (k === Qt.Key_Escape && root.inPack))
@@ -1145,6 +1165,7 @@ Window {
       else if (k === Qt.Key_Tab || k === Qt.Key_Backtab)
         root.sortHand(root.game && root.game.sort_by === "rank" ? "suit" : "rank")
       else if (k === Qt.Key_J) jokerRow.cycle()
+      else if (k === Qt.Key_X) root.sellChosenJoker()
       else if (k === Qt.Key_R) root.reroll()
       else if (k === Qt.Key_S) root.skipBlind()
       else if (k === Qt.Key_B) root.rerollBoss()
@@ -1574,7 +1595,8 @@ Window {
             }
           }
 
-          // Clipboard: consumables waiting to be used (Ctrl+1, Ctrl+2).
+          // Clipboard: consumables waiting to be used (Ctrl+1-9) or sold
+          // (Ctrl+Shift+1-9).
           Column {
             Layout.fillWidth: true
             spacing: Style.spacing.md
@@ -1585,11 +1607,13 @@ Window {
                 b: root.game.consumable_slots }) : ""
             }
             // Past two cards (Transparent copies take no slot, but room), they
-            // overlap: hover or click one to bring it to the front.
+            // overlap: hover one to bring it to the front, click it to choose
+            // the one the buttons under the row act on.
             Fan {
               id: clipboardRow
               width: implicitWidth
-              height: implicitHeight
+              // Stacked, the cards lose their buttons and the bar holds them.
+              height: implicitHeight + (stacked ? clipboardBar.height + Style.spacing.sm : 0)
               count: root.game ? root.game.consumables.length : 0
               itemWidth: (Style.space(250) - spacing) / 2
               spacing: Style.spacing.md
@@ -1603,7 +1627,7 @@ Window {
                   Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                   Behavior on y { NumberAnimation { duration: 100 } }
                   spacing: Style.spacing.sm
-                  // Its controls only show in front, when the cards overlap.
+                  // Its own controls, while the cards lie side by side.
                   readonly property bool controls: clipboardRow.showsControls(index)
                   HoverHandler {
                     blocking: true
@@ -1616,8 +1640,7 @@ Window {
                   }
                   Caption {
                     width: clipboardRow.itemWidth
-                    visible: modelData.max_cards > 0
-                    opacity: parent.controls ? 1 : 0
+                    visible: parent.controls && modelData.max_cards > 0
                     fontSizeMode: Text.HorizontalFit
                     minimumPixelSize: Style.fontPx(0.6)
                     horizontalAlignment: Text.AlignHCenter
@@ -1625,8 +1648,7 @@ Window {
                   }
                   Row {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    opacity: parent.controls ? 1 : 0
-                    enabled: parent.controls
+                    visible: parent.controls
                     spacing: Style.spacing.xs
                     Button {
                       compact: true
@@ -1641,6 +1663,43 @@ Window {
                       enabled: !root.busy && root.game.phase !== "lost"
                       onClicked: root.sellConsumable(index)
                     }
+                  }
+                }
+              }
+              // The buttons of the stacked cards, for the lifted one.
+              Column {
+                id: clipboardBar
+                readonly property var item: clipboardRow.stacked && root.game
+                  && clipboardRow.target < root.game.consumables.length
+                  ? root.game.consumables[clipboardRow.target] || null : null
+                visible: item !== null
+                anchors.bottom: parent.bottom
+                width: clipboardRow.available
+                z: clipboardRow.count + 3
+                spacing: Style.spacing.sm
+                Caption {
+                  width: parent.width
+                  elide: Text.ElideRight
+                  horizontalAlignment: Text.AlignHCenter
+                  text: !clipboardBar.item ? "" : clipboardBar.item.max_cards > 0
+                    ? clipboardBar.item.name + " · " + I18n.tr("select {range}", { range: Labels.range(clipboardBar.item.min_cards, clipboardBar.item.max_cards) })
+                    : clipboardBar.item.name
+                }
+                Row {
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  spacing: Style.spacing.xs
+                  Button {
+                    compact: true
+                    text: I18n.tr("Apply")
+                    enabled: clipboardBar.item !== null && root.canUse(clipboardBar.item)
+                    opacity: enabled ? 1 : 0.5
+                    onClicked: root.useConsumable(clipboardRow.target)
+                  }
+                  Button {
+                    compact: true
+                    text: clipboardBar.item ? Labels.money(clipboardBar.item.sell_value) : ""
+                    enabled: clipboardBar.item !== null && !root.busy && root.game.phase !== "lost"
+                    onClicked: root.sellConsumable(clipboardRow.target)
                   }
                 }
               }
@@ -1671,7 +1730,8 @@ Window {
         }
 
         // Jokers overlap when they no longer fit (Transparent jokers add
-        // slots): hover or click one, or press J, to bring it to the front.
+        // slots): hover one to bring it to the front; click one, or press J,
+        // to choose the one the Sell button under the row acts on.
         Fan {
           id: jokerRow
           Layout.alignment: Qt.AlignHCenter
@@ -1727,16 +1787,39 @@ Window {
                 bonus: root.preview && root.preview.bonuses.length > index
                   ? root.preview.bonuses[index] : modelData.bonus
               }
-              // Sell; only in front when the jokers overlap.
+              // Sell, while the jokers lie side by side; the bar has it when
+              // they overlap.
               Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                visible: root.jokerControls
-                opacity: jokerRow.showsControls(index) ? 1 : 0
-                enabled: root.jokersEditable && jokerRow.showsControls(index)
+                visible: root.jokerControls && jokerRow.showsControls(index)
+                enabled: root.jokersEditable
                 compact: true
                 text: I18n.tr("Sell {money}", { money: Labels.money(modelData.sell_value) })
                 onClicked: root.sell(index)
               }
+            }
+          }
+          // Sell for the lifted joker, when they overlap: hovering others on
+          // the way never changes which one.
+          Row {
+            readonly property var joker: jokerRow.stacked && root.game
+              && jokerRow.target < root.game.jokers.length ? root.game.jokers[jokerRow.target] || null : null
+            visible: root.jokerControls && joker !== null
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            z: jokerRow.count + 3
+            spacing: Style.spacing.md
+            // A boss that hides the jokers hides their names too.
+            Caption {
+              anchors.verticalCenter: parent.verticalCenter
+              visible: root.game !== null && !root.game.jokers_hidden
+              text: parent.joker ? parent.joker.name : ""
+            }
+            Button {
+              enabled: root.jokersEditable
+              compact: true
+              text: parent.joker ? I18n.tr("Sell {money}", { money: Labels.money(parent.joker.sell_value) }) : ""
+              onClicked: root.sell(jokerRow.target)
             }
           }
         }

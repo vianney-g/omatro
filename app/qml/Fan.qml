@@ -4,8 +4,12 @@ import omatro
 // A row of cards that overlap when they no longer fit side by side, like a
 // hand of cards: each keeps its full width, the left edge of each stays in
 // view, and the card in front (hovered, flashing, or pinned with a click or
-// a key) shows whole, lifted. Delegates place themselves with `xOf(index)`,
+// a key) shows whole. Delegates place themselves with `xOf(index)`,
 // `zOf(index)` and `liftOf(index)`, and report hovering with `hover`.
+// Side by side, each card shows its own buttons (`showsControls`); stacked,
+// they would overlap, so one action bar under the row acts on `target`: the
+// pinned card, or the last one. Hovering never changes it, so the pointer
+// can cross other cards on its way to the bar.
 Item {
   id: fan
 
@@ -24,6 +28,8 @@ Item {
   // controls show.
   readonly property int chosen: hovered >= 0 ? hovered : flashing >= 0 ? flashing : pinned
   readonly property int front: chosen >= 0 ? chosen : count - 1
+  // The card the action bar acts on, lifted, when stacked.
+  readonly property int target: pinned >= 0 ? pinned : count - 1
 
   readonly property bool stacked: count > 1 && count * itemWidth + (count - 1) * spacing > available
   readonly property real step: stacked ? Math.max(Style.space(12), (available - itemWidth) / (count - 1))
@@ -40,12 +46,13 @@ Item {
   function xOf(i) { return i * step }
   // Later cards lie on earlier ones; the front card on all of them.
   function zOf(i) { return i === front ? count + 1 : i }
-  // Only a card brought forward lifts, not the last one lying on top; a
-  // pinned card always does, to show which one keys move.
-  function liftOf(i) { return (stacked && i === chosen) || i === pinned ? -Style.space(8) : 0 }
-  // Whether the card's own buttons show: always side by side, only the front
-  // card's when stacked (they would overlap).
-  function showsControls(i) { return !stacked || i === front }
+  // A pinned card lifts, to show which one keys move; stacked, the action
+  // bar's target does. A hovered card only comes forward, without moving
+  // under the pointer.
+  function liftOf(i) { return (stacked ? i === target : i === pinned) ? -Style.space(8) : 0 }
+  // Whether the card's own buttons show: only side by side; stacked, the
+  // action bar has them.
+  function showsControls(i) { return !stacked }
 
   function hover(i, on) {
     if (on) hovered = i
@@ -54,6 +61,12 @@ Item {
   function pin(i) { pinned = pinned === i ? -1 : i }
   // Next card in front (keyboard), then none after the last.
   function cycle() { pinned = pinned + 1 < count ? pinned + 1 : -1 }
+  // Card i left the row (sold, used): the pinned card stays the same one,
+  // and is no longer pinned if it was that one.
+  function removed(i) {
+    if (pinned === i) pinned = -1
+    else if (pinned > i) pinned--
+  }
   function flash(i) {
     flashing = i
     flashTimer.restart()
