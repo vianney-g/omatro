@@ -957,8 +957,12 @@ Window {
       shownScore = pendingState.score
       if (heatFor(scoring.total) > 0) sound("fire")
       fireHeat = Math.max(fireHeat, heatFor(scoring.total))
-      // A hand far beyond the blind shakes the screen.
-      if (heatFor(scoring.total) >= 2) quake(heatFor(scoring.total) - 1)
+      // A hand far beyond the blind shakes the screen, with a boom and the
+      // fan spinning up.
+      if (heatFor(scoring.total) >= 2) {
+        quake(heatFor(scoring.total) - 1)
+        sound("quake-" + (heatFor(scoring.total) - 1))
+      }
       stepTimer.interval = 900
     } else if (!changesShown && playCardChanges(scoringChanges)) {
       changesShown = true
