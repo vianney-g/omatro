@@ -64,18 +64,19 @@ fn shaders() -> Vec<QResourceFile> {
         .collect()
 }
 
-/// The palette letters of the pixel art, in index order: transparent, then the
-/// theme's foreground, accent, muted, background, warm, urgent and green.
-const ART_PALETTE: &str = ".kambwrg";
+/// The palette letters of the pixel art, in index order: transparent; the
+/// theme's foreground, accent, muted, background, warm, urgent, green, cyan,
+/// magenta and orange; `d` ink, always dark, and `l` light, always light (for
+/// outlines and highlights, whatever the theme); then, in capitals, the dark
+/// shades of accent, warm, urgent, green, cyan, magenta and orange.
+/// `shaders/palette.frag` and `art/art.py` follow the same order.
+const ART_PALETTE: &str = ".kambwrgcpodlAWRGCPO";
 
-/// The size of the joker drawings, in pixels (square).
-const ART_SIZE: usize = 48;
-
-/// The joker drawings of `art/jokers/`: ART_SIZE lines of ART_SIZE palette letters,
-/// turned into greyscale PGM images whose grey is the palette index × 32, so
-/// that `shaders/palette.frag` paints them in the theme's colours; with
-/// `qml/Drawn.js`, the ids of the jokers drawn (`Drawn.ids`), so that the
-/// others are not looked for.
+/// The joker drawings of `art/jokers/<id>.txt`: a square of palette letters
+/// (64 × 64), `#` lines being comments. Each becomes a greyscale PGM image whose
+/// grey is the palette index × 8, that `shaders/palette.frag` paints in the
+/// theme's colours; `qml/Drawn.js` lists the jokers drawn (`Drawn.ids`), so
+/// that the others are not looked for.
 fn art() -> Vec<QResourceFile> {
     println!("cargo:rerun-if-changed=art/jokers");
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("art");
@@ -86,35 +87,37 @@ fn art() -> Vec<QResourceFile> {
         .filter(|name| name.ends_with(".txt"))
         .collect();
     names.sort();
-    let ids: Vec<String> = names.iter().map(|n| format!("{:?}: true", n.trim_end_matches(".txt"))).collect();
+    let mut files = Vec::new();
+    let mut ids = Vec::new();
+    for name in names {
+        let stem = name.trim_end_matches(".txt");
+        let text = std::fs::read_to_string(format!("art/jokers/{name}")).unwrap();
+        let rows: Vec<&str> = text
+            .lines()
+            .map(str::trim_end)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .collect();
+        let size = rows.len();
+        assert!(
+            size > 0 && rows.iter().all(|r| r.chars().count() == size),
+            "art/jokers/{name}: a square of letters expected"
+        );
+        let mut pgm = format!("P5 {size} {size} 255\n").into_bytes();
+        for c in rows.iter().flat_map(|r| r.chars()) {
+            let index = ART_PALETTE
+                .find(c)
+                .unwrap_or_else(|| panic!("art/jokers/{name}: unknown letter {c:?}"));
+            pgm.push(index as u8 * 8);
+        }
+        let file = out.join(format!("{stem}.pgm"));
+        std::fs::write(&file, pgm).unwrap();
+        files.push(QResourceFile::new(file).alias(format!("art/jokers/{stem}.pgm")));
+        ids.push(format!("{stem:?}: true"));
+    }
     let drawn = out.join("Drawn.js");
     std::fs::write(&drawn, format!(".pragma library\nvar ids = {{ {} }}\n", ids.join(", "))).unwrap();
-    let list = QResourceFile::new(drawn).alias("qml/Drawn.js");
-    names
-        .into_iter()
-        .map(|name| {
-            let text = std::fs::read_to_string(format!("art/jokers/{name}")).unwrap();
-            let rows: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
-            assert!(
-                rows.len() == ART_SIZE && rows.iter().all(|r| r.chars().count() == ART_SIZE),
-                "art/jokers/{name}: {ART_SIZE} lines of {ART_SIZE} letters expected"
-            );
-            let mut pgm = format!("P5 {ART_SIZE} {ART_SIZE} 255\n").into_bytes();
-            for row in rows {
-                for c in row.chars() {
-                    let index = ART_PALETTE
-                        .find(c)
-                        .unwrap_or_else(|| panic!("art/jokers/{name}: unknown letter {c:?}"));
-                    pgm.push(index as u8 * 32);
-                }
-            }
-            let stem = name.trim_end_matches(".txt");
-            let file = out.join(format!("{stem}.pgm"));
-            std::fs::write(&file, pgm).unwrap();
-            QResourceFile::new(file).alias(format!("art/jokers/{stem}.pgm"))
-        })
-        .chain(std::iter::once(list))
-        .collect()
+    files.push(QResourceFile::new(drawn).alias("qml/Drawn.js"));
+    files
 }
 
 fn main() {

@@ -2,7 +2,7 @@ import QtQuick
 import omatro
 import "Drawn.js" as Drawn
 
-// A joker's drawing: the 48 × 48 pixel art of art/jokers/<id>.txt, painted in
+// A joker's drawing: the pixel art of art/jokers/<id>.txt, painted in
 // the theme's colours (shaders/palette.frag), its pixels kept sharp.
 // `ready` is false for a joker not drawn yet.
 Item {
@@ -32,6 +32,9 @@ Item {
     property color warm: Colors.warm
     property color urgent: Colors.urgent
     property color green: Colors.green
+    property color cyan: Colors.cyan
+    property color magenta: Colors.magenta
+    property color orange: Colors.orange
     fragmentShader: "../shaders/palette.frag.qsb"
   }
 }

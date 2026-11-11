@@ -101,13 +101,17 @@ than push the play area out.
   after its enhancement (`heat.frag` for Overclocked, `foil.frag` for
   Enterprise); a new enhancement gets its look there. Check them in a real
   window: offscreen draws no shader.
-- Joker drawings: `app/art/jokers/<id>.txt` is a 48 × 48 pixel art, one palette
-  letter per pixel (`.` transparent, the others theme colours: `ART_PALETTE` in
-  `build.rs`), which `build.rs` turns into greyscale images and `Drawn.js` (the ids
-  drawn). `JokerArt.qml` paints them with `shaders/palette.frag`, so they follow the
-  theme. In the joker row (`JokerView.compact`), a drawn joker shows its drawing,
-  name, badge, stickers and edition; its full text shows hovered (`CardPeek`).
-  Jokers not drawn keep their text card.
+- Joker drawings: `app/art/jokers/<id>.txt` is a square pixel art (64 × 64), one palette
+  letter per pixel (`.` transparent, theme colours, an ink always dark and a
+  light always light, dark shades: `ART_PALETTE` in `build.rs`), never animated (the maintainer's choice).
+  `build.rs` turns them into greyscale images and `Drawn.js` (the ids
+  drawn); `JokerArt.qml` paints them with
+  `shaders/palette.frag`, so they follow the theme. In the joker row
+  (`JokerView.compact`), a drawn joker shows its drawing, name, badge, stickers
+  and edition; its full text shows hovered (`CardPeek`). Jokers not drawn keep
+  their text card. `app/art/README.md` has the style and the workflow
+  (`art.py import` / `preview`), `app/art/briefs.md` what each drawing shows
+  (proposed to the maintainer first, as names are).
 - Sizing: every size goes through `Style.space()` / `Style.fontPx()`, i.e. theme scale ×
   `Style.fit`. `Main.qml` sets `fit` so the whole UI shrinks together when the window is
   smaller than `designWidth` × `designHeight` (tiled Hyprland windows ignore the minimum
