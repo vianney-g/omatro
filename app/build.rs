@@ -64,6 +64,59 @@ fn shaders() -> Vec<QResourceFile> {
         .collect()
 }
 
+/// The palette letters of the pixel art, in index order: transparent, then the
+/// theme's foreground, accent, muted, background, warm, urgent and green.
+const ART_PALETTE: &str = ".kambwrg";
+
+/// The size of the joker drawings, in pixels (square).
+const ART_SIZE: usize = 48;
+
+/// The joker drawings of `art/jokers/`: ART_SIZE lines of ART_SIZE palette letters,
+/// turned into greyscale PGM images whose grey is the palette index × 32, so
+/// that `shaders/palette.frag` paints them in the theme's colours; with
+/// `qml/Drawn.js`, the ids of the jokers drawn (`Drawn.ids`), so that the
+/// others are not looked for.
+fn art() -> Vec<QResourceFile> {
+    println!("cargo:rerun-if-changed=art/jokers");
+    let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("art");
+    std::fs::create_dir_all(&out).unwrap();
+    let mut names: Vec<String> = std::fs::read_dir("art/jokers")
+        .unwrap_or_else(|e| panic!("art/jokers: {e}"))
+        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .filter(|name| name.ends_with(".txt"))
+        .collect();
+    names.sort();
+    let ids: Vec<String> = names.iter().map(|n| format!("{:?}: true", n.trim_end_matches(".txt"))).collect();
+    let drawn = out.join("Drawn.js");
+    std::fs::write(&drawn, format!(".pragma library\nvar ids = {{ {} }}\n", ids.join(", "))).unwrap();
+    let list = QResourceFile::new(drawn).alias("qml/Drawn.js");
+    names
+        .into_iter()
+        .map(|name| {
+            let text = std::fs::read_to_string(format!("art/jokers/{name}")).unwrap();
+            let rows: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
+            assert!(
+                rows.len() == ART_SIZE && rows.iter().all(|r| r.chars().count() == ART_SIZE),
+                "art/jokers/{name}: {ART_SIZE} lines of {ART_SIZE} letters expected"
+            );
+            let mut pgm = format!("P5 {ART_SIZE} {ART_SIZE} 255\n").into_bytes();
+            for row in rows {
+                for c in row.chars() {
+                    let index = ART_PALETTE
+                        .find(c)
+                        .unwrap_or_else(|| panic!("art/jokers/{name}: unknown letter {c:?}"));
+                    pgm.push(index as u8 * 32);
+                }
+            }
+            let stem = name.trim_end_matches(".txt");
+            let file = out.join(format!("{stem}.pgm"));
+            std::fs::write(&file, pgm).unwrap();
+            QResourceFile::new(file).alias(format!("art/jokers/{stem}.pgm"))
+        })
+        .chain(std::iter::once(list))
+        .collect()
+}
+
 fn main() {
     CxxQtBuilder::new_qml_module(QmlModule::new("omatro").qml_files([
         QmlFile::from("qml/Main.qml"),
@@ -92,6 +145,7 @@ fn main() {
         QmlFile::from("qml/Coins.qml"),
         QmlFile::from("qml/SealMark.qml"),
         QmlFile::from("qml/JokerView.qml"),
+        QmlFile::from("qml/JokerArt.qml"),
         QmlFile::from("qml/Button.qml"),
         QmlFile::from("qml/SeedLabel.qml"),
         QmlFile::from("qml/OmarchyLogo.qml"),
@@ -112,6 +166,7 @@ fn main() {
     .qrc_resources(resources())
     // Compiled at build time: the .qsb files are not kept in the repository.
     .qrc_resources(shaders())
+    .qrc_resources(art())
     .files(["src/bridge.rs"])
     .build();
 }

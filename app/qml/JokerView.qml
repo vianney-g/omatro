@@ -4,12 +4,18 @@ import omatro
 import "Labels.js" as Labels
 
 // A joker: rarity, name, effect, what it adds now, its quip and its edition.
+// Compact, a drawn joker shows its drawing and name instead, with what it
+// adds now (badge, what it copies), its stickers and edition: its text is
+// read in its full view, hovered (CardPeek).
 // Hovered, it leans towards the pointer in perspective, a light following
 // the pointer on it; at rest, it breathes (each joker at its own pace).
 Item {
   id: root
 
   property var joker: null
+  // Its drawing rather than its text, when it has one (JokerArt).
+  property bool compact: false
+  readonly property bool showArt: compact && art.ready
   // The Kernel Panic: jokers face down.
   property bool hidden: false
   // Hovered, its terms are explained beside it (Glossary).
@@ -101,7 +107,10 @@ Item {
     radius: Style.cornerRadius
     color: Qt.tint(Colors.background, Util.alpha(Colors.accent, root.edition ? 0.20 : 0.10))
     border.width: root.edition ? Style.space(2) : Style.normalBorderWidth
-    border.color: root.edition ? Colors.accent : Util.alpha(Colors.accent, Style.normalBorderAlpha)
+    // Compact, the border tells the rarity, which is not written.
+    border.color: root.edition ? Colors.accent
+      : root.showArt ? Util.alpha(root.rarityColor, 0.8)
+      : Util.alpha(Colors.accent, Style.normalBorderAlpha)
     opacity: (root.disabled || root.wornOut) && !root.hidden ? 0.4 : 1
 
     // The edition, under the joker's text.
@@ -113,11 +122,15 @@ Item {
     }
 
     Column {
+      id: content
       anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.space(8) }
-      spacing: Style.space(4)
+      // Compact, the drawing in the middle of the card.
+      anchors.topMargin: root.showArt ? Math.max(Style.space(8), (face.height - implicitHeight) / 2 - Style.space(12)) : Style.space(8)
+      spacing: root.showArt ? Style.space(8) : Style.space(4)
 
       Text {
         width: parent.width
+        visible: !root.showArt
         horizontalAlignment: Text.AlignHCenter
         text: root.joker ? I18n.tr(root.joker.rarity_name) : ""
         color: root.rarityColor
@@ -134,8 +147,15 @@ Item {
         font.pixelSize: Style.font.subtitle
         font.bold: true
       }
+      JokerArt {
+        id: art
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: root.showArt
+        jokerId: root.joker ? root.joker.id : ""
+      }
       Text {
         width: parent.width
+        visible: !root.showArt
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         textFormat: Text.StyledText
@@ -187,6 +207,7 @@ Item {
       }
       Text {
         width: parent.width
+        visible: !root.showArt
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         text: root.joker ? root.joker.quip : ""
@@ -231,7 +252,9 @@ Item {
       visible: root.edition !== null
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
-      text: root.edition ? root.edition.name + " · " + root.edition.description : ""
+      // Compact, its name alone: its effect is in the full view.
+      text: !root.edition ? "" : root.showArt ? root.edition.name
+        : root.edition.name + " · " + root.edition.description
       color: Colors.accent
       font.family: Style.font.family
       font.pixelSize: Style.font.caption

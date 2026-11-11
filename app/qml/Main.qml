@@ -1743,8 +1743,9 @@ Window {
                 id: jokerCard
                 width: jokerRow.cardWidth
                 height: view.height * jokerRow.cardScale
+                // Narrowed or drawn, its full view shows under the row.
                 HoverHandler {
-                  onHoveredChanged: if (jokerRow.narrow) hovered
+                  onHoveredChanged: if (jokerRow.narrow || view.showArt) hovered
                     ? cardPeek.showJoker(jokerCard, modelData, jokerRow, root.game.jokers_hidden)
                     : cardPeek.hide(jokerCard)
                 }
@@ -1754,7 +1755,8 @@ Window {
                   joker: modelData
                   scale: jokerRow.cardScale
                   transformOrigin: Item.TopLeft
-                  hints: !jokerRow.narrow
+                  compact: true
+                  hints: !jokerRow.narrow && !view.showArt
                   TapHandler { onTapped: jokerRow.pin(index) }
                   hidden: root.game.jokers_hidden
                   disabled: root.game.disabled_joker === index
