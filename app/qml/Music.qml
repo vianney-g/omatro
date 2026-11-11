@@ -25,6 +25,11 @@ Item {
     { file: "omatro-2", title: "Omatro 2", song: false },
     { file: "omatro-3", title: "Omatro 3", song: false },
     { file: "omatro-4", title: "Omatro 4", song: false },
+    { file: "keyboard-rain", title: "Keyboard Rain", song: false },
+    { file: "tiling-window-groove", title: "Tiling Window Groove", song: false },
+    { file: "kernel-lullaby", title: "Kernel Lullaby", song: false },
+    { file: "pacman-syu", title: "Pacman Syu", song: false },
+    { file: "quattro-nights", title: "Quattro Nights", song: false },
   ]
   property int current: -1
   // Tracks that failed in a row: past all of them, the music stops.
