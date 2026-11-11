@@ -850,8 +850,10 @@ pub struct Game {
     target_rng: Rng,
     /// Size of the deck at the start (Bit Rot).
     starting_deck: usize,
-    /// paru: free rerolls left in this shop.
-    free_rerolls: u32,
+    /// paru: free rerolls taken in this shop. Each paru gives one, from the
+    /// moment it joins, and selling it takes its reroll away if unused.
+    #[serde(default)]
+    free_rerolls_used: u32,
     /// How the hand is sorted, and whether the player rearranged it since
     /// (then it keeps its order until the next draw, which sorts it again).
     sort_by: SortBy,
@@ -973,7 +975,7 @@ impl Game {
             targets: Targets::default(),
             target_rng: Rng::stream(seed, "targets"),
             starting_deck: 0,
-            free_rerolls: 0,
+            free_rerolls_used: 0,
             sort_by: SortBy::Rank,
             arranged: false,
             locked: Vec::new(),
@@ -1734,6 +1736,11 @@ impl Game {
             indices.push(i);
         }
         Ok(indices)
+    }
+
+    /// paru: free rerolls left in this shop, one per paru owned now.
+    fn free_rerolls(&self) -> u32 {
+        (self.count(Joker::Paru) as u32).saturating_sub(self.free_rerolls_used)
     }
 
     fn count(&self, joker: Joker) -> usize {
@@ -2737,7 +2744,7 @@ impl Game {
         self.phase = Phase::Shop;
         self.hand.clear();
         self.reroll_cost = self.base_reroll_cost();
-        self.free_rerolls = self.count(Joker::Paru) as u32;
+        self.free_rerolls_used = 0;
         self.shop_rerolls = 0;
         self.roll_offers();
         self.packs = (0..SHOP_PACKS).map(|_| self.roll_pack()).collect();
@@ -3836,8 +3843,8 @@ impl Game {
     /// New offers; each reroll costs $1 more than the previous one.
     pub fn reroll(&mut self) -> Result<(), GameError> {
         self.in_shop()?;
-        if self.free_rerolls > 0 {
-            self.free_rerolls -= 1;
+        if self.free_rerolls() > 0 {
+            self.free_rerolls_used += 1;
         } else {
             self.spend(self.reroll_cost)?;
             self.reroll_cost += 1;
@@ -4196,7 +4203,7 @@ impl Game {
                     }),
                 })
                 .collect(),
-            reroll_cost: if self.free_rerolls > 0 {
+            reroll_cost: if self.free_rerolls() > 0 {
                 0
             } else {
                 self.reroll_cost
@@ -6147,6 +6154,13 @@ mod tests {
         game.reroll().unwrap();
         assert_eq!(game.money, 50 - REROLL_COST as i64);
         assert_eq!(game.jokers[1].counter, 4.0);
+        // A paru bought in the shop gives its reroll right away.
+        let mut game = shopping(1, vec![]);
+        game.jokers.push(OwnedJoker::new(Joker::Paru, None));
+        assert_eq!(game.state().reroll_cost, 0);
+        game.reroll().unwrap();
+        assert_eq!(game.money, 50);
+        assert_eq!(game.state().reroll_cost, REROLL_COST);
     }
 
     #[test]
