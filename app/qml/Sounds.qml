@@ -14,7 +14,8 @@ Item {
   // Each sound and its own level, to even them out.
   readonly property var levels: ({
     "select": 0.5, "deselect": 0.35, "play": 1, "discard": 1, "draw": 0.6, "deal": 0.9,
-    "mult": 0.5, "x-mult": 0.6, "money": 0.8, "debuffed": 0.4, "fire": 0.5,
+    "mult": 0.5, "x-mult": 0.6, "money": 0.8, "debuffed": 0.4,
+    "fire-1": 0.6, "fire-2": 0.7, "fire-3": 0.8,
     "blind-won": 0.6, "victory": 0.6, "game-over": 0.3, "boss": 0.8,
     "cash-out": 1, "buy": 0.5, "sell": 1, "reroll": 1, "pack": 1, "pick": 1, "skip": 0.5,
     "use": 0.5, "merge": 0.7, "achievement": 0.7, "found": 0.7, "error": 0.5,

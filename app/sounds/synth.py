@@ -161,3 +161,51 @@ random.seed(12)
 write("quake-2", mix((0, boom(0.5, drive=3.0)), (0.22, boom(0.9, f0=110, drive=3.5)),
                      (0.08, [0.7 * v for v in fan(1.25, 280, 2600, rise=0.75)]),
                      (1.05, [0.5 * v for v in clack()])))
+
+# The score catches fire: not a campfire but a processor frying. A mains
+# buzz, distorted, under the crackle of sparks; the hotter (heat 1 to 3),
+# the louder the buzz, the denser the sparks, then the coil whine and, at
+# the top, a capacitor popping.
+
+
+def frying(seconds, heat):
+    out = [0.0] * int(seconds * RATE)
+    n = len(out)
+    # The buzz: 100 Hz and its harmonics, clipped harder as it heats.
+    for i in range(n):
+        t = i / RATE
+        env = min(1.0, t / 0.03) * (1 - i / n) ** 1.5
+        wobble = 1 + 0.3 * math.sin(2 * math.pi * 7 * t)
+        v = sum(math.sin(2 * math.pi * 100 * h * t) / h for h in (1, 2, 3, 5, 7))
+        out[i] = 0.25 * math.tanh((1 + heat) * v) * env * wobble
+    # The sparks: short bursts of bright noise, ever more of them.
+    t = random.uniform(0.0, 0.03)
+    while t < seconds * 0.9:
+        length = int(random.uniform(0.002, 0.009) * RATE)
+        amp = random.uniform(0.3, 1.0) * (1 - t / seconds) ** 0.5
+        o, prev = int(t * RATE), 0.0
+        for i in range(min(length, n - o)):
+            x = random.uniform(-1, 1)
+            out[o + i] += amp * (x - prev) * math.exp(-6 * i / length)  # high-passed
+            prev = x
+        t += random.expovariate(25 + 35 * heat)
+    # The coil whine, high and thin, rising.
+    if heat >= 2:
+        phase = 0.0
+        for i in range(n):
+            f = 7000 + 1500 * i / n
+            phase += 2 * math.pi * f / RATE
+            out[i] += 0.04 * heat * math.sin(phase) * math.sin(math.pi * i / n)
+    # A capacitor giving up.
+    if heat >= 3:
+        pop = mix((0, tone(180, 0.15, decay=30)),
+                  (0, [random.uniform(-1, 1) * math.exp(-90 * i / RATE) for i in range(int(0.06 * RATE))]))
+        o = int(seconds * 0.72 * RATE)
+        for i, v in enumerate(pop[: n - o]):
+            out[o + i] += 1.2 * v
+    return out
+
+
+for heat, seconds in ((1, 0.7), (2, 0.95), (3, 1.2)):
+    random.seed(20 + heat)
+    write(f"fire-{heat}", frying(seconds, heat))

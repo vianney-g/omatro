@@ -87,7 +87,8 @@ than push the play area out.
   them with `sound(name)`, `act(command, name)` (the sound if the state changed,
   `error` if refused) and `soundTransition` (phase changes). Kenney's CC0 packs
   give most of them; `app/sounds/synth.py` writes the others (chips steps, blind
-  won, victory, game over, the quakes of big hands).
+  won, victory, game over, the quakes of big hands, the score
+  frying as it catches fire).
 - Glossary: the engine's `glossary` command lists every named term (`glossary.rs`:
   modifiers, badges, pull requests, consumables, jokers, packages; hand types only
   block matches) and its test forbids two things sharing a name. Card views

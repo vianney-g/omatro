@@ -180,6 +180,12 @@ Window {
     return total >= 3 * target ? 3 : total >= 1.5 * target ? 2 : total >= target ? 1 : 0
   }
   Timer { id: fireOut; interval: 1800; onTriggered: root.fireHeat = 0 }
+  // The score fries as it catches fire, and louder each time it heats up.
+  property int heardHeat: 0
+  onFireHeatChanged: {
+    if (fireHeat > heardHeat) sound("fire-" + fireHeat)
+    heardHeat = fireHeat
+  }
 
   readonly property bool busy: scoring !== null || changing
   readonly property bool playing: game !== null && game.phase === "playing" && !busy
@@ -955,7 +961,6 @@ Window {
       showTotal = true
       // The blind score counts up with the total, not after it.
       shownScore = pendingState.score
-      if (heatFor(scoring.total) > 0) sound("fire")
       fireHeat = Math.max(fireHeat, heatFor(scoring.total))
       // A hand far beyond the blind shakes the screen, with a boom and the
       // fan spinning up.
