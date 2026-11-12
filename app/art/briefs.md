@@ -863,7 +863,7 @@ Creates an oligarchy card if the hand is a Straight Flush.
 - **Shows:** a slime blob holding a bucket.
 - **Prompt:** a cute jelly slime blob holding a bucket
 
-## Batch 9
+## Batch 9 (drawn)
 
 ### Rails World — *Everyone came for the keynote. And the opinions.*
 
@@ -1039,3 +1039,211 @@ Scoring face cards become Enterprise cards.
 
 - **Shows:** two identical cats bumping heads.
 - **Prompt:** two identical cats bumping their heads together, stars around
+
+## Batch 10 (drawn)
+
+The last ones. DHH and ThePrimeagen are real people: their drawings are a
+nod (an object, an animal), never a portrait.
+
+### Tiling Manager — *Floating windows are a lifestyle choice.*
+
++12 mult if the hand is a straight.
+
+- **Shows:** four neat tiles, one floating off on its own.
+- **Prompt:** four square ceramic tiles in a neat grid, one tile floating away
+
+### CI Runner — *Green checks, one after another.*
+
+Gains +15 chips when the hand contains a Straight.
+
+- **Shows:** a robot sprinting, a check mark on its chest.
+- **Prompt:** a cute robot sprinting fast, a big green check mark on its chest
+
+### Auto Update — *pacman -Syu, every hand.*
+
+1 in 4 chance to level up the played hand type.
+
+- **Shows:** a robot tightening its own bolt with a wrench, cheerfully.
+- **Prompt:** a cute robot happily tightening a bolt on its own head with a wrench
+
+### Free Tier — *Rate-limited, but it works.*
+
+Creates a command when a hand is played with $4 or less.
+
+- **Shows:** a sleepy turtle carrying a parcel: rate-limited, but it delivers.
+- **Prompt:** a sleepy turtle carrying a parcel on its shell
+
+### Minimal Install — *Fewer packages, more speed.*
+
+Gains +3 mult per pack skipped.
+
+- **Shows:** one cactus in one pot: nothing else needed.
+- **Prompt:** a single cactus in a plain clay pot
+
+### Empty Workspace — *Workspaces 6 through 10, still empty.*
+
++30 chips per discard left.
+
+- **Shows:** an empty desk with a cobweb: workspaces 6 to 10.
+- **Prompt:** an empty wooden desk with a chair, nothing on it, a cobweb in the corner
+
+### Identicon — *Every card gets a face. Even the twos.*
+
+Every card counts as a face card.
+
+- **Shows:** a playing card with googly eyes and a grin: every card gets a face.
+- **Prompt:** a blank playing card with big googly eyes and a wide grin
+
+### Flatpak — *The same app, installed three times.*
+
+Jokers you own can show up in the shop again.
+
+- **Shows:** three identical boxes stacked: the same app, three times.
+- **Prompt:** three identical cardboard boxes stacked on top of each other
+
+### r/unixporn — *Karma, but you can spend it.*
+
++$1 at the end of each blind per unique theme applied.
+
+- **Shows:** a peacock spreading its tail: showing off the rice.
+- **Prompt:** a proud peacock spreading its big colorful tail feathers
+
+### Code Signing — *Signed, sealed, delivered.*
+
+When a blind starts, adds a random card with a random seal to the hand.
+
+- **Shows:** a fountain pen and a wax seal: signed, sealed, delivered.
+- **Prompt:** a fountain pen next to a round red wax seal
+
+### Alias Collection — *alias ll='ls -la'. And 400 more.*
+
+Creates a command when a blind starts (if there is room).
+
+- **Shows:** a disguise: fake glasses, big nose and moustache. Another name, same thing.
+- **Prompt:** a pair of fake disguise glasses with a big nose and a bushy moustache
+
+### Bit Twiddling — *Small values, flipped twice as hard.*
+
+Retriggers every scoring 2, 3, 4 and 5.
+
+- **Shows:** a light switch, flipped.
+- **Prompt:** a light switch on a wall plate, flipped on, a spark
+
+### Pitch Black — *Black on black. Readable to you only.*
+
+×3 mult if every card held in hand is a spade or a club.
+
+- **Shows:** a black cat in the dark, only its eyes showing.
+- **Prompt:** a black cat with big glowing yellow eyes, sitting
+
+### dotfiles.bak — *Two of everything. Just in case.*
+
+Gains +2 mult per hand containing a Two Pair.
+
+- **Shows:** two identical floppy disks: just in case.
+- **Prompt:** two identical floppy disks side by side
+
+### Swap File — *Plenty of room. Shrinks every reboot.*
+
++5 hand size, −1 at the end of each blind.
+
+- **Shows:** a squeezed sponge, dripping.
+- **Prompt:** a yellow kitchen sponge being squeezed, water dripping
+
+### Vertical Monitor — *Taller view, fewer turns.*
+
++2 hand size, −1 hand each blind.
+
+- **Shows:** a monitor turned on its side, standing tall.
+- **Prompt:** a tall computer monitor turned vertically in portrait orientation, a happy face on its screen
+
+### Semver Inflation — *1.0.0 to 47.2.0, same features.*
+
++$1 sell value to every joker and consumable at the end of each blind.
+
+- **Shows:** a balloon being pumped up: bigger numbers, same air.
+- **Prompt:** a bicycle pump inflating a big round balloon
+
+### No Build — *Webpack? Never heard of her.*
+
+×2 mult if the played hand has 3 cards or fewer.
+
+- **Shows:** a closed toolbox, fast asleep: no build step.
+- **Prompt:** a closed red toolbox with a sleeping face
+
+### Nine Nines — *99.9999999% uptime, billed per nine.*
+
++$1 per 9 in the deck at the end of each blind.
+
+- **Shows:** a smug cat with a halo: nine lives, nine nines.
+- **Prompt:** a smug cat with a golden halo above its head
+
+### Config Reload — *Super+Shift+R: everything, but fresher.*
+
+Levels up the hand type of the first discard of each blind.
+
+- **Shows:** a cold glass of lemonade: everything, but fresher.
+- **Prompt:** a cold glass of lemonade with ice cubes and a lemon slice
+
+### Minimal Waybar — *Less widgets, more wallpaper.*
+
+×1 mult per empty joker slot (Minimal Waybar counts as empty).
+
+- **Shows:** a framed landscape: less widgets, more wallpaper.
+- **Prompt:** a framed painting of a mountain landscape at sunset
+
+### Hotwire — *Three frameworks walk into a monolith.*
+
+×3 mult if the hand contains a Three of a Kind.
+
+- **Shows:** two wires twisted together, sparking.
+- **Prompt:** two electric wires twisted together, sparks flying
+
+### Git Bisect — *Good, bad, good, bad… found it.*
+
+×3 mult if the hand contains a Straight.
+
+- **Shows:** a knife cutting a carrot in half: good half, bad half.
+- **Prompt:** a kitchen knife cutting a carrot in half
+
+### jq Filter — *Filters out the jacks. Keeps the value.*
+
+Gains ×0.5 mult per jack discarded; resets after each blind.
+
+- **Shows:** a funnel letting drops through.
+- **Prompt:** a metal kitchen funnel with drops of water falling out of it
+
+### Rolling Release — *Today's favorite suit, until the next update.*
+
+×1.5 mult for each scoring card of a suit drawn at each blind.
+
+- **Shows:** a donut rolling along.
+- **Prompt:** a pink frosted donut rolling on its side, motion lines
+
+### Quine — *Prints itself. Adds itself to the deck.*
+
+If the first hand of a blind is a single card, adds a copy of it to the deck and the hand.
+
+- **Shows:** a hand mirror smiling at its own reflection.
+- **Prompt:** a cute hand mirror with a smiling face, its reflection smiling back
+
+### Syncthing — *Two blinds to sync, then a perfect copy.*
+
+Sold after 2 blinds, copies another random joker.
+
+- **Shows:** two identical potted plants joined by a string.
+- **Prompt:** two identical potted plants side by side, connected by a string
+
+### DHH — *Strong opinions, loosely held. Mostly strong.*
+
+Played kings and queens each give ×2 mult.
+
+- **Shows:** a racing helmet and a chequered flag: a nod to the racing, never a portrait.
+- **Prompt:** a racing helmet next to a black and white checkered flag
+
+### ThePrimeagen — *Blazingly fast. Skill issue for everyone else.*
+
+Gains ×1 mult when a face card is destroyed.
+
+- **Shows:** a cheetah running, flames behind: blazingly fast, never a portrait.
+- **Prompt:** a cheetah running blazingly fast, flames trailing behind it

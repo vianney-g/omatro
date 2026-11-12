@@ -2,7 +2,7 @@
 
 Each drawn joker has `jokers/<id>.txt`: a square pixel art, one letter per
 pixel, at the size it was drawn: 64 × 64 for every joker, so that their pixels
-match (Fork's 48 × 48 is a placeholder). Letters are theme colours, not
+match. Letters are theme colours, not
 fixed colours, so a drawing follows every Omarchy theme (`build.rs` turns it into an image, `shaders/palette.frag`
 paints it). Jokers without a drawing keep their text card.
 
