@@ -286,7 +286,7 @@ Creates a command if the hand contains an ace and a Straight.
 - **Prompt:** a golf ball on a small tee next to a golf hole with a little
   flag
 
-## Batch 4
+## Batch 4 (drawn)
 
 ### Optional Dependencies — *Optional, but you'll install them anyway.*
 
@@ -388,7 +388,7 @@ One free reroll per shop.
 - **Prompt:** an envelope sealed with a big heart, small hearts floating out
   of it
 
-## Batch 5
+## Batch 5 (drawn, but Meetup Pizza)
 
 ### Rabbit Hole — *Just one more config tweak.*
 
@@ -486,6 +486,10 @@ Saves a lost blind if you scored 25% of the target, then disappears.
 - **Prompt:** a small computer server box on fire, wearing cool sunglasses,
   calm and smiling
 
+## Batch 6
+
+Meetup Pizza, left from batch 5, comes first.
+
 ### Meetup Pizza — *Free pizza, mandatory lightning talk.*
 
 +7 mult for each scoring club.
@@ -493,3 +497,80 @@ Saves a lost blind if you scored 25% of the target, then disappears.
 - **Shows:** a slice of pizza, cheese stretching: the reason everyone came.
 - **Prompt:** a slice of pepperoni pizza with stretchy melted cheese, a
   happy face on it
+
+### Shell Fu — *Pipes, loops, one-liners.*
+
++1 mult per command used this game.
+
+- **Shows:** a seashell in a karate headband, ready to fight: shell, kung fu.
+- **Prompt:** a cute spiral seashell wearing a karate headband, doing a martial arts pose
+
+### Release Train — *Leaves every six hands. Packed.*
+
+×4 mult every 6 hands played.
+
+- **Shows:** a little steam locomotive puffing: it leaves on schedule.
+- **Prompt:** a cute little steam locomotive puffing a cloud of smoke, front three-quarter view
+
+### Closed Source — *Can't read it. Can't remove it.*
+
+Adds a Binary Blob card to the deck when a blind starts.
+
+- **Shows:** a treasure chest shut with a huge padlock: nobody gets to look inside.
+- **Prompt:** a wooden treasure chest locked shut with a huge padlock and chains
+
+### Deep Dive — *Three hours in, still reading source.*
+
++50 chips for each scoring spade.
+
+- **Shows:** a deep-sea diver in a brass helmet, bubbles rising: very deep in the code.
+- **Prompt:** a cute deep sea diver in an old brass diving helmet, air bubbles rising
+
+### Garbage Collector — *Frees memory. And your upgrades.*
+
+Gains ×0.1 mult per enhanced card played, and removes the enhancement.
+
+- **Shows:** a trash can robot, lid open, happy to eat whatever you give it.
+- **Prompt:** a cute little trash can robot with its lid open like a mouth, small arms
+
+### Espresso Shot — *Everything twice, for ten hands.*
+
+Retriggers every scoring card, for 10 hands.
+
+- **Shows:** a tiny espresso cup, wide-eyed and trembling: everything twice.
+- **Prompt:** a tiny espresso cup with steam, the cup has a wide-eyed jittery face
+
+### Super Key — *Every good shortcut starts here.*
+
++2 mult for each scoring card.
+
+- **Shows:** a single big keyboard key, blank, wearing a superhero cape.
+- **Prompt:** a single big blank keyboard key wearing a red superhero cape, heroic pose
+
+### Bit Rot — *Fewer cards, sharper teeth.*
+
++4 mult per card the deck has lost since the start.
+
+- **Shows:** a rotten apple with a worm grinning out of it.
+- **Prompt:** a rotten apple with brown spots and a grinning worm poking out of it
+
+### Muscle Memory — *Your fingers type it before you think.*
+
+Adds the number of times the hand type was played to mult.
+
+- **Shows:** a cartoon arm flexing a big bicep.
+- **Prompt:** a cartoon arm flexing a big bicep muscle, a small sparkle on the muscle
+
+### Rollback — *git revert HEAD. Everyone relax.*
+
+Sell it to disable the current boss blind's effect.
+
+- **Shows:** a cassette tape being wound back with a pencil: rewind.
+- **Prompt:** a cassette tape with a pencil stuck in one of its holes to rewind it
+
+### Sticker Pack — *Free stickers at every conference.*
+
+Sell it to win the badge badges: 2x.
+
+- **Shows:** a sheet of cute stickers, one peeling off.
+- **Prompt:** a sheet of cute round stickers, a star, a heart and a smiley, one sticker peeling off
