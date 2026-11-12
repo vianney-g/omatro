@@ -111,7 +111,10 @@ than push the play area out.
   drawing, name, badge, stickers and edition; hovered, its full view shows
   (`CardPeek`, asked through the `Peek` singleton: under the joker row, beside
   the joker elsewhere). The collection's joker tiles show the drawing and name
-  the same way. Jokers not drawn keep their text card. `app/art/README.md` has the style and the workflow
+  the same way. Jokers not drawn keep their text card. Theme cards have a
+  picture instead (`app/art/themes/<id>.png`, 64 × 40, in the theme's own
+  colours, embedded as is and listed in `Drawn.themes`), framed at the top of
+  `ConsumableView` and beside the name in the collection. `app/art/README.md` has the style and the workflow
   (`art.py import` / `preview`), `app/art/briefs.md` what each drawing shows
   (proposed to the maintainer first, as names are).
 - Sizing: every size goes through `Style.space()` / `Style.fontPx()`, i.e. theme scale ×

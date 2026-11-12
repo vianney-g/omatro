@@ -76,9 +76,12 @@ const ART_PALETTE: &str = ".kambwrgcpodlAWRGCPO";
 /// (64 × 64), `#` lines being comments. Each becomes a greyscale PGM image whose
 /// grey is the palette index × 8, that `shaders/palette.frag` paints in the
 /// theme's colours; `qml/Drawn.js` lists the jokers drawn (`Drawn.ids`), so
-/// that the others are not looked for.
+/// that the others are not looked for. The theme pictures of
+/// `art/themes/<id>.png` keep their own colours (those of the theme they show):
+/// they go in as they are, listed in `Drawn.themes`.
 fn art() -> Vec<QResourceFile> {
     println!("cargo:rerun-if-changed=art/jokers");
+    println!("cargo:rerun-if-changed=art/themes");
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("art");
     std::fs::create_dir_all(&out).unwrap();
     let mut names: Vec<String> = std::fs::read_dir("art/jokers")
@@ -114,8 +117,27 @@ fn art() -> Vec<QResourceFile> {
         files.push(QResourceFile::new(file).alias(format!("art/jokers/{stem}.pgm")));
         ids.push(format!("{stem:?}: true"));
     }
+    let mut themes: Vec<String> = std::fs::read_dir("art/themes")
+        .unwrap_or_else(|e| panic!("art/themes: {e}"))
+        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .filter_map(|name| Some(name.strip_suffix(".png")?.to_string()))
+        .collect();
+    themes.sort();
+    for theme in &themes {
+        let path = PathBuf::from(format!("art/themes/{theme}.png")).canonicalize().unwrap();
+        files.push(QResourceFile::new(path).alias(format!("art/themes/{theme}.png")));
+    }
+    let themes: Vec<String> = themes.iter().map(|t| format!("{t:?}: true")).collect();
     let drawn = out.join("Drawn.js");
-    std::fs::write(&drawn, format!(".pragma library\nvar ids = {{ {} }}\n", ids.join(", "))).unwrap();
+    std::fs::write(
+        &drawn,
+        format!(
+            ".pragma library\nvar ids = {{ {} }}\nvar themes = {{ {} }}\n",
+            ids.join(", "),
+            themes.join(", ")
+        ),
+    )
+    .unwrap();
     files.push(QResourceFile::new(drawn).alias("qml/Drawn.js"));
     files
 }

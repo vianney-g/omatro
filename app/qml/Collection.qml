@@ -1,6 +1,7 @@
 import QtQuick
 import omatro
 import "Labels.js" as Labels
+import "Drawn.js" as Drawn
 
 // The collection over everything: a tab per family of items, found ones with
 // their text, the others as "?", hidden ones with the achievement that
@@ -371,9 +372,13 @@ Rectangle {
       id: tile
       readonly property var e: parent.entry
       readonly property bool found: e.state === "found"
-      // A joker found and drawn: its drawing and name; hovered, its full
-      // view beside it (Peek).
+      // A joker found and drawn, or a theme with a picture: its drawing and
+      // name; hovered, its full view beside it (Peek).
       readonly property bool drawn: found && tileArt.ready
+      readonly property bool pictured: found && e.id.indexOf("theme:") === 0 && Drawn.themes[e.id.slice(6)] === true
+      readonly property var theme: pictured ? {
+        kind: "theme", id: e.id.slice(6), name: e.name, description: e.description || "",
+        quip: e.quip || "", current: null, transparent: false } : null
       readonly property var joker: found && e.id.indexOf("joker:") === 0 ? {
         kind: "joker", id: e.id.slice(6), name: e.name, description: e.description || "",
         quip: e.quip || "", rarity: e.rarity, rarity_name: e.rarity_name,
@@ -388,19 +393,29 @@ Rectangle {
       opacity: found ? 1 : 0.7
 
       Row {
-        visible: parent.drawn
+        visible: parent.drawn || parent.pictured
         anchors { fill: parent; margins: Style.spacing.sm }
         spacing: Style.spacing.md
         JokerArt {
           id: tileArt
+          visible: tile.drawn
           anchors.verticalCenter: parent.verticalCenter
           width: parent.height
           height: parent.height
           jokerId: joker ? joker.id : ""
         }
+        Image {
+          id: tilePicture
+          visible: tile.pictured
+          anchors.verticalCenter: parent.verticalCenter
+          height: parent.height
+          width: Math.round(height * 64 / 40)
+          smooth: false
+          source: tile.theme ? "../art/themes/" + tile.theme.id + ".png" : ""
+        }
         Text {
           anchors.verticalCenter: parent.verticalCenter
-          width: parent.width - tileArt.width - parent.spacing
+          width: parent.width - (tile.drawn ? tileArt.width : tilePicture.width) - parent.spacing
           wrapMode: Text.WordWrap
           text: e.name || ""
           color: tint
@@ -411,7 +426,7 @@ Rectangle {
       }
 
       Column {
-        visible: parent.found && !parent.drawn
+        visible: parent.found && !parent.drawn && !parent.pictured
         anchors { fill: parent; margins: Style.spacing.lg }
         spacing: Style.spacing.xs
         Text {
@@ -478,6 +493,8 @@ Rectangle {
         hoverEnabled: true
         onContainsMouseChanged: parent.drawn
           ? (containsMouse ? Peek.showJoker(parent, parent.joker, null, false) : Peek.hide(parent))
+          : parent.pictured
+          ? (containsMouse ? Peek.showConsumable(parent, parent.theme, "") : Peek.hide(parent))
           : parent.found && e.description
           ? (containsMouse ? Hints.show(parent, e.description, e.name) : Hints.hide(parent))
           : Hints.hide(parent)

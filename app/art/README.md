@@ -69,3 +69,29 @@ Jokers are not animated: a still drawing, one image.
 
 `python3 art.py palette` writes the palette files again, should the palette
 change (keep `build.rs`, `palette.frag` and `art.py` in step).
+
+# Theme pictures
+
+Each theme card has `themes/<id>.png` (the theme's id in the engine:
+`matte_black`, `rose_pine`…): a 64 × 40 picture, the shape of a wallpaper,
+in its own colours, never the current theme's (a Nord card stays Nord
+blue). `build.rs` embeds them as they are; a theme card shows its picture
+framed at its top, the collection's theme tiles beside the name.
+
+They were made with Retro Diffusion from each theme's own wallpaper
+(`~/.local/share/omarchy/themes/<theme>/backgrounds`):
+
+| Theme | Wallpaper |
+|---|---|
+| Matte Black | `0-ship-at-sea` |
+| Rosé Pine | `1-funky-shapes` |
+| Ristretto | `1-color-curves` |
+| Osaka Jade | the theme's background |
+| Nord | `0-black-moon` |
+| Everforest | `1-tree-tops` |
+| Kanagawa | `1-kanagawa` |
+| Catppuccin | `1-totoro` (a black cat, not the character) |
+| Tokyo Night | `2-quattro` |
+| Hackerman | `1-synth-scape` |
+| Ethereal | `1-cosmic` |
+| Flexoki Light | `1-orb` |
