@@ -388,7 +388,7 @@ One free reroll per shop.
 - **Prompt:** an envelope sealed with a big heart, small hearts floating out
   of it
 
-## Batch 5 (drawn, but Meetup Pizza)
+## Batch 5 (drawn)
 
 ### Rabbit Hole — *Just one more config tweak.*
 
@@ -486,7 +486,7 @@ Saves a lost blind if you scored 25% of the target, then disappears.
 - **Prompt:** a small computer server box on fire, wearing cool sunglasses,
   calm and smiling
 
-## Batch 6
+## Batch 6 (drawn)
 
 Meetup Pizza, left from batch 5, comes first.
 
@@ -574,3 +574,148 @@ Sell it to win the badge badges: 2x.
 
 - **Shows:** a sheet of cute stickers, one peeling off.
 - **Prompt:** a sheet of cute round stickers, a star, a heart and a smiley, one sticker peeling off
+
+## Batch 7
+
+Retro Diffusion tends to fill bodies with its dark purple: keep the
+subjects light, or the drawing reads as a dark blob.
+
+### Distro Hopping — *Wipe everything, reinstall, feel alive.*
+
+When a small or big blind starts, gains ×0.5 mult and destroys another random joker.
+
+- **Shows:** a kangaroo hopping with a suitcase: off to the next distro.
+- **Prompt:** a cute kangaroo hopping mid-air, carrying a small suitcase
+
+### Recursion — *To understand recursion, see Recursion.*
+
++8 mult for each scoring A, 2, 3, 5 or 8.
+
+- **Shows:** nesting dolls, each one opening on a smaller one.
+- **Prompt:** a row of three nesting dolls, from big to small, the biggest one open
+
+### Senior Engineer — *Has seen every config.*
+
+×3 mult if the deck holds at least 16 enhanced cards.
+
+- **Shows:** an old wise owl in round glasses, unimpressed.
+- **Prompt:** a wise old owl wearing round glasses, a calm unimpressed look
+
+### Bloatware — *Huge numbers. No room for anything.*
+
++250 chips, −2 hand size.
+
+- **Shows:** a pufferfish blown up as round as it gets.
+- **Prompt:** a pufferfish puffed up into a huge round spiky ball, surprised face
+
+### Upstream — *Tracks the first joker, always.*
+
+Copies the ability of the leftmost joker.
+
+- **Shows:** a salmon leaping up a waterfall: always upstream.
+- **Prompt:** a salmon leaping out of the water up a small waterfall
+
+### Pacman Cache — *Every package you add, kept forever.*
+
+Gains ×0.25 mult per card added to the deck.
+
+- **Shows:** a squirrel with bulging cheeks, hugging a pile of nuts: keeps everything.
+- **Prompt:** a squirrel with puffed full cheeks hugging a big pile of acorns
+
+### MVP — *Minimum viable flush.*
+
+Flushes and Straights can be made with 4 cards.
+
+- **Shows:** a plain skateboard: the minimum viable car.
+- **Prompt:** a simple wooden skateboard with four wheels, side view
+
+### Bootstrapped — *No VCs. Profitable since day one.*
+
++2 mult per $5 you have.
+
+- **Shows:** a boot pulling itself up by its own straps.
+- **Prompt:** a leather boot with long bootstraps, the straps pulled upward by tiny arms
+
+### Backspace — *Worn smooth from all the deleting.*
+
++3 discards each blind, −1 hand size.
+
+- **Shows:** a pink eraser worn down to a stub, crumbs all around.
+- **Prompt:** a small pink eraser worn down to a stub, eraser crumbs around it
+
+### Hipster Stack — *Never the popular framework.*
+
+Gains ×0.2 mult per hand in a row that isn't your most played type.
+
+- **Shows:** a stack of pancakes wearing a curly moustache and thick glasses.
+- **Prompt:** a stack of pancakes with a curly moustache and thick black rimmed glasses
+
+### Integer Overflow — *MAX_INT + 1 = surprise.*
+
+Doubles its mult when a blind is won in one hand; back to ×1 otherwise.
+
+- **Shows:** a glass filled past the brim, water spilling everywhere.
+- **Prompt:** a drinking glass overflowing with water spilling over the edges
+
+### Orphan Cleanup — *pacman -Rns $(pacman -Qdtq)*
+
+Gains ×0.25 mult per card sold; resets after a boss.
+
+- **Shows:** a broom sweeping a little pile of dust.
+- **Prompt:** a broom sweeping a small pile of dust and crumbs
+
+### Package Maintainer — *Every extra package, lovingly maintained.*
+
+×1.5 mult per extra joker you own.
+
+- **Shows:** a delivery cat carrying a tall pile of parcels, proud.
+- **Prompt:** a cute cat in a delivery cap carrying a tall stack of parcels
+
+### Code Review — *Looks good to me. Ship it.*
+
+×2 mult if the hand contains a Pair.
+
+- **Shows:** a rubber stamp with a big check mark: approved without reading.
+- **Prompt:** a big rubber stamp with a check mark on its face, a fresh stamp mark below
+
+### systemd — *One daemon to rule them all.*
+
+×0.2 mult per Daemon card in the deck.
+
+- **Shows:** a little daemon wearing a crown, very pleased with itself.
+- **Prompt:** a cute little horned daemon imp wearing a golden crown, smug smile
+
+### Incident Commander — *Paged at 3 a.m. Billed at 9.*
+
++$8 each time a boss blind's effect triggers.
+
+- **Shows:** a firefighter's helmet with a pager beeping beside it.
+- **Prompt:** a red firefighter helmet next to a small beeping pager
+
+### Postmortem — *We learned a lot. Mostly about failure.*
+
+Gains ×0.5 mult when a blind is won on its last hand.
+
+- **Shows:** a little tombstone with flowers in front.
+- **Prompt:** a small rounded tombstone with a bunch of flowers in front of it
+
+### rm -rf node_modules — *Frees 2 GB. Feels like a win.*
+
+When a blind starts, destroys the joker on its right and gains twice its sell value as mult.
+
+- **Shows:** a small black hole swallowing cardboard boxes: the heaviest object in the universe, gone.
+- **Prompt:** a small cute swirling black hole sucking in tiny cardboard boxes
+
+### kill -9 — *No signal handlers. No mercy.*
+
+Disables every boss blind's effect.
+
+- **Shows:** a cute grim reaper with a big scythe.
+- **Prompt:** a cute little grim reaper in a hooded robe holding a big scythe
+
+### Copy-on-Write — *Free copies until someone writes.*
+
+At the end of the shop, adds a Transparent copy of a random consumable.
+
+- **Shows:** a photocopier spitting out pages, happy to help.
+- **Prompt:** a cute office photocopier with a happy face pushing out a stack of paper
