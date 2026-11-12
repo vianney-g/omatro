@@ -1756,6 +1756,8 @@ Window {
                   scale: jokerRow.cardScale
                   transformOrigin: Item.TopLeft
                   compact: true
+                  // Its full view shows under the row (above), not beside it.
+                  peek: false
                   hints: !jokerRow.narrow && !view.showArt
                   TapHandler { onTapped: jokerRow.pin(index) }
                   hidden: root.game.jokers_hidden
@@ -1863,6 +1865,7 @@ Window {
                       visible: modelData.kind === "joker"
                       width: shop.itemWidth
                       joker: visible ? modelData : null
+                      compact: true
                       opacity: root.canBuy(modelData) ? 1 : 0.5
                     }
                     ConsumableView {

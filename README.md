@@ -264,7 +264,7 @@ Responses:
 - `{"event":"collection","collection":{…}}` after `collection`: `found` and `total`,
   the `families` (each with its `id`, `name`, `found`, `total` and `items`: `id`,
   `state` (`found`, `unknown`, or `locked` until an achievement), `secret`, and once
-  found `name`, `description`, `quip` and a joker's `rarity`; a locked item's
+  found `name`, `description`, `quip` and a joker's `rarity` and `rarity_name`; a locked item's
   `achievement` and `condition`), then the `achievements` (`id`, `name`,
   `description`, `quip`, `done`, `progress` and `goal` for counting ones, `unlocks`
   once done or `unlocks_family` before), the `stats` (`games`, `won`, `lost`,

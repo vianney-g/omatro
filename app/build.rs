@@ -162,6 +162,7 @@ fn main() {
         QmlFile::from("qml/Style.qml").singleton(true),
         QmlFile::from("qml/Util.qml").singleton(true),
         QmlFile::from("qml/Hints.qml").singleton(true),
+        QmlFile::from("qml/Peek.qml").singleton(true),
         QmlFile::from("qml/I18n.qml").singleton(true),
     ]))
     // .js files are not module files: they go next to them, in the resources.

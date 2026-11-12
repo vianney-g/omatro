@@ -249,8 +249,9 @@ pub struct ItemInfo {
     pub name: Option<String>,
     pub description: Option<String>,
     pub quip: Option<&'static str>,
-    /// A joker's rarity.
+    /// A joker's rarity, and its name.
     pub rarity: Option<Rarity>,
+    pub rarity_name: Option<&'static str>,
     /// What unlocks a locked item: its achievement.
     pub achievement: Option<&'static str>,
     pub condition: Option<&'static str>,
@@ -510,6 +511,7 @@ fn item_info(item: Item, profile: &Profile) -> ItemInfo {
         description: found.then(|| item.description()).filter(|d| !d.is_empty()),
         quip: found.then(|| item.quip()).filter(|q| !q.is_empty()),
         rarity: joker.filter(|_| found).map(Joker::rarity),
+        rarity_name: joker.filter(|_| found).map(|j| j.rarity().name()),
         achievement: hidden_by.map(Achievement::name),
         condition: hidden_by.map(Achievement::description),
     }

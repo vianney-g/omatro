@@ -49,6 +49,7 @@ Column {
         JokerView {
           visible: modelData.kind === "joker"
           joker: visible ? modelData : null
+          compact: true
         }
         ConsumableView {
           visible: modelData.kind !== "joker" && modelData.kind !== "card"

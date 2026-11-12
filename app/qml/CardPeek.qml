@@ -2,18 +2,28 @@ import QtQuick
 import omatro
 
 // A card shown at full size over everything while its small form is hovered:
-// a consumable of the clipboard list beside its line, a narrowed joker under
-// the joker row (below its buttons, which stay clickable). Its terms are
-// explained beside it (Glossary). It takes no pointer, and no room.
+// a consumable of the clipboard list beside its line, a narrowed or drawn
+// joker of the joker row under the row (below its buttons, which stay
+// clickable), a drawn joker elsewhere beside it. Views ask through `Peek`.
+// Its terms are explained beside it (Glossary). It takes no pointer, and no
+// room.
 Item {
   id: root
+
+  Connections {
+    target: Peek
+    function onJokerShown(item, joker, under, hidden) { root.showJoker(item, joker, under, hidden) }
+    function onConsumableShown(item, consumable, note) { root.showConsumable(item, consumable, note) }
+    function onHidden(item) { root.hide(item) }
+  }
 
   // The small form hovered, and what it shows.
   property Item source: null
   property var consumable: null
   property var joker: null
   property bool hidden: false
-  // Under this item, for a joker (the row, with its buttons).
+  // Under this item, for a joker of the row (with its buttons); null, beside
+  // the joker.
   property Item under: null
   // What the consumable needs, said under it ("select 1-2 cards").
   property string note: ""
@@ -50,9 +60,12 @@ Item {
     Hints.hide(jokerView)
     source = item
     var p = item.mapToItem(root, 0, 0)
-    if (consumable) {
-      card.x = p.x + item.width + gap
-      card.y = Math.max(0, Math.min(p.y + item.height / 2 - card.height / 2, root.height - card.height))
+    if (consumable || !under) {
+      // Beside it: on its right, or on its left when there is no room.
+      var w = consumable ? consumableView.width : jokerView.width
+      var h = consumable ? card.height : jokerView.height
+      card.x = p.x + item.width + gap + w <= root.width || consumable ? p.x + item.width + gap : Math.max(0, p.x - gap - w)
+      card.y = Math.max(0, Math.min(p.y + item.height / 2 - h / 2, root.height - h))
     } else {
       var u = under.mapToItem(root, 0, under.height)
       card.x = Math.max(0, Math.min(p.x + item.width / 2 - card.width / 2, root.width - card.width))

@@ -271,6 +271,7 @@ Rectangle {
                   id: card
                   width: parent.width
                   joker: modelData
+                  compact: true
                 }
                 HoverHandler {
                   onHoveredChanged: if (hovered) jokers.hovered = index

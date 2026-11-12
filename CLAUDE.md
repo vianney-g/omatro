@@ -106,10 +106,12 @@ than push the play area out.
   light always light, dark shades: `ART_PALETTE` in `build.rs`), never animated (the maintainer's choice).
   `build.rs` turns them into greyscale images and `Drawn.js` (the ids
   drawn); `JokerArt.qml` paints them with
-  `shaders/palette.frag`, so they follow the theme. In the joker row
-  (`JokerView.compact`), a drawn joker shows its drawing, name, badge, stickers
-  and edition; its full text shows hovered (`CardPeek`). Jokers not drawn keep
-  their text card. `app/art/README.md` has the style and the workflow
+  `shaders/palette.frag`, so they follow the theme. Compact (`JokerView.compact`:
+  the joker row, the shop, packs, the resume screen), a drawn joker shows its
+  drawing, name, badge, stickers and edition; hovered, its full view shows
+  (`CardPeek`, asked through the `Peek` singleton: under the joker row, beside
+  the joker elsewhere). The collection's joker tiles show the drawing and name
+  the same way. Jokers not drawn keep their text card. `app/art/README.md` has the style and the workflow
   (`art.py import` / `preview`), `app/art/briefs.md` what each drawing shows
   (proposed to the maintainer first, as names are).
 - Sizing: every size goes through `Style.space()` / `Style.fontPx()`, i.e. theme scale ×

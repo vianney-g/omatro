@@ -6,7 +6,8 @@ import "Labels.js" as Labels
 // A joker: rarity, name, effect, what it adds now, its quip and its edition.
 // Compact, a drawn joker shows its drawing and name instead, with what it
 // adds now (badge, what it copies), its stickers and edition: its text is
-// read in its full view, hovered (CardPeek).
+// read in its full view, hovered, beside it (`peek`, through Peek and
+// CardPeek; the joker row shows it under the row itself).
 // Hovered, it leans towards the pointer in perspective, a light following
 // the pointer on it; at rest, it breathes (each joker at its own pace).
 Item {
@@ -16,6 +17,8 @@ Item {
   // Its drawing rather than its text, when it has one (JokerArt).
   property bool compact: false
   readonly property bool showArt: compact && art.ready
+  // Drawn, hovered: its full view beside it.
+  property bool peek: true
   // The Kernel Panic: jokers face down.
   property bool hidden: false
   // Hovered, its terms are explained beside it (Glossary).
@@ -24,9 +27,13 @@ Item {
   property bool hints: true
   HoverHandler {
     id: hover
-    onHoveredChanged: if (root.hints) hovered && !root.hidden ? Hints.show(root, root.joker ? root.joker.description
+    onHoveredChanged: if (root.showArt && root.peek) {
+        if (hovered && !root.hidden) Peek.showJoker(root, root.joker, null, false)
+        else Peek.hide(root)
+      } else if (root.hints) hovered && !root.hidden ? Hints.show(root, root.joker ? root.joker.description
       + root.stickers.map(function(s) { return " " + s.name }).join("") : "", root.joker ? root.joker.name : "") : Hints.hide(root)
   }
+  Component.onDestruction: Peek.hide(root)
 
   // Welded, Worn, Leased (the higher difficulty levels).
   readonly property var stickers: joker && joker.stickers ? joker.stickers : []

@@ -368,8 +368,16 @@ Rectangle {
   Component {
     id: itemTile
     Rectangle {
+      id: tile
       readonly property var e: parent.entry
       readonly property bool found: e.state === "found"
+      // A joker found and drawn: its drawing and name; hovered, its full
+      // view beside it (Peek).
+      readonly property bool drawn: found && tileArt.ready
+      readonly property var joker: found && e.id.indexOf("joker:") === 0 ? {
+        kind: "joker", id: e.id.slice(6), name: e.name, description: e.description || "",
+        quip: e.quip || "", rarity: e.rarity, rarity_name: e.rarity_name,
+        edition: null, stickers: [], bonus: null, current: null } : null
       readonly property color tint: !e.rarity ? Colors.foreground
         : e.rarity === "extra" ? Colors.accent
         : e.rarity === "core" ? Colors.foreground : Colors.urgent
@@ -379,8 +387,31 @@ Rectangle {
       border.color: e.state === "locked" ? Colors.urgent : Style.normalBorderColor
       opacity: found ? 1 : 0.7
 
+      Row {
+        visible: parent.drawn
+        anchors { fill: parent; margins: Style.spacing.sm }
+        spacing: Style.spacing.md
+        JokerArt {
+          id: tileArt
+          anchors.verticalCenter: parent.verticalCenter
+          width: parent.height
+          height: parent.height
+          jokerId: joker ? joker.id : ""
+        }
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          width: parent.width - tileArt.width - parent.spacing
+          wrapMode: Text.WordWrap
+          text: e.name || ""
+          color: tint
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          font.bold: true
+        }
+      }
+
       Column {
-        visible: parent.found
+        visible: parent.found && !parent.drawn
         anchors { fill: parent; margins: Style.spacing.lg }
         spacing: Style.spacing.xs
         Text {
@@ -445,10 +476,13 @@ Rectangle {
       MouseArea {
         anchors.fill: parent
         hoverEnabled: true
-        onContainsMouseChanged: parent.found && e.description
+        onContainsMouseChanged: parent.drawn
+          ? (containsMouse ? Peek.showJoker(parent, parent.joker, null, false) : Peek.hide(parent))
+          : parent.found && e.description
           ? (containsMouse ? Hints.show(parent, e.description, e.name) : Hints.hide(parent))
           : Hints.hide(parent)
       }
+      Component.onDestruction: Peek.hide(tile)
     }
   }
 
