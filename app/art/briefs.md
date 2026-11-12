@@ -721,7 +721,7 @@ At the end of the shop, adds a Transparent copy of a random consumable.
 - **Shows:** a photocopier spitting out pages, happy to help.
 - **Prompt:** a cute office photocopier with a happy face pushing out a stack of paper
 
-## Batch 8
+## Batch 8 (drawn)
 
 ### Energy Drink — *×2 now. Crash later.*
 
@@ -862,3 +862,180 @@ Creates an oligarchy card if the hand is a Straight Flush.
 
 - **Shows:** a slime blob holding a bucket.
 - **Prompt:** a cute jelly slime blob holding a bucket
+
+## Batch 9
+
+### Rails World — *Everyone came for the keynote. And the opinions.*
+
++30 chips for each scoring face card.
+
+- **Shows:** a microphone on a stand under a spotlight: the keynote everyone came for.
+- **Prompt:** a vintage stage microphone on a stand under a bright spotlight
+
+### Linux User Group — *Pizza, slides, and a broken projector.*
+
++3 mult for each scoring club.
+
+- **Shows:** the pizza box at the end of the meetup, one slice left.
+- **Prompt:** an open pizza box with one slice of pizza left inside
+
+### Support Contract — *Billed per incident.*
+
+Enterprise cards give +$4 when scored.
+
+- **Shows:** a call-centre headset, ready to bill.
+- **Prompt:** a telephone headset with a microphone, a happy smiling face on the earpiece
+
+### man 8 — *System administration commands.*
+
+1 in 4 chance per scoring 8 to create a command.
+
+- **Shows:** an octopus reading a thick manual: eight arms, man 8.
+- **Prompt:** a cute octopus wearing reading glasses, reading a thick old book
+
+### Profile Picture — *First impression: doubled.*
+
+×2 mult for the first scoring face card.
+
+- **Shows:** a framed portrait of a cat: the first impression.
+- **Prompt:** a wooden picture frame with a portrait of a smiling cat inside
+
+### Queue Manager — *Queens waiting in line. Patiently.*
+
++13 mult for each queen held in hand.
+
+- **Shows:** a take-a-number ticket dispenser: queens, wait your turn.
+- **Prompt:** a red ticket number dispenser with a paper ticket sticking out
+
+### Free RAM — *Unused RAM is wasted RAM.*
+
++2 chips per card left to draw.
+
+- **Shows:** a memory stick lounging in sunglasses: unused, and loving it.
+- **Prompt:** a green computer memory stick wearing sunglasses, relaxing on a beach towel
+
+### Middle Management — *Paid to be in the room.*
+
+1 in 2 chance of +$1 for each face card held in hand.
+
+- **Shows:** an empty office chair with a tie on it: paid to be in the room.
+- **Prompt:** an office swivel chair with a necktie draped over its back
+
+### Transitive Dependencies — *You installed one. Got two more.*
+
+When a blind starts, creates 2 core jokers (if there is room).
+
+- **Shows:** a hen followed by two chicks: install one, get two more.
+- **Prompt:** a mother hen walking with two baby chicks following her
+
+### Incremental Build — *A little faster every time.*
+
+Every played card permanently gains +5 chips.
+
+- **Shows:** a tower of toy bricks, one more brick coming down on top.
+- **Prompt:** a tower of colorful toy building bricks, one brick being placed on top
+
+### Last Commit — *Final hand. Everything runs twice.*
+
+Retriggers every scoring card of the last hand of a blind.
+
+- **Shows:** an hourglass with its last grains falling.
+- **Prompt:** an hourglass with only a few grains of sand left falling
+
+### Refresh Spam — *F5 until something changes.*
+
+Gains +2 mult per shop reroll.
+
+- **Shows:** a hamster running flat out in its wheel.
+- **Prompt:** a hamster running fast in a hamster wheel
+
+### Watch Mode — *Every face, hot-reloaded.*
+
+Retriggers every scoring face card.
+
+- **Shows:** a pocket watch with big eyes, watching everything.
+- **Prompt:** a golden pocket watch with big watchful eyes on its face
+
+### Theme Collector — *37 themes installed, 1 in use.*
+
+Gains ×0.1 mult per theme applied.
+
+- **Shows:** a painter's palette full of colours, a brush beside it.
+- **Prompt:** a wooden painter's palette covered in many paint colors, a brush beside it
+
+### Flaky CI — *Green on the third try.*
+
+Gains ×0.25 mult each time a Flaky Test card triggers.
+
+- **Shows:** a croissant shedding flakes: flaky.
+- **Prompt:** a golden croissant with flakes falling off it, a nervous face
+
+### RMA Department — *We've seen worse. Probably.*
+
+Gains ×0.75 mult per Overclocked card that breaks.
+
+- **Shows:** a robot in bandages with its arm in a sling.
+- **Prompt:** a cute robot covered in bandages with its arm in a sling
+
+### Angel Investor — *Sacrifices a six. Expects a unicorn.*
+
+If the first hand of a blind is a single 6, destroys it and creates an oligarchy card.
+
+- **Shows:** an angel with a halo, hugging a money bag.
+- **Prompt:** a cute angel with a halo and wings hugging a big money bag
+
+### Skip Intro — *Netflix taught us well.*
+
+Gains ×0.25 mult per blind skipped.
+
+- **Shows:** a TV remote with one big button.
+- **Prompt:** a TV remote control with one big round button, a finger pressing it
+
+### Split Brain — *Two nodes, both think they're leader.*
+
+×2 mult if a club and a card of another suit score.
+
+- **Shows:** a brain in two halves, each convinced it's in charge.
+- **Prompt:** a pink brain split into two halves arguing with each other
+
+### Daily Driver — *This one card. Today, anyway.*
+
+×2 mult for each scoring card matching a card drawn at each blind.
+
+- **Shows:** a trusty old car, a bit dented, still running.
+- **Prompt:** a cute old rounded car, slightly dented, happy headlights
+
+### Log Rotation — *Rotates daily. Keeps every line.*
+
+Gains +3 chips per discarded card of a suit drawn at each blind.
+
+- **Shows:** a wooden log rolling along.
+- **Prompt:** a wooden log rolling on the ground, motion lines
+
+### Warm Start — *Seen it this blind. Faster now.*
+
+×3 mult if the hand type was already played this blind.
+
+- **Shows:** a kettle whistling on the stove: already warm.
+- **Prompt:** a kettle whistling with steam on a stove burner
+
+### Single Binary — *Statically linked, zero dependencies.*
+
+×3 mult if it is your only joker.
+
+- **Shows:** one stone monolith standing alone, needing nothing.
+- **Prompt:** a single tall smooth stone monolith standing alone on a patch of grass
+
+### Enterprise Sales — *Every face, upsold.*
+
+Scoring face cards become Enterprise cards.
+
+- **Shows:** a briefcase open on piles of gold.
+- **Prompt:** an open leather briefcase overflowing with gold coins
+
+### Hash Collision — *Two files, one checksum. Uh oh.*
+
+×2 mult if the hand contains two identical cards (same rank and suit).
+
+- **Shows:** two identical cats bumping heads.
+- **Prompt:** two identical cats bumping their heads together, stars around
