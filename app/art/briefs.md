@@ -387,3 +387,109 @@ One free reroll per shop.
 - **Shows:** an envelope sealed with a heart, little hearts floating out.
 - **Prompt:** an envelope sealed with a big heart, small hearts floating out
   of it
+
+## Batch 5
+
+### Rabbit Hole — *Just one more config tweak.*
+
++3 mult for each scoring spade.
+
+- **Shows:** a rabbit peeking out of a deep hole: the hole you fall into
+  at 2 a.m., one setting at a time.
+- **Prompt:** a cute white rabbit peeking out of a deep dark hole in the
+  ground
+
+### Free Trial — *Enjoy it while it lasts.*
+
++100 chips, −5 chips per hand played.
+
+- **Shows:** an ice cream cone melting: lovely now, less so every hand.
+- **Prompt:** a big ice cream cone melting and dripping, a happy face on
+  the scoop
+
+### Beta Release — *Works great until it doesn't.*
+
++15 mult; 1 in 6 chance to break at the end of each blind.
+
+- **Shows:** a chick barely out of its egg, wearing a hard hat: shipped
+  early, still fragile.
+- **Prompt:** a baby chick hatching from a cracked egg, wearing a tiny
+  yellow construction hard hat
+
+### Inbox Zero — *Everything discarded. Finally at peace.*
+
++15 mult when no discard is left.
+
+- **Shows:** an empty mailbox, open, with a little bonsai growing inside:
+  nothing left, total serenity.
+- **Prompt:** an empty open mailbox with a small peaceful bonsai tree
+  growing inside
+
+### Hype Cycle — *Peak of inflated expectations.*
+
++20 mult, −4 mult at the end of each blind.
+
+- **Shows:** a party balloon going soft and wrinkled: inflated
+  expectations, losing air.
+- **Prompt:** a party balloon slowly deflating, wrinkled and droopy, a
+  disappointed face on it
+
+### Sponsorware — *Thank you for your sponsorship.*
+
++$4 at the end of each blind.
+
+- **Shows:** a tip jar with a heart, a few coins in it: open source
+  funding, one coin at a time.
+- **Prompt:** a glass tip jar with a heart on it, a few gold coins inside
+
+### Chaos Monkey — *Doubles the odds of everything.*
+
+Doubles every chance (1 in 4 becomes 2 in 4).
+
+- **Shows:** a grinning monkey holding a die in each hand: twice the
+  dice, twice the chaos.
+- **Prompt:** a mischievous grinning monkey holding a white die in each
+  hand
+
+### Cron Job — *Runs again at midnight. And again.*
+
+Retriggers the effects of cards held in hand.
+
+- **Shows:** an old twin-bell alarm clock ringing, both hands at twelve.
+- **Prompt:** a ringing twin bell alarm clock jumping, both hands pointing
+  at twelve
+
+### Btrfs Snapshot — *Rolled back from the brink. Once.*
+
+Saves a lost blind if you scored 25% of the target, then disappears.
+
+- **Shows:** an instant camera pushing out its photo: one snapshot, one
+  save.
+- **Prompt:** an instant camera with a photo sliding out of it, a small
+  flash spark
+
+### Compound Interest — *Einstein's favorite. Allegedly.*
+
++$1 of interest per $5 you have (same cap).
+
+- **Shows:** a piggy bank with a small money tree growing from its back:
+  money making money.
+- **Prompt:** a pink piggy bank with a small tree of gold coins growing
+  from its back
+
+### Friday Deploy — *Last hand, no rollback, maximum mult.*
+
+×3 mult on the last hand of a blind.
+
+- **Shows:** a small server on fire, wearing sunglasses, perfectly calm:
+  it's Friday, ship it.
+- **Prompt:** a small computer server box on fire, wearing cool sunglasses,
+  calm and smiling
+
+### Meetup Pizza — *Free pizza, mandatory lightning talk.*
+
++7 mult for each scoring club.
+
+- **Shows:** a slice of pizza, cheese stretching: the reason everyone came.
+- **Prompt:** a slice of pepperoni pizza with stretchy melted cheese, a
+  happy face on it
