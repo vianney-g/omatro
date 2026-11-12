@@ -183,7 +183,7 @@ Every played card scores.
 - **Prompt:** a smug crescent moon wearing sunglasses, a few small stars
   around it
 
-## Batch 3
+## Batch 3 (drawn)
 
 ### Two Spaces — *Not tabs. Never tabs.*
 
@@ -285,3 +285,105 @@ Creates a command if the hand contains an ace and a Straight.
 - **Shows:** the pun: a golf ball on a tee, next to the flag of the hole.
 - **Prompt:** a golf ball on a small tee next to a golf hole with a little
   flag
+
+## Batch 4
+
+### Optional Dependencies — *Optional, but you'll install them anyway.*
+
+1 in 2 chance to create a command when a pack is opened.
+
+- **Shows:** a shopping cart overflowing with little parcels: "optional",
+  and yet.
+- **Prompt:** a shopping cart overflowing with small cardboard boxes
+
+### Emoji Reaction — *A rocket on every pull request.*
+
++5 mult for each scoring face card.
+
+- **Shows:** the emoji itself: a round yellow smiley face, starstruck, with
+  sparkling star eyes and a huge grin.
+- **Prompt:** a big round yellow emoji smiley face with sparkling star eyes
+  and a huge grin
+
+### Error 404 — *Card not found. Scored anyway.*
+
++10 chips and +4 mult for each scoring 10 or 4.
+
+- **Shows:** something not found: a puzzled little ghost searching with a
+  magnifying glass.
+- **Prompt:** a confused cute ghost holding a magnifying glass, searching
+
+### Bug Bounty — *Report the right bug, get paid.*
+
++$5 per discarded card of a rank drawn at each blind.
+
+- **Shows:** a bounty hunter bug: a beetle in a cowboy hat, sitting on a bag
+  of gold.
+- **Prompt:** a cute beetle wearing a cowboy hat, sitting on a bag of gold
+  coins
+
+### TODO.md — *One item. Changes every blind.*
+
++$4 if the hand is of a type drawn at each blind.
+
+- **Shows:** a clipboard whose list holds a single empty checkbox, a pencil
+  beside it.
+- **Prompt:** a clipboard holding a paper with a single empty checkbox, a
+  pencil next to it
+
+### Headhunter — *Three managers out. Budget's back.*
+
++$5 when 3 face cards or more are discarded at once.
+
+- **Shows:** the recruiter's catch: a fishing hook with a necktie caught on
+  it.
+- **Prompt:** a big fishing hook hanging from a line with a necktie caught
+  on it
+
+### Grid Layout — *Four windows, not a pixel wasted.*
+
+Gains +4 chips per hand of exactly 4 cards.
+
+- **Shows:** the pun: a house window of four equal square panes, neat, a
+  flower pot on the sill.
+- **Prompt:** a house window with four equal square panes, a small flower
+  pot on the sill
+
+### Plugin Manager — *lazy.nvim, 87 plugins, 12 ms startup.*
+
++3 mult per joker.
+
+- **Shows:** a power strip with far too many plugs in it, cables everywhere.
+- **Prompt:** a power strip overloaded with many plugs and tangled cables
+
+### Homelab — *Spare parts, adding up.*
+
+Adds the sell value of your other jokers to mult.
+
+- **Shows:** a small server rack built from mismatched spare parts, held
+  with tape, lights blinking.
+- **Prompt:** a small home server rack built from mismatched spare parts
+  held together with tape, little blinking lights
+
+### paru — *Free reroll, now in Rust.*
+
+One free reroll per shop.
+
+- **Shows:** the pun on reroll and Rust: a big rusty die.
+- **Prompt:** a big rusty metal six-sided die covered in rust spots
+
+### Ruby Gem — *Optimized for programmer happiness.*
+
++3 mult for each scoring diamond.
+
+- **Shows:** a red gem, beaming with happiness, sparkling.
+- **Prompt:** a shiny red gemstone with a happy smiling face, small sparkles
+  around it
+
+### Fan Mail — *HEY, someone loves your pull request.*
+
++15 chips for each scoring heart.
+
+- **Shows:** an envelope sealed with a heart, little hearts floating out.
+- **Prompt:** an envelope sealed with a big heart, small hearts floating out
+  of it
