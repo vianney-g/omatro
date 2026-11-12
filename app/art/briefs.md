@@ -15,6 +15,10 @@ reads at card size. Retro Diffusion draws single concrete objects and
 characters well, abstract compositions (arrows, collisions) and fine detail
 (keyboards) badly: prefer a pun that fits in one object.
 
+Avoid the word "little" in prompts: Retro Diffusion then draws a tiny
+subject in an empty frame. Keep subjects light-coloured too: it tends to
+fill bodies with its dark purple, which reads as a dark blob.
+
 ## Batch 1 (drawn)
 
 ### Uptime — *847 days without a reboot.*
@@ -575,10 +579,7 @@ Sell it to win the badge badges: 2x.
 - **Shows:** a sheet of cute stickers, one peeling off.
 - **Prompt:** a sheet of cute round stickers, a star, a heart and a smiley, one sticker peeling off
 
-## Batch 7
-
-Retro Diffusion tends to fill bodies with its dark purple: keep the
-subjects light, or the drawing reads as a dark blob.
+## Batch 7 (drawn)
 
 ### Distro Hopping — *Wipe everything, reinstall, feel alive.*
 
@@ -719,3 +720,145 @@ At the end of the shop, adds a Transparent copy of a random consumable.
 
 - **Shows:** a photocopier spitting out pages, happy to help.
 - **Prompt:** a cute office photocopier with a happy face pushing out a stack of paper
+
+## Batch 8
+
+### Energy Drink — *×2 now. Crash later.*
+
+×2 mult, −×0.01 mult per card discarded.
+
+- **Shows:** a can with a lightning bolt, wide-eyed and sweating: wired now, crash later.
+- **Prompt:** a soda can with a lightning bolt on it, wide jittery eyes, sweat drops
+
+### Garage Sale — *Old hardware, cash only.*
+
+If the first discard of a blind is a single card, destroys it and gives $3.
+
+- **Shows:** a cardboard box of old mice and cables with a blank price tag.
+- **Prompt:** a cardboard box full of old computer mice and tangled cables, a blank price tag hanging on it
+
+### Heartbleed — *Your heart leaks, 64 KB at a time.*
+
+1 in 2 chance of ×1.5 mult for each scoring heart.
+
+- **Shows:** a cracked heart with a bandage, still leaking a drop.
+- **Prompt:** a cracked red heart with a bandage on it, one drop leaking out
+
+### Gem Install — *bundle install, then go make coffee.*
+
++$1 for each scoring diamond.
+
+- **Shows:** a pickaxe stuck in a rock full of gems.
+- **Prompt:** a pickaxe stuck in a rock sparkling with red gemstones
+
+### Fuzzy Finder — *fzf: close enough is a match.*
+
+Hearts and diamonds count as each other, and so do spades and clubs.
+
+- **Shows:** a fluffy fuzzball sniffing around: close enough is a match.
+- **Prompt:** a fluffy round fuzzball creature with big eyes, sniffing the ground
+
+### Fast-Forward — *Skips a commit or two. No one checks.*
+
+Straights may skip one rank between two cards.
+
+- **Shows:** a snail with a rocket strapped to its shell.
+- **Prompt:** a snail with a rocket strapped to its shell, flames and speed
+
+### Free as in Beer — *Also free as in freedom.*
+
+Themes and base16 packs in the shop cost $0.
+
+- **Shows:** a foamy mug of beer.
+- **Prompt:** a big glass mug of beer with thick white foam spilling over
+
+### Benevolent Dictator — *For life. Or until the fork.*
+
+×1.5 mult for each king held in hand.
+
+- **Shows:** a lion with a crown and a kind smile.
+- **Prompt:** a friendly lion wearing a golden crown, a kind gentle smile
+
+### Two-Factor Auth — *Every 2 adds a layer. Every layer, a prompt.*
+
+Gains +8 chips for each scoring 2.
+
+- **Shows:** two keys on one ring: one is never enough.
+- **Prompt:** two old fashioned keys hanging on one key ring
+
+### Hockey Stick — *Growth chart up and to the right.*
+
++$1 at the end of each blind, +$2 more after each boss.
+
+- **Shows:** a hockey stick and its puck: the growth curve, literally.
+- **Prompt:** an ice hockey stick with a puck next to it
+
+### Owned Servers — *Paid once. Yours forever.*
+
++2 chips per $1 you have.
+
+- **Shows:** a server tower wearing a crown: owned, not rented.
+- **Prompt:** a computer server tower wearing a golden crown, proud smile
+
+### Force Push — *No discards. No regrets. Push.*
+
+When a blind starts, +3 hands and no discards.
+
+- **Shows:** a sumo wrestler pushing forward with everything.
+- **Prompt:** a cute sumo wrestler pushing forward, determined face, dust clouds
+
+### Mailing List — *23 replies later, still no consensus.*
+
+Gains ×1 mult every 23 cards discarded.
+
+- **Shows:** a mailbox buried under letters.
+- **Prompt:** a mailbox overflowing with a huge pile of letters
+
+### Quad Core — *All cores busy compiling Rust.*
+
+×4 mult if the hand contains a Four of a Kind.
+
+- **Shows:** a processor chip with legs, running and sweating.
+- **Prompt:** a computer processor chip with legs, running and sweating
+
+### Rainbow Prompt — *Starship, with every glyph enabled.*
+
+×3 mult if all four suits score.
+
+- **Shows:** a rainbow over a cloud: every colour enabled.
+- **Prompt:** a rainbow arching over a fluffy white cloud
+
+### Seed Round — *Straight to the top. Then raise again.*
+
+Creates an oligarchy card if the hand is a Straight Flush.
+
+- **Shows:** a seed sprouting gold coins for leaves.
+- **Prompt:** a sprouting seed in a mound of soil, its two leaves are gold coins
+
+### Monorepo — *Everything in one place. Even you.*
+
+×2 mult if the hand contains a Flush.
+
+- **Shows:** a backpack stuffed to bursting with everything.
+- **Prompt:** a huge backpack stuffed to bursting, things sticking out of it
+
+### Cloud Exit — *Why rent what you can own?*
+
++$1 per discard left at the end of the blind.
+
+- **Shows:** a cloud with legs walking off with its suitcase.
+- **Prompt:** a fluffy cloud with legs carrying a suitcase, walking away
+
+### Open Source Love — *Made with ♥ and too much coffee.*
+
++3 mult for each scoring heart.
+
+- **Shows:** a heart-shaped coffee mug, steaming.
+- **Prompt:** a heart shaped coffee mug with steam rising
+
+### Blob Storage — *S3 buckets all the way down.*
+
++25 chips per Binary Blob card in the deck.
+
+- **Shows:** a slime blob holding a bucket.
+- **Prompt:** a cute jelly slime blob holding a bucket
