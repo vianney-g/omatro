@@ -11,7 +11,9 @@ Style line, at the start of every prompt:
 
 A brief says what the drawing shows and gives the prompt that follows the
 style line. The generator may wander from it: what matters is that the joke
-reads at card size.
+reads at card size. Retro Diffusion draws single concrete objects and
+characters well, abstract compositions (arrows, collisions) and fine detail
+(keyboards) badly: prefer a pun that fits in one object.
 
 ## Batch 1 (drawn)
 
@@ -180,3 +182,106 @@ Every played card scores.
   around it.
 - **Prompt:** a smug crescent moon wearing sunglasses, a few small stars
   around it
+
+## Batch 3
+
+### Two Spaces — *Not tabs. Never tabs.*
+
++4 mult for each scoring even card (10, 8, 6, 4, 2).
+
+- **Shows:** the pun on "spaces": two little astronauts floating side by
+  side, thumbs up.
+- **Prompt:** two cute little astronauts floating side by side, giving a
+  thumbs up
+
+### Off By One — *Arrays start at one. Fight me.*
+
++31 chips for each scoring odd card (A, 9, 7, 5, 3).
+
+- **Shows:** "fight me": a small cardboard box (an array's cell) wearing red
+  boxing gloves, ready to fight.
+- **Prompt:** a small cardboard box character wearing red boxing gloves,
+  ready to fight, determined face
+
+### Arch Wiki — *The answer was on the Arch Wiki all along.*
+
++20 chips and +4 mult for each scoring ace.
+
+- **Shows:** a huge old book, open, glowing with light, a lightbulb popping
+  out of its pages. No logo.
+- **Prompt:** a huge open old book glowing with bright light, a small
+  lightbulb floating above its pages
+
+### Green Build — *All tests pass. Don't touch anything.*
+
++1 mult per hand played, −1 mult per discard.
+
+- **Shows:** a big green check mark kept in a glass display case, like a
+  museum piece nobody may touch.
+- **Prompt:** a big green check mark standing proudly inside a glass display
+  case on a small pedestal
+
+### Vintage ThinkPad — *Appreciating asset. Allegedly.*
+
+Sell value rises by $3 at the end of each blind.
+
+- **Shows:** an old black laptop with a little red pointing nub, displayed
+  on a velvet cushion like a treasure. No logo.
+- **Prompt:** an old black laptop computer with a small red dot in the middle
+  of the keyboard, displayed on a red velvet cushion like a treasure
+
+### Data Hoarder — *Never delete anything. Ever.*
+
++$2 per discard left, if no discard was used this blind.
+
+- **Shows:** a little dragon asleep on a hoard of floppy disks and hard
+  drives instead of gold.
+- **Prompt:** a cute small dragon sleeping on a big pile of floppy disks and
+  hard drives
+
+### Consulting Gig — *Faces pay. Sometimes.*
+
+1 in 2 chance of +$2 for each scoring face card.
+
+- **Shows:** a briefcase so stuffed with banknotes it won't close, a few
+  bills flying out.
+- **Prompt:** a briefcase overflowing with banknotes, a few bills flying out
+
+### Stable Release — *Boring. Reliable. Beautiful.*
+
+×3 mult; 1 in 1000 chance to break at the end of each blind.
+
+- **Shows:** the pun: a calm, half-asleep horse standing in its stable.
+- **Prompt:** a calm sleepy horse standing in a small wooden stable
+
+### Bang Bang — *!! — run it again, louder.*
+
+Retriggers the first scoring card 2 more times.
+
+- **Shows:** two firecrackers going off side by side, two big bursts.
+- **Prompt:** two cartoon firecrackers exploding side by side with two big
+  bang bursts
+
+### Ultrawide — *More screen, more cards.*
+
++1 hand size.
+
+- **Shows:** an absurdly wide curved monitor, far wider than tall.
+- **Prompt:** an extremely wide curved computer monitor, much wider than
+  tall, on a small stand
+
+### Undo History — *Ctrl+Z, but for cards.*
+
++1 discard each blind.
+
+- **Shows:** an old pocket watch whose hands spin backwards.
+- **Prompt:** an old golden pocket watch with its hands spinning backwards,
+  small motion swirls around it
+
+### Vim Golf — *Done in four keystrokes.*
+
+Creates a command if the hand contains an ace and a Straight.
+
+- **Shows:** the pun: a golf ball on a tee, next to the flag of the hole.
+- **Prompt:** a golf ball on a small tee next to a golf hole with a little
+  flag
