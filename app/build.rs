@@ -72,20 +72,17 @@ fn shaders() -> Vec<QResourceFile> {
 /// `shaders/palette.frag` and `art/art.py` follow the same order.
 const ART_PALETTE: &str = ".kambwrgcpodlAWRGCPO";
 
-/// The joker drawings of `art/jokers/<id>.txt`: a square of palette letters
-/// (64 × 64), `#` lines being comments. Each becomes a greyscale PGM image whose
-/// grey is the palette index × 8, that `shaders/palette.frag` paints in the
-/// theme's colours; `qml/Drawn.js` lists the jokers drawn (`Drawn.ids`), so
-/// that the others are not looked for. The theme pictures of
-/// `art/themes/<id>.png` keep their own colours (those of the theme they show):
-/// they go in as they are, listed in `Drawn.themes`.
-fn art() -> Vec<QResourceFile> {
-    println!("cargo:rerun-if-changed=art/jokers");
-    println!("cargo:rerun-if-changed=art/themes");
-    let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("art");
+/// The drawings of `art/<dir>/<id>.txt`: a grid of palette letters (64 × 64
+/// for a joker, 64 × 40 for an oligarchy card), `#` lines being comments. Each
+/// becomes a greyscale PGM image, `art/<dir>/<id>.pgm`, whose grey is the
+/// palette index × 8, that `shaders/palette.frag` paints in the theme's
+/// colours. Gives the files and the ids drawn.
+fn drawings(dir: &str, out: &Path) -> (Vec<QResourceFile>, Vec<String>) {
+    println!("cargo:rerun-if-changed=art/{dir}");
+    let out = out.join(dir);
     std::fs::create_dir_all(&out).unwrap();
-    let mut names: Vec<String> = std::fs::read_dir("art/jokers")
-        .unwrap_or_else(|e| panic!("art/jokers: {e}"))
+    let mut names: Vec<String> = std::fs::read_dir(format!("art/{dir}"))
+        .unwrap_or_else(|e| panic!("art/{dir}: {e}"))
         .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
         .filter(|name| name.ends_with(".txt"))
         .collect();
@@ -94,29 +91,43 @@ fn art() -> Vec<QResourceFile> {
     let mut ids = Vec::new();
     for name in names {
         let stem = name.trim_end_matches(".txt");
-        let text = std::fs::read_to_string(format!("art/jokers/{name}")).unwrap();
+        let text = std::fs::read_to_string(format!("art/{dir}/{name}")).unwrap();
         let rows: Vec<&str> = text
             .lines()
             .map(str::trim_end)
             .filter(|l| !l.is_empty() && !l.starts_with('#'))
             .collect();
-        let size = rows.len();
+        let width = rows.first().map_or(0, |r| r.chars().count());
         assert!(
-            size > 0 && rows.iter().all(|r| r.chars().count() == size),
-            "art/jokers/{name}: a square of letters expected"
+            width > 0 && rows.iter().all(|r| r.chars().count() == width),
+            "art/{dir}/{name}: rows of letters of the same length expected"
         );
-        let mut pgm = format!("P5 {size} {size} 255\n").into_bytes();
+        let mut pgm = format!("P5 {width} {} 255\n", rows.len()).into_bytes();
         for c in rows.iter().flat_map(|r| r.chars()) {
             let index = ART_PALETTE
                 .find(c)
-                .unwrap_or_else(|| panic!("art/jokers/{name}: unknown letter {c:?}"));
+                .unwrap_or_else(|| panic!("art/{dir}/{name}: unknown letter {c:?}"));
             pgm.push(index as u8 * 8);
         }
         let file = out.join(format!("{stem}.pgm"));
         std::fs::write(&file, pgm).unwrap();
-        files.push(QResourceFile::new(file).alias(format!("art/jokers/{stem}.pgm")));
+        files.push(QResourceFile::new(file).alias(format!("art/{dir}/{stem}.pgm")));
         ids.push(format!("{stem:?}: true"));
     }
+    (files, ids)
+}
+
+/// The joker drawings (`art/jokers`) and the oligarchy cards' (`art/oligarchy`),
+/// see `drawings`; the theme pictures of `art/themes/<id>.png` keep their own
+/// colours (those of the theme they show): they go in as they are. `qml/Drawn.js`
+/// lists what is drawn (`Drawn.ids` for the jokers, `Drawn.oligarchy`,
+/// `Drawn.themes`), so that the others are not looked for.
+fn art() -> Vec<QResourceFile> {
+    println!("cargo:rerun-if-changed=art/themes");
+    let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("art");
+    let (mut files, jokers) = drawings("jokers", &out);
+    let (oligarchy_files, oligarchy) = drawings("oligarchy", &out);
+    files.extend(oligarchy_files);
     let mut themes: Vec<String> = std::fs::read_dir("art/themes")
         .unwrap_or_else(|e| panic!("art/themes: {e}"))
         .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
@@ -132,8 +143,9 @@ fn art() -> Vec<QResourceFile> {
     std::fs::write(
         &drawn,
         format!(
-            ".pragma library\nvar ids = {{ {} }}\nvar themes = {{ {} }}\n",
-            ids.join(", "),
+            ".pragma library\nvar ids = {{ {} }}\nvar oligarchy = {{ {} }}\nvar themes = {{ {} }}\n",
+            jokers.join(", "),
+            oligarchy.join(", "),
             themes.join(", ")
         ),
     )

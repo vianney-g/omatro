@@ -6,9 +6,11 @@
     art.py import ID IMAGE [--map rrggbb=x,...] [--crop 64] [--key ...] [--outline k]
     art.py preview ID... [-o FILE] [--themes a,b,c]
 
-A drawing is a square of palette letters (build.rs, ART_PALETTE), 64 × 64
-(an upscaled image is brought back to its own size, then cut around its
-subject). Jokers are not animated. The
+A drawing is a grid of palette letters (build.rs, ART_PALETTE): a joker's is
+64 × 64 (an upscaled image is brought back to its own size, then cut around
+its subject), an oligarchy card's 64 × 40. ID is a joker's id
+(jokers/ID.txt), or a path under art/ for the others: oligarchy/merger.
+Jokers are not animated. The
 reference palette is Tokyo Night's: draw (or generate) with exactly these
 colours, and `import` turns each into its letter, i.e. its theme role, so that
 the drawing follows every theme. Needs Pillow.
@@ -110,7 +112,7 @@ def native(frame):
     pixels all fill (a 256 px image drawn at 64 px gives 64)."""
     w, h = frame.size
     px = frame.load()
-    for s in sorted((d for d in range(2, h + 1) if h % d == 0), reverse=True):
+    for s in sorted((d for d in range(2, h + 1) if h % d == 0 and w % d == 0), reverse=True):
         if all(px[x, y] == px[x - x % s, y - y % s] for y in range(h) for x in range(w)):
             small = Image.new("RGBA", (w // s, h // s))
             for y in range(h // s):
@@ -127,20 +129,21 @@ def load(path):
     if getattr(img, "n_frames", 1) > 1:
         print(f"{path}: {img.n_frames} frames: the first one is taken (jokers are not animated)",
               file=sys.stderr)
-    img = img.convert("RGBA")
-    w, h = img.size
-    if w != h:
-        sys.exit(f"{path}: {w}×{h}: a square image expected")
-    return native(img)
+    return native(img.convert("RGBA"))
+
+
+def art_path(art_id):
+    """jokers/ID.txt for a joker, ID.txt for a path under art/."""
+    return os.path.join(HERE, art_id if "/" in art_id else os.path.join("jokers", art_id)) + ".txt"
 
 
 def outline(rows, letter):
     """The background-coloured pixels on the drawing's edge (next to a
     transparent one) in `letter`: a dark outline vanishes on the card, which is
     tinted with the background; in the foreground, it shows on every theme."""
-    n = len(rows)
+    h, w = len(rows), len(rows[0])
     def clear(x, y):
-        return not (0 <= x < n and 0 <= y < n) or rows[y][x] == "."
+        return not (0 <= x < w and 0 <= y < h) or rows[y][x] == "."
     return ["".join(letter if c == "b" and any(clear(x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
                     else c for x, c in enumerate(row)) for y, row in enumerate(rows)]
 
@@ -159,7 +162,7 @@ def parse_map(text):
 def crop(rows, size):
     """The drawing cut to size × size around what it draws, so that the
     subject fills the card and every drawing has the same pixel size."""
-    n = len(rows)
+    h, w = len(rows), len(rows[0])
     cells = [(x, y) for y, row in enumerate(rows) for x, c in enumerate(row) if c != "."]
     x0, x1 = min(x for x, _ in cells), max(x for x, _ in cells)
     y0, y1 = min(y for _, y in cells), max(y for _, y in cells)
@@ -168,14 +171,13 @@ def crop(rows, size):
     left = (x0 + x1 + 1 - size) // 2
     top = (y0 + y1 + 1 - size) // 2
     def at(x, y):
-        return rows[y][x] if 0 <= x < n and 0 <= y < n else "."
+        return rows[y][x] if 0 <= x < w and 0 <= y < h else "."
     return ["".join(at(left + i, top + j) for i in range(size)) for j in range(size)]
 
 
 def cmd_colors(args):
     img = load(args.image)
-    n = img.size[0]
-    print(f"{args.image}: {n} × {n}")
+    print(f"{args.image}: {img.size[0]} × {img.size[1]}")
     cols = colours(REFERENCE)
     for count, c in sorted(img.getcolors(1 << 20), reverse=True):
         if c[3] < 128:
@@ -189,19 +191,19 @@ def cmd_import(args):
     cols = colours(REFERENCE)
     mapping = parse_map(args.map)
     img = load(args.image)
-    n = img.size[0]
+    w, h = img.size
     key = None
     if args.key == "auto":
-        corners = {img.getpixel(p) for p in [(0, 0), (n - 1, 0), (0, n - 1), (n - 1, n - 1)]}
+        corners = {img.getpixel(p) for p in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]}
         if len(corners) == 1 and next(iter(corners))[3] >= 128:
             key = next(iter(corners))[:3]
             print(f"background #%02x%02x%02x taken as transparent" % key)
     elif args.key != "none":
         key = rgb(args.key)
     off, worst, rows = 0, 0, []
-    for y in range(n):
+    for y in range(h):
         row = ""
-        for x in range(n):
+        for x in range(w):
             r, g, b, a = img.getpixel((x, y))
             if a < 128 or (key and math.dist((r, g, b), key) < 8):
                 row += "."
@@ -217,10 +219,10 @@ def cmd_import(args):
         rows = crop(rows, args.crop)
     if args.outline:
         rows = outline(rows, args.outline)
-    path = os.path.join(HERE, "jokers", f"{args.id}.txt")
+    path = art_path(args.id)
     with open(path, "w") as f:
         f.write("\n".join(rows) + "\n")
-    print(f"{path}: {len(rows)} × {len(rows)}")
+    print(f"{path}: {len(rows[0])} × {len(rows)}")
     if off:
         print(f"warning: {off} pixel(s) far from the palette (up to {worst:.0f}): "
               "use the reference palette, or --map (see `art.py colors`)", file=sys.stderr)
@@ -229,7 +231,7 @@ def cmd_import(args):
 # ---------------------------------------------------------------- preview
 
 def read_art(art_id):
-    return [line.rstrip("\n") for line in open(os.path.join(HERE, "jokers", f"{art_id}.txt"))
+    return [line.rstrip("\n") for line in open(art_path(art_id))
             if line.strip() and not line.startswith("#")]
 
 
@@ -238,19 +240,19 @@ def cmd_preview(args):
     themes = [colours(omarchy_theme(n)) for n in names]
     arts = [read_art(i) for i in args.ids]
     scale, pad = args.scale, 4
-    side = max(len(rows) for rows in arts) + 2 * pad
-    cell = side * scale
-    img = Image.new("RGB", (cell * len(themes), cell * len(arts)))
+    tw = max(len(rows[0]) for rows in arts) + 2 * pad
+    th = max(len(rows) for rows in arts) + 2 * pad
+    img = Image.new("RGB", (tw * scale * len(themes), th * scale * len(arts)))
     for ti, cols in enumerate(themes):
         face = mix(cols[3], cols[1], 0.10)  # the card: background tinted with the accent
         for ai, rows in enumerate(arts):
-            tile = Image.new("RGB", (side, side), face)
-            off = (side - len(rows)) // 2
+            tile = Image.new("RGB", (tw, th), face)
+            ox, oy = (tw - len(rows[0])) // 2, (th - len(rows)) // 2
             for y, row in enumerate(rows):
                 for x, ch in enumerate(row):
                     if ch != ".":
-                        tile.putpixel((x + off, y + off), cols[LETTERS.index(ch) - 1])
-            img.paste(tile.resize((cell, cell), Image.NEAREST), (ti * cell, ai * cell))
+                        tile.putpixel((x + ox, y + oy), cols[LETTERS.index(ch) - 1])
+            img.paste(tile.resize((tw * scale, th * scale), Image.NEAREST), (ti * tw * scale, ai * th * scale))
     out = args.output or "/tmp/omatro-art.png"
     img.save(out)
     print(f"{out}: {', '.join(args.ids)} on {', '.join(names)}")
@@ -260,7 +262,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("palette", help="write palette.hex and palette.png")
-    i = sub.add_parser("import", help="turn images into art/jokers/ID.txt")
+    i = sub.add_parser("import", help="turn images into art/jokers/ID.txt (or art/ID.txt)")
     i.add_argument("id")
     i.add_argument("image")
     i.add_argument("--map", help="colours and their letters: 3b2a5c=m,fe7a6b=a (others: nearest)")

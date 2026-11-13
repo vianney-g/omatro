@@ -3,13 +3,15 @@ import omatro
 import "Drawn.js" as Drawn
 
 // A joker's drawing: the pixel art of art/jokers/<id>.txt, painted in
-// the theme's colours (shaders/palette.frag), its pixels kept sharp.
-// `ready` is false for a joker not drawn yet.
+// the theme's colours (shaders/palette.frag), its pixels kept sharp; with
+// `family: "oligarchy"`, an oligarchy card's (art/oligarchy, 64 × 40: give it
+// that shape). `ready` is false for one not drawn yet.
 Item {
   id: root
 
   property string jokerId: ""
-  readonly property bool drawn: Drawn.ids[jokerId] === true
+  property string family: "jokers"
+  readonly property bool drawn: (family === "oligarchy" ? Drawn.oligarchy : Drawn.ids)[jokerId] === true
   readonly property bool ready: drawn && image.status === Image.Ready
 
   implicitWidth: Style.space(112)
@@ -19,7 +21,7 @@ Item {
     id: image
     visible: false
     smooth: false
-    source: root.drawn ? "../art/jokers/" + root.jokerId + ".pgm" : ""
+    source: root.drawn ? "../art/" + root.family + "/" + root.jokerId + ".pgm" : ""
   }
   ShaderEffect {
     anchors.fill: parent

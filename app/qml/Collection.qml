@@ -372,12 +372,16 @@ Rectangle {
       id: tile
       readonly property var e: parent.entry
       readonly property bool found: e.state === "found"
-      // A joker found and drawn, or a theme with a picture: its drawing and
-      // name; hovered, its full view beside it (Peek).
+      // A joker found and drawn, or a theme or oligarchy card with a picture:
+      // its drawing and name; hovered, its full view beside it (Peek).
       readonly property bool drawn: found && tileArt.ready
-      readonly property bool pictured: found && e.id.indexOf("theme:") === 0 && Drawn.themes[e.id.slice(6)] === true
-      readonly property var theme: pictured ? {
-        kind: "theme", id: e.id.slice(6), name: e.name, description: e.description || "",
+      readonly property string family: e.id.slice(0, e.id.indexOf(":"))
+      readonly property string itemId: e.id.slice(e.id.indexOf(":") + 1)
+      readonly property bool pictured: found
+        && (family === "theme" ? Drawn.themes[itemId] === true
+          : family === "oligarchy" && Drawn.oligarchy[itemId] === true)
+      readonly property var consumable: pictured ? {
+        kind: family, id: itemId, name: e.name, description: e.description || "",
         quip: e.quip || "", current: null, transparent: false } : null
       readonly property var joker: found && e.id.indexOf("joker:") === 0 ? {
         kind: "joker", id: e.id.slice(6), name: e.name, description: e.description || "",
@@ -404,14 +408,25 @@ Rectangle {
           height: parent.height
           jokerId: joker ? joker.id : ""
         }
-        Image {
+        Item {
           id: tilePicture
           visible: tile.pictured
           anchors.verticalCenter: parent.verticalCenter
-          height: parent.height
-          width: Math.round(height * 64 / 40)
-          smooth: false
-          source: tile.theme ? "../art/themes/" + tile.theme.id + ".png" : ""
+          // At most half the tile: the name keeps room for its longest word.
+          width: Math.min(Math.round(parent.height * 64 / 40), Math.round(parent.width / 2))
+          height: Math.round(width * 40 / 64)
+          Image {
+            anchors.fill: parent
+            visible: tile.family === "theme"
+            smooth: false
+            source: tile.pictured && tile.family === "theme" ? "../art/themes/" + tile.itemId + ".png" : ""
+          }
+          JokerArt {
+            anchors.fill: parent
+            visible: tile.family === "oligarchy"
+            family: "oligarchy"
+            jokerId: tile.pictured && tile.family === "oligarchy" ? tile.itemId : ""
+          }
         }
         Text {
           anchors.verticalCenter: parent.verticalCenter
@@ -494,7 +509,7 @@ Rectangle {
         onContainsMouseChanged: parent.drawn
           ? (containsMouse ? Peek.showJoker(parent, parent.joker, null, false) : Peek.hide(parent))
           : parent.pictured
-          ? (containsMouse ? Peek.showConsumable(parent, parent.theme, "") : Peek.hide(parent))
+          ? (containsMouse ? Peek.showConsumable(parent, parent.consumable, "") : Peek.hide(parent))
           : parent.found && e.description
           ? (containsMouse ? Hints.show(parent, e.description, e.name) : Hints.hide(parent))
           : Hints.hide(parent)

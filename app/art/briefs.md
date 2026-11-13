@@ -1247,3 +1247,183 @@ Gains ×1 mult when a face card is destroyed.
 
 - **Shows:** a cheetah running, flames behind: blazingly fast, never a portrait.
 - **Prompt:** a cheetah running blazingly fast, flames trailing behind it
+
+# Oligarchy cards
+
+What each oligarchy card's picture shows: 64 × 40, wide like the theme
+pictures, framed at the top of the card. Unlike the themes, they follow the
+current theme, as the jokers do: palette letters, imported with `art.py`.
+Gold (`w`, `W`) and red (`r`, `R`) carry them, with the ink `d` and the
+light `l`: money and danger, whatever the theme. The Retro Diffusion
+palette used for the jokers fits as is (`ffb454` gold, `ff7a6b` red).
+
+The humour is the corporate world's: boards, golden parachutes, layoffs.
+Anonymous suits and objects only: no real people (oligarchy.fyi names real
+billionaires), and nothing of the Monopoly board game.
+
+Style line, at the start of every prompt (generate at 64 × 40):
+
+> pixel art game card illustration, wide landscape composition, flat 2D,
+> clean dark outline, few colors, gold and red accents, transparent
+> background, satirical corporate humor, no text
+
+Badges, stamps and screens stay blank: letters are unreadable at this size.
+
+## Batch 1 (drawn)
+
+### Board Appointment — *Three new directors. All related.*
+
+Destroys 1 random card in hand, adds 3 enhanced face cards.
+
+- **Shows:** a long boardroom table, three identical high-backed leather
+  chairs behind it: three directors, all the same.
+- **Prompt:** a long boardroom table with three identical high-backed red
+  leather chairs behind it, gold trim
+
+### Hostile Takeover — *Everything belongs to us now.*
+
+Destroys 1 random card in hand, adds 2 enhanced aces.
+
+- **Shows:** a shark in a tie biting into an office building.
+- **Prompt:** a grey shark wearing a red necktie biting into an office
+  building, side view
+
+### Hiring Spree — *Four interns, no onboarding.*
+
+Destroys 1 random card in hand, adds 4 enhanced numbered cards.
+
+- **Shows:** four office chairs in a row, a blank badge on a lanyard hanging
+  from each.
+- **Prompt:** four identical office chairs in a row, a blank name badge on a
+  red lanyard hanging from each chair
+
+### Golden Handshake — *Signed, sealed, overpaid.*
+
+Adds a Gold Star seal to 1 selected card.
+
+- **Shows:** two hands shaking, one of them solid gold, coins falling from
+  the handshake.
+- **Prompt:** two hands shaking, one hand made of shiny gold, gold coins
+  falling from the handshake
+
+### Oligarchy Theme — *Funny, but good enough to ship.*
+
+Gives 1 selected card Blur, Shadow or Animated.
+
+- **Shows:** a paint roller painting a rainbow-striped wall over in gold.
+- **Prompt:** a paint roller painting over a rainbow striped wall with shiny
+  gold paint, half the wall already gold
+
+### Leveraged Buyout — *Bought with your money. All of it.*
+
+Creates a random AUR joker; sets money to $0.
+
+- **Shows:** a crowbar levering an office building off the ground, an empty
+  open wallet under it (the pun on leverage).
+- **Prompt:** a big red crowbar lifting an office building off the ground,
+  an empty open wallet lying underneath
+
+### Monopoly — *One suit to rule them all.*
+
+Every card in hand takes a single random suit.
+
+- **Shows:** one big card suit symbol on a gold pedestal, the three other
+  suits squashed flat at its feet.
+- **Prompt:** a big red heart symbol standing on a gold pedestal, a flattened
+  club, spade and diamond lying crushed at its base
+
+### Consolidation — *Fewer choices. Same price.*
+
+Every card in hand takes a single random rank; −1 hand size.
+
+- **Shows:** a hydraulic press squashing a stack of playing cards into one
+  block.
+- **Prompt:** a hydraulic press crushing a stack of playing cards into a
+  single flat block
+
+### Offshore Account — *Invisible to the taxman.*
+
+Gives a random joker Transparent; −1 hand size.
+
+- **Shows:** an island with one palm tree and a safe sitting on it, out
+  at sea.
+- **Prompt:** a sandy island with one palm tree and a gold safe on it,
+  surrounded by sea waves
+
+### Mass Layoffs — *Synergy achieved. Here's $20.*
+
+Destroys 5 random cards in hand; +$20.
+
+- **Shows:** cardboard boxes full of desk things (a plant, a mug) piled by
+  an exit door.
+- **Prompt:** several cardboard boxes filled with office belongings, potted
+  plants and mugs sticking out, piled next to a red exit door
+
+### Merger — *Two of the same, none of the rest.*
+
+Copies a random joker; destroys all the others.
+
+- **Shows:** two identical towers joined by a sky bridge, a third one
+  crumbling beside them.
+- **Prompt:** two identical skyscrapers joined by a sky bridge, a third
+  building beside them crumbling to rubble
+
+### Oligarchy Harness — *Every release, vetted twice by agents.*
+
+Adds a Retry seal to 1 selected card.
+
+- **Shows:** a robot reading a document through a magnifying glass, a stamp
+  ready in its other hand.
+- **Prompt:** a cute robot inspecting a sheet of paper through a magnifying
+  glass, holding a red rubber stamp in its other hand
+
+### Restructuring — *One survivor, now with animations.*
+
+Gives a random joker Animated; destroys all the others.
+
+- **Shows:** a single desk left in a huge empty open-plan office, sparkles
+  around it.
+- **Prompt:** a single office desk with a computer alone in a huge empty
+  office floor, gold sparkles around the desk
+
+### Brand Guidelines — *Every slide in the corporate theme.*
+
+Adds a Theme Sync seal to 1 selected card.
+
+- **Shows:** a presentation screen showing colour swatches, a pointer stick
+  aimed at it.
+- **Prompt:** a presentation screen on a stand showing a row of color
+  swatches, a pointer stick aimed at it
+
+### Surveillance — *Recorded for quality purposes.*
+
+Adds a Shell History seal to 1 selected card.
+
+- **Shows:** a security camera on its wall arm, its red light on.
+- **Prompt:** a white security camera on a wall mount arm, a glowing red
+  recording light
+
+### Stock Split — *Same value, twice the shares.*
+
+Adds 2 copies of 1 selected card to the deck.
+
+- **Shows:** a share certificate cut into two equal halves, an upward chart
+  line forking in two behind it.
+- **Prompt:** an ornate gold-bordered certificate cut into two equal halves,
+  a red chart line forking into two arrows behind it
+
+### Aspiring Billionaire — *#AspiringBillionaires*
+
+Creates a legendary joker.
+
+- **Shows:** a rocket made of stacked gold coins taking off.
+- **Prompt:** a rocket made of stacked gold coins taking off, red flames
+  and smoke below it
+
+### Praise the Oligarchy — *A million here, a million there.*
+
+Levels up every poker hand type.
+
+- **Shows:** a briefcase wearing a crown on a pedestal, gold rays behind it.
+- **Prompt:** a leather briefcase wearing a gold crown on a pedestal, gold
+  light rays shining behind it

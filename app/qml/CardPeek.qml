@@ -80,6 +80,7 @@ Item {
     spacing: Style.spacing.sm
     ConsumableView {
       id: consumableView
+      full: true
       visible: root.consumable !== null
       item: root.consumable
     }

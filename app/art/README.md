@@ -70,6 +70,16 @@ Jokers are not animated: a still drawing, one image.
 `python3 art.py palette` writes the palette files again, should the palette
 change (keep `build.rs`, `palette.frag` and `art.py` in step).
 
+# Oligarchy pictures
+
+Each oligarchy card has `oligarchy/<id>.txt`: palette letters as the jokers,
+but 64 × 40, wide like the theme pictures; they follow the current theme
+too. Imported whole, background included:
+`art.py import oligarchy/<id> image.png --key none --crop 0 --map
+0f0c1d=d,3b2a5c=A,fff1c1=l,ffb454=w,ff7a6b=r` (the jokers' Retro Diffusion
+palette, its purple as the accent's dark shade). `briefs.md` has their
+briefs. A card shows its picture and name; hovered, its full view.
+
 # Theme pictures
 
 Each theme card has `themes/<id>.png` (the theme's id in the engine:
