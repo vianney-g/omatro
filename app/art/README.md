@@ -90,6 +90,14 @@ image.png --key none --crop 0 --map
 green; `ff7a6b=r` where red must stay: `cpupower`'s flames, the hearts of
 `ln_s` and `mv_hearts`). `briefs.md` has their briefs.
 
+# Pack pictures
+
+Each pack kind has a 64 × 40 drawing (`packs/<kind>.txt`: `coreutils`,
+`base16`, `base_devel`, `jokers_git`, `oligarchy`), shared by its three
+sizes, which `PackView` stacks (one frame, two, three and a shine). Each is
+imported in the colours of what it holds (`briefs.md` has the `--map` of
+each); `base16`'s paint pans were recoloured by hand, one hue each.
+
 # Theme pictures
 
 Each theme card has `themes/<id>.png` (the theme's id in the engine:

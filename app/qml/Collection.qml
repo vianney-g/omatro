@@ -372,14 +372,14 @@ Rectangle {
       id: tile
       readonly property var e: parent.entry
       readonly property bool found: e.state === "found"
-      // A joker found and drawn, or a theme, oligarchy card or command with a picture:
+      // A joker found and drawn, or a theme, oligarchy card, command or pack with a picture:
       // its drawing and name; hovered, its full view beside it (Peek).
       readonly property bool drawn: found && tileArt.ready
       readonly property string family: e.id.slice(0, e.id.indexOf(":"))
       readonly property string itemId: e.id.slice(e.id.indexOf(":") + 1)
       // Where a drawn oligarchy card or command is (JokerArt's family).
       readonly property string drawing: family === "oligarchy" ? "oligarchy"
-        : family === "command" ? "commands" : ""
+        : family === "command" ? "commands" : family === "package" ? "packs" : ""
       readonly property bool pictured: found
         && (family === "theme" ? Drawn.themes[itemId] === true
           : drawing !== "" && Drawn[drawing][itemId] === true)

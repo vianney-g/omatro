@@ -4,8 +4,9 @@ import "Drawn.js" as Drawn
 
 // A joker's drawing: the pixel art of art/jokers/<id>.txt, painted in
 // the theme's colours (shaders/palette.frag), its pixels kept sharp; with
-// `family: "oligarchy"` or `"commands"`, an oligarchy card's or a command's
-// (art/oligarchy, art/commands, 64 × 40: give it that shape). `ready` is false for one not drawn yet.
+// `family: "oligarchy"`, `"commands"` or `"packs"`, an oligarchy card's, a
+// command's or a pack's (art/oligarchy, art/commands, art/packs, 64 × 40:
+// give it that shape). `ready` is false for one not drawn yet.
 Item {
   id: root
 

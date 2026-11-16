@@ -1638,3 +1638,81 @@ Creates a random joker (needs a free slot).
 - **Shows:** a jack-in-the-box springing out of a delivery box.
 - **Prompt:** a cardboard delivery box flung open, a jack-in-the-box
   jester springing out of it on a coiled spring
+
+# Packs
+
+What each pack's picture shows: one drawing per kind (coreutils, base16,
+base-devel, jokers-git, oligarchy), 64 × 40 like the consumables sold
+beside them, framed at the top of the pack card and following the current
+theme. The sizes share their kind's drawing: the game stacks it, a frame
+for a normal pack, a second one behind for `-full`, two behind and a
+moving shine for `-meta`.
+
+Generated with the usual Retro Diffusion palette; each pack is imported in
+the colours of what it holds (the `--map` of `art/README.md`):
+
+| Pack | Colours | Gold `ffb454` | Red `ff7a6b` | Purple `3b2a5c` |
+|---|---|---|---|---|
+| coreutils | the commands' | `a` | `g` | `A` |
+| base16 | the theme's hues | `o` | `c` | `C` |
+| base-devel | the playing cards' | `k` | `r` | `R` |
+| jokers-git | the jokers' | `w` | `o` | `d` |
+| oligarchy | the oligarchy cards' | `w` | `r` | `A` |
+
+An Arch package is an archive: each picture is a box or a crate, what it
+holds showing. No logos (Arch, git, LEGO) and no text.
+
+Style line, at the start of every prompt (generate at 64 × 40):
+
+> pixel art game card illustration, wide landscape composition, flat 2D,
+> clean dark outline, few colors, gold and red accents, transparent
+> background, playful packaging humor, no text
+
+## Batch 1 (drawn)
+
+### coreutils — *ls, cp, mv… pick one.*
+
+Commands.
+
+- **Shows:** an open toolbox, the basic tools showing: the core utilities.
+- **Prompt:** an open metal toolbox with its tray lifted, a wrench, a
+  screwdriver, a hammer and a tape measure sticking out
+
+### base16 — *Sixteen colors. Pick a vibe.*
+
+Themes.
+
+- **Shows:** an open paint box, sixteen paint pans in two rows, a brush on
+  it.
+- **Touched up:** Retro Diffusion gave every pan the same two colours; each
+  pan was given one of the theme's hues by hand (`g p w c r a`, then
+  `o a g p w`), so that the box shows the theme's palette.
+- **Prompt:** an open flat paint box with sixteen square paint pans in two
+  rows of eight, each a different shade, a paintbrush lying across the lid
+
+### base-devel — *Everything you need to build a deck.*
+
+Playing cards.
+
+- **Shows:** an open construction kit box, playing cards stacked like
+  bricks into a little wall.
+- **Prompt:** an open cardboard construction kit box, blank playing cards
+  stacked like bricks into a small wall in front of it
+
+### jokers-git — *Unstable, untested, irresistible.*
+
+Jokers.
+
+- **Shows:** a wooden crate wrapped in caution tape, tilting, a jester hat
+  pushing its lid open.
+- **Prompt:** a tilted wooden crate wrapped in striped caution tape, its
+  lid pushed half open by a jester hat with bells peeking out
+
+### oligarchy — *Elite capital. Public code.*
+
+Oligarchy cards.
+
+- **Shows:** an open luxury briefcase full of gold bars, a red wax seal on
+  its clasp.
+- **Prompt:** an open leather briefcase full of stacked gold bars, a red
+  wax seal on its clasp, small sparkles above the gold

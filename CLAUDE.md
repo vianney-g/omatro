@@ -121,7 +121,10 @@ than push the play area out.
   colours, embedded as is and listed in `Drawn.themes`); oligarchy cards and commands
   have palette-letter drawings like the jokers' but 64 × 40 (`app/art/oligarchy`,
   `app/art/commands`, `Drawn.oligarchy`, `Drawn.commands`, `JokerArt` with
-  `family: "oligarchy"` or `"commands"`). All show
+  `family: "oligarchy"` or `"commands"`); so do packs, one per kind
+  (`app/art/packs`, `Drawn.packs`), which `PackView` stacks by size: a frame
+  for a normal pack, two for `-full`, three and a passing shine for `-meta`,
+  the quip in the hover bubble. All show
   framed at the top of `ConsumableView`, compact (picture, name, what it does
   now; the rest in `CardPeek`'s bubble while hovered), and beside
   the name in the collection. `app/art/README.md` has the style and the workflow
