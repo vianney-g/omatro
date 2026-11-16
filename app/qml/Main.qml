@@ -1632,7 +1632,7 @@ Window {
                     id: lineHover
                     onHoveredChanged: hovered
                       ? cardPeek.showConsumable(line, modelData, modelData.max_cards > 0
-                        ? I18n.tr("select {range}", { range: Labels.range(modelData.min_cards, modelData.max_cards) }) : "")
+                        ? I18n.tr("select {range}", { range: Labels.range(modelData.min_cards, modelData.max_cards) }) : "", true)
                       : cardPeek.hide(line)
                   }
                   Component.onDestruction: cardPeek.hide(line)

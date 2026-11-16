@@ -173,6 +173,8 @@ fn main() {
         QmlFile::from("qml/Glossary.qml"),
         QmlFile::from("qml/CardRow.qml"),
         QmlFile::from("qml/CardPeek.qml"),
+        QmlFile::from("qml/Bubble.qml"),
+        QmlFile::from("qml/TermList.qml"),
         QmlFile::from("qml/ScoreFire.qml"),
         QmlFile::from("qml/Sparks.qml"),
         QmlFile::from("qml/CardView.qml"),

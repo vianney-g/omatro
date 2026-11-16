@@ -95,7 +95,10 @@ than push the play area out.
   block matches) and its test forbids two things sharing a name. Card views
   underline the terms of their text (`Labels.highlight`) and, hovered, call
   `Hints.show`; `Glossary.qml` explains them beside the card. A new view with a
-  description does both.
+  description does both. What tells about a hovered thing goes in a `Bubble`
+  (styled as the Omarchy shell's notifications, with a shadow and an arrow
+  pointing at it), never in a card-like frame, which would pass for one more
+  card.
 - Shaders: `app/shaders/*.frag` are compiled by `build.rs` with `qsb` (from
   `qt6-shadertools`) and embedded as `shaders/<name>.frag.qsb`; QML reaches them as
   `"../shaders/<name>.frag.qsb"`. `SuitMark.qml` draws a card's middle symbol
@@ -109,9 +112,10 @@ than push the play area out.
   drawn); `JokerArt.qml` paints them with
   `shaders/palette.frag`, so they follow the theme. Compact (`JokerView.compact`:
   the joker row, the shop, packs, the resume screen), a drawn joker shows its
-  drawing, name, badge, stickers and edition; hovered, its full view shows
-  (`CardPeek`, asked through the `Peek` singleton: under the joker row, beside
-  the joker elsewhere). The collection's joker tiles show the drawing and name
+  drawing, name, badge, stickers and edition; hovered, what it says shows in a
+  bubble (`CardPeek`, asked through the `Peek` singleton: under the joker row,
+  beside the joker elsewhere), with the glossary of its terms, without the
+  drawing the hovered form shows already. The collection's joker tiles show the drawing and name
   the same way. Jokers not drawn keep their text card. Theme cards have a
   picture instead (`app/art/themes/<id>.png`, 64 × 40, in the theme's own
   colours, embedded as is and listed in `Drawn.themes`); oligarchy cards and commands
@@ -119,7 +123,7 @@ than push the play area out.
   `app/art/commands`, `Drawn.oligarchy`, `Drawn.commands`, `JokerArt` with
   `family: "oligarchy"` or `"commands"`). All show
   framed at the top of `ConsumableView`, compact (picture, name, what it does
-  now; the full view, `full: true`, in `CardPeek` while hovered), and beside
+  now; the rest in `CardPeek`'s bubble while hovered), and beside
   the name in the collection. `app/art/README.md` has the style and the workflow
   (`art.py import` / `preview`), `app/art/briefs.md` what each drawing shows
   (proposed to the maintainer first, as names are).
@@ -132,8 +136,8 @@ than push the play area out.
   varies narrow their items, never overlap them: the hand (`handRow.cardWidth`), the
   jokers (`CardRow.qml`, which scales each view by `cardScale` and keeps its button
   under it); the clipboard is a list of lines. A narrowed joker or a clipboard line
-  shows the card at full size while hovered (`CardPeek.qml`, which takes the
-  glossary along).
+  shows what the card says while hovered (`CardPeek.qml`, with the glossary; a
+  clipboard line's bubble shows the picture too, as the line has none).
 
 ## Debugging and screenshots
 

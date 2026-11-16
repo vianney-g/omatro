@@ -8,17 +8,15 @@ import "Drawn.js" as Drawn
 // A theme with a picture (art/themes/<id>.png, in the theme's own colours, not
 // the current theme's) or a drawn oligarchy card or command (art/oligarchy,
 // art/commands, in the current theme's, as jokers) shows it at the top, framed, in place of its kind;
-// with its name and what it would do now only, its full view showing beside it
-// while hovered (CardPeek, through Peek), as drawn jokers do.
+// with its name and what it would do now only, the rest of what it says
+// showing beside it while hovered (CardPeek, through Peek), as drawn jokers do.
 Rectangle {
   id: root
 
   property var item: null
-  // The full view: every text, the card as tall as they need (CardPeek).
-  property bool full: false
-  readonly property bool compact: pictured && !full
-  // Hovered, its terms are explained beside it (Glossary), or its full view
-  // shows, which explains them.
+  readonly property bool compact: pictured
+  // Hovered, its terms are explained beside it (Glossary), or what it says
+  // shows (CardPeek), which explains them.
   HoverHandler {
     onHoveredChanged: {
       if (root.compact) hovered ? Peek.showConsumable(root, root.item, "") : Peek.hide(root)
@@ -28,9 +26,7 @@ Rectangle {
   Component.onDestruction: Peek.hide(root)
 
   width: Style.space(120)
-  height: full
-    ? Math.max(Style.space(150), content.y + content.height + (quip.visible ? content.spacing + quip.implicitHeight : 0) + Style.space(8))
-    : Style.space(150)
+  height: Style.space(150)
   radius: Style.cornerRadius
   clip: true
   // Narrow (three or more in the clipboard): no quip, smaller name.
@@ -101,7 +97,7 @@ Rectangle {
       font.bold: true
     }
     // Compact, what it does now alone: a theme's level names the hand
-    // already, the rest is in the full view.
+    // already, the rest is in its bubble (CardPeek).
     Text {
       width: parent.width
       visible: !root.compact
@@ -135,7 +131,7 @@ Rectangle {
     horizontalAlignment: Text.AlignHCenter
     wrapMode: Text.WordWrap
     visible: !root.narrow && !root.compact && !(root.item && root.item.current)
-      && (root.full || content.y + content.height + content.spacing + implicitHeight <= root.height - Style.space(4))
+      && content.y + content.height + content.spacing + implicitHeight <= root.height - Style.space(4)
     text: root.item ? root.item.quip : ""
     color: Colors.muted
     font.family: Style.font.family
