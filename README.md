@@ -13,7 +13,7 @@ A standalone Qt Quick application, like omawrite or omacut, but written in Rust
 - `app/`: the application. The QML is embedded in the binary, and the engine is called
   directly, with the same JSON protocol. The active Omarchy theme (colors from
   `colors.toml`, font size from `shell.toml`, Hyprland rounding) is reloaded as soon as
-  it changes.
+  it changes. Elsewhere, the game wears Omarchy's default theme, Tokyo Night.
 - `pkgbuild/`: launcher entry and icon.
 
 ![The game following the Omarchy theme as it changes, through ten themes](docs/themes.gif)

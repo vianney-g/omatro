@@ -1,5 +1,6 @@
 //! Reading the active Omarchy theme: palette from `colors.toml` and font size
-//! from `shell.toml`, as the shell does.
+//! from `shell.toml`, as the shell does. Elsewhere than on Omarchy, its
+//! defaults: Tokyo Night, font size 12, square corners.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -40,6 +41,22 @@ impl Default for Palette {
         }
     }
 }
+
+/// The colours of Tokyo Night, the theme a new Omarchy install starts with:
+/// used when there is no Omarchy theme at all (another system), so that
+/// the game still looks like Omarchy there.
+const DEFAULT_THEME: &str = r##"
+accent = "#7aa2f7"
+muted = "#414868"
+background = "#1a1b26"
+foreground = "#a9b1d6"
+red = "#f7768e"
+yellow = "#e0af68"
+orange = "#eb927b"
+green = "#9ece6a"
+cyan = "#449dab"
+magenta = "#ad8ee6"
+"##;
 
 /// `key = "#rrggbb"` pairs of a TOML color file.
 fn colors(text: &str) -> impl Iterator<Item = (&str, &str)> {
@@ -98,6 +115,12 @@ impl Palette {
             p.orange = v;
         }
         p
+    }
+
+    /// The palette of a theme's `colors.toml`; without one (not on
+    /// Omarchy), Omarchy's default theme.
+    pub fn of_theme(colors_toml: Option<&str>) -> Palette {
+        Palette::parse(colors_toml.unwrap_or(DEFAULT_THEME))
     }
 }
 
@@ -171,7 +194,11 @@ impl Theme {
         let user_shell = read(&home().join(".config/omarchy/shell.toml"));
         let theme_shell = read(&dir.join("shell.toml"));
         Theme {
-            palette: Palette::parse(&read(&dir.join("colors.toml"))),
+            palette: Palette::of_theme(
+                std::fs::read_to_string(dir.join("colors.toml"))
+                    .ok()
+                    .as_deref(),
+            ),
             font_base_size: font_base_size(&user_shell)
                 .or_else(|| font_base_size(&theme_shell))
                 .unwrap_or(12),
@@ -250,7 +277,10 @@ mod tests {
         std::os::unix::fs::symlink(&image, &link).unwrap();
         let url = wallpaper_url(&link);
         let file = image.canonicalize().unwrap();
-        assert!(url.starts_with(&format!("file://{}?", file.display())), "{url}");
+        assert!(
+            url.starts_with(&format!("file://{}?", file.display())),
+            "{url}"
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -288,6 +318,30 @@ mod tests {
         };
         assert_eq!(Palette::parse(""), expected);
         assert_eq!(Palette::parse("accent = \"not a color\""), expected);
+    }
+
+    #[test]
+    fn without_a_theme_the_palette_is_tokyo_night() {
+        let p = Palette::of_theme(None);
+        assert_eq!(
+            [
+                &p.background,
+                &p.foreground,
+                &p.accent,
+                &p.muted,
+                &p.urgent,
+                &p.warm
+            ],
+            [
+                "#1a1b26", "#a9b1d6", "#7aa2f7", "#414868", "#f7768e", "#e0af68"
+            ]
+        );
+        assert_eq!(
+            [&p.green, &p.cyan, &p.magenta, &p.orange],
+            ["#9ece6a", "#449dab", "#ad8ee6", "#eb927b"]
+        );
+        // A theme's own file, even a sparse one, keeps the shell's fallbacks.
+        assert_eq!(Palette::of_theme(Some("")), Palette::parse(""));
     }
 
     #[test]

@@ -66,7 +66,8 @@ A Cargo workspace with two crates:
   the JSON protocol, never through Rust types), and the `OmarchyTheme` singleton
   (colors, font size, corner radius). `theme.rs` reads the active Omarchy theme
   (`~/.local/state/omarchy/current/theme/colors.toml`, `~/.config/omarchy/shell.toml`,
-  rounding via `hyprctl`); `Main.qml` calls `refresh()` on a timer, which only reloads
+  rounding via `hyprctl`; without an Omarchy theme, the colours of Tokyo Night,
+  Omarchy's default, in `DEFAULT_THEME`); `Main.qml` calls `refresh()` on a timer, which only reloads
   when the fingerprint (modification times) has changed.
 - QML (`app/qml/`): embedded in the binary as the `omatro` module. Every new QML file
   must be declared in `app/build.rs` (singletons with `.singleton(true)`, `.js` files
