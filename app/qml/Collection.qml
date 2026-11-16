@@ -372,19 +372,23 @@ Rectangle {
       id: tile
       readonly property var e: parent.entry
       readonly property bool found: e.state === "found"
-      // A joker found and drawn, or a theme, oligarchy card, command or pack with a picture:
+      // A joker or boss found and drawn, or a theme, oligarchy card, command or pack with a picture:
       // its drawing and name; hovered, its full view beside it (Peek).
       readonly property bool drawn: found && tileArt.ready
       readonly property string family: e.id.slice(0, e.id.indexOf(":"))
       readonly property string itemId: e.id.slice(e.id.indexOf(":") + 1)
       // Where a drawn oligarchy card or command is (JokerArt's family).
       readonly property string drawing: family === "oligarchy" ? "oligarchy"
-        : family === "command" ? "commands" : family === "package" ? "packs" : ""
+        : family === "command" ? "commands" : family === "pack" ? "packs" : ""
       readonly property bool pictured: found
         && (family === "theme" ? Drawn.themes[itemId] === true
           : drawing !== "" && Drawn[drawing][itemId] === true)
       readonly property var consumable: pictured ? {
         kind: family, id: itemId, name: e.name, description: e.description || "",
+        quip: e.quip || "", current: null, transparent: false } : null
+      // A boss found: its portrait, as a joker's drawing (art/bosses).
+      readonly property var boss: found && family === "boss" ? {
+        kind: "boss", id: itemId, name: e.name, description: e.description || "",
         quip: e.quip || "", current: null, transparent: false } : null
       readonly property var joker: found && e.id.indexOf("joker:") === 0 ? {
         kind: "joker", id: e.id.slice(6), name: e.name, description: e.description || "",
@@ -409,7 +413,8 @@ Rectangle {
           anchors.verticalCenter: parent.verticalCenter
           width: parent.height
           height: parent.height
-          jokerId: joker ? joker.id : ""
+          family: tile.boss ? "bosses" : "jokers"
+          jokerId: joker ? joker.id : tile.boss ? tile.itemId : ""
         }
         Item {
           id: tilePicture
@@ -509,7 +514,9 @@ Rectangle {
       MouseArea {
         anchors.fill: parent
         hoverEnabled: true
-        onContainsMouseChanged: parent.drawn
+        onContainsMouseChanged: parent.drawn && parent.boss
+          ? (containsMouse ? Peek.showConsumable(parent, parent.boss, "") : Peek.hide(parent))
+          : parent.drawn
           ? (containsMouse ? Peek.showJoker(parent, parent.joker, null, false) : Peek.hide(parent))
           : parent.pictured
           ? (containsMouse ? Peek.showConsumable(parent, parent.consumable, "") : Peek.hide(parent))

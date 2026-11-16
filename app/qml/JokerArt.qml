@@ -3,7 +3,8 @@ import omatro
 import "Drawn.js" as Drawn
 
 // A joker's drawing: the pixel art of art/jokers/<id>.txt, painted in
-// the theme's colours (shaders/palette.frag), its pixels kept sharp; with
+// the theme's colours (shaders/palette.frag), its pixels kept sharp; a
+// boss's with `family: "bosses"` (art/bosses, square too); with
 // `family: "oligarchy"`, `"commands"` or `"packs"`, an oligarchy card's, a
 // command's or a pack's (art/oligarchy, art/commands, art/packs, 64 × 40:
 // give it that shape). `ready` is false for one not drawn yet.

@@ -1371,20 +1371,34 @@ Window {
               }
               Value { text: root.game ? Labels.number(root.game.target) : "–" }
               // The ante's boss, ahead of its blind (muted) and while its effect
-              // applies (urgent).
-              Text {
+              // applies (urgent), its portrait beside it.
+              Row {
                 width: parent.width
                 visible: root.upcomingBoss
-                wrapMode: Text.WordWrap
-                textFormat: Text.StyledText
-                text: visible
-                  ? "<b>" + I18n.tr("Boss: {name}", { name: root.game.boss.name }) + "</b><br>" + root.game.boss.description
-                    // What the boss holds the player to now (The Style Guide's hand type).
-                    + (root.game.boss.current ? "<br><b>" + root.game.boss.current + "</b>" : "")
-                  : ""
-                color: root.bossName !== "" && root.game.phase === "playing" ? Colors.urgent : Colors.muted
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
+                spacing: Style.spacing.md
+                JokerArt {
+                  id: bossPortrait
+                  anchors.verticalCenter: parent.verticalCenter
+                  visible: ready
+                  width: Style.space(40)
+                  height: width
+                  family: "bosses"
+                  jokerId: root.game ? root.game.boss.id : ""
+                }
+                Text {
+                  width: parent.width - (bossPortrait.visible ? bossPortrait.width + parent.spacing : 0)
+                  visible: root.upcomingBoss
+                  wrapMode: Text.WordWrap
+                  textFormat: Text.StyledText
+                  text: visible
+                    ? "<b>" + I18n.tr("Boss: {name}", { name: root.game.boss.name }) + "</b><br>" + root.game.boss.description
+                      // What the boss holds the player to now (The Style Guide's hand type).
+                      + (root.game.boss.current ? "<br><b>" + root.game.boss.current + "</b>" : "")
+                    : ""
+                  color: root.bossName !== "" && root.game.phase === "playing" ? Colors.urgent : Colors.muted
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                }
               }
             }
           }
@@ -2006,6 +2020,7 @@ Window {
           BlindSelect {
             Layout.alignment: Qt.AlignHCenter
             blinds: root.game ? root.game.blinds : []
+            bossId: root.game ? root.game.boss.id : ""
             bossRerollCost: root.game && root.game.boss_reroll_cost !== null ? root.game.boss_reroll_cost : -1
             onPlay: root.confirm()
             onSkip: root.skipBlind()

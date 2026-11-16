@@ -1716,3 +1716,256 @@ Oligarchy cards.
   its clasp.
 - **Prompt:** an open leather briefcase full of stacked gold bars, a red
   wax seal on its clasp, small sparkles above the gold
+
+# Bosses
+
+What each boss's portrait shows: 64 × 64, square like the jokers (they are
+characters), following the current theme. Every boss is a monster made of
+one object, cute but menacing: a family, and simple shapes that Retro
+Diffusion draws well. They show on the boss card of the blind select, beside
+the boss in the left panel (ahead of its blind and during it), and in the
+collection.
+
+Generated with the usual Retro Diffusion palette, imported in the colours
+of a threat: `--map 0f0c1d=d,fff1c1=l,ffb454=w,ff7a6b=r,3b2a5c=R` (gold
+the theme's warm, red its urgent and the purple urgent's dark shade).
+
+No logos and no trademarked characters: Kubernetes is a ship's wheel (not
+its seven-spoke logo), Windows Update a house window (not the four-pane
+logo), Clippy a stationery paperclip with fangs (not Microsoft's character,
+without its big round eyes and eyebrows), the Nvidia Driver a graphics card
+(no logo, no green eye); the OOM Killer is a generic grim reaper, a nod to
+Death in Pratchett's books, not a copy (no horse, no capitals).
+
+Style line, at the start of every prompt (generate at 64 × 64):
+
+> pixel art game boss portrait, square composition, flat 2D, clean dark
+> outline, few colors, gold and red accents, transparent background, cute
+> but menacing cartoon monster, no text
+
+## Batch 1 (drawn)
+
+### The OOM Killer — *Something had to go.*
+
+`oom_killer`: discards 2 random cards from the hand after each hand played.
+
+- **Shows:** a grim reaper, a skeleton in a hood with a scythe.
+- **Prompt:** a small grim reaper, a skeleton in a dark hooded robe holding
+  a big scythe, glowing eyes
+
+### The Cloud Bill — *Your usage spiked. So did the invoice.*
+
+`cloud_bill`: playing your most played hand type sets money to $0.
+
+- **Shows:** a storm cloud monster, its tongue a long receipt.
+- **Prompt:** a grinning storm cloud monster with a long paper receipt
+  sticking out as its tongue, small lightning bolts
+
+### The Black Screen — *Did it boot? Nobody knows.*
+
+`black_screen`: the first hand is dealt face down.
+
+- **Shows:** a black screen, a huge sinister grin floating in it.
+- **Prompt:** a computer monitor with a pitch black screen, a huge wide
+  sinister grin with sharp teeth floating in the darkness, two thin eyes
+
+### The Kubernetes Cluster — *Seventeen YAML files for one hello world.*
+
+`kubernetes_cluster`: a huge blind, ×4 the base score.
+
+- **Shows:** a ship's wheel monster.
+- **Prompt:** a wooden ship's steering wheel with eight spokes turned into
+  a monster, a big angry face in its center hub
+
+### The Flaky Wi-Fi — *Connected, no internet.*
+
+`flaky_wifi`: 1 in 7 cards is drawn face down.
+
+- **Shows:** a wifi symbol monster, flickering.
+- **Prompt:** a monster shaped like a wifi signal symbol, curved bars as
+  its body, a sly face on the dot, one bar fading away
+
+### The Regression — *It worked in the last release.*
+
+`regression`: each hand played loses one level.
+
+- **Shows:** a big down arrow monster.
+- **Prompt:** a big fat monster shaped like a downward pointing arrow, a
+  smug grin, small arms
+
+### The Electron App — *500 MB of RAM to show a club.*
+
+`electron_app`: clubs don't score.
+
+- **Shows:** a huge weightlifter straining to lift a feather.
+- **Prompt:** a huge muscular weightlifter straining and sweating to lift a
+  single tiny feather above his head
+
+### The Screen Lock — *Hyprlock kicked in. Type your password.*
+
+`screen_lock`: cards drawn after each hand are face down.
+
+- **Shows:** a padlock monster.
+- **Prompt:** a big padlock monster with a mean face on its body, the
+  shackle like a pair of horns
+
+### The Mandatory Meeting — *Everyone has to attend.*
+
+`mandatory_meeting`: hands must have 5 cards.
+
+- **Shows:** a necktie monster.
+- **Prompt:** a necktie monster with a stern face on its knot, its tail
+  curling like a pointing finger
+
+### The Nvidia Driver — *Spades? Not supported on Wayland.*
+
+`nvidia_driver`: spades don't score.
+
+- **Shows:** a graphics card monster, its fans as eyes.
+- **Prompt:** a graphics card monster, its two cooling fans as angry eyes,
+  a grumpy mouth, little legs
+
+### The Read-Only Filesystem — *mount: / is read-only.*
+
+`read_only_filesystem`: no discards. Reading glasses, as read-only.
+
+- **Shows:** a reading glasses monster.
+- **Prompt:** a pair of reading glasses turned into a monster, big
+  staring eyes behind the lenses, little legs on the temples
+
+### The Paywall — *Diamonds are for premium users.*
+
+`paywall`: diamonds don't score.
+
+- **Shows:** a brick wall monster.
+- **Prompt:** a brick wall monster with a coin slot as its mouth and
+  greedy eyes
+
+### The 4:3 Monitor — *Remember when screens were square?*
+
+`monitor43`: −1 hand size.
+
+- **Shows:** a CRT monitor monster.
+- **Prompt:** a chunky old square CRT monitor monster, a proud face on its
+  screen, wearing sunglasses
+
+### The Code Reviewer — *Seen this pattern before. Rejected.*
+
+`code_reviewer`: no hand type can be played twice.
+
+- **Shows:** a stern owl with glasses.
+- **Prompt:** a stern owl wearing small round glasses, frowning, holding a
+  red pen
+
+### The Style Guide — *Pick a convention. Forever.*
+
+`style_guide`: only one hand type can be played.
+
+- **Shows:** a ruler monster.
+- **Prompt:** a wooden ruler monster standing upright, a strict face, a
+  whistle in its mouth
+
+### The Anonymous Account — *No faces, only opinions.*
+
+`anonymous_account`: face cards don't score.
+
+- **Shows:** a faceless silhouette, a question mark for a face.
+- **Prompt:** a grey faceless silhouette head and shoulders, a big question
+  mark where the face should be
+
+### The Rate Limiter — *429 Too Many Requests.*
+
+`rate_limiter`: after each hand or discard, draw only 3 cards.
+
+- **Shows:** a traffic light monster, stuck on red.
+- **Prompt:** a traffic light monster stuck on red, the red light as one
+  glaring eye, a stern mouth
+
+### The Stale Cache — *Invalidate and try again.*
+
+`stale_cache`: cards already played this ante don't score.
+
+- **Shows:** a moldy cheese monster.
+- **Prompt:** a moldy wedge of cheese monster with holes, green mold spots,
+  a lazy grin, small flies around it
+
+### The Deadline — *Ship it today. One shot.*
+
+`deadline`: only 1 hand, but a smaller blind.
+
+- **Shows:** an alarm clock monster.
+- **Prompt:** an angry alarm clock monster with two bells as horns,
+  ringing and shaking, sharp teeth
+
+### The Burnout — *No love left for this codebase.*
+
+`burnout`: hearts don't score.
+
+- **Shows:** a monster in burnout.
+- **Prompt:** an exhausted little monster slumped over, dark circles under
+  its eyes, smoke rising from its head, a cracked heart beside it
+
+### The Per-Seat License — *Every seat is billed. Every one.*
+
+`per_seat_license`: −$1 per card played.
+
+- **Shows:** a taxi monster, its meter running (the second of two
+  versions, the maintainer's pick).
+- **Prompt:** a taxi cab monster seen from the front, headlights as greedy
+  eyes, a taxi meter on its roof, a grin of a grille
+
+### The Thermal Throttle — *Fans at 100%. Clocks at 50%.*
+
+`thermal_throttle`: base chips and mult are halved.
+
+- **Shows:** a boiling thermometer monster.
+- **Prompt:** a thermometer monster boiling over, red liquid at the top,
+  sweating, steam puffs around it
+
+### The Dark Pattern — *Hidden on purpose.*
+
+`dark_pattern`: face cards are drawn face down.
+
+- **Shows:** a sly carnival mask monster.
+- **Prompt:** a sly carnival mask monster with narrow eyes and a sneaky
+  smile, ribbons floating behind it
+
+### The Kernel Panic — *Attempted to kill init!*
+
+`kernel_panic`: jokers are flipped face down and shuffled.
+
+- **Shows:** a screaming chip monster.
+- **Prompt:** a computer chip monster screaming in panic, arms up, pins as
+  legs, sweat drops flying
+
+### The Vendor Lock-in — *Pay to leave.*
+
+`vendor_lock_in`: no card scores until a joker is sold.
+
+- **Shows:** a handcuffs monster.
+- **Prompt:** a pair of handcuffs turned into a monster, a greedy face on
+  one cuff, the chain hanging
+
+### The Microservices — *Two hundred services for a todo app.*
+
+`microservices`: a colossal blind, ×6 the base score.
+
+- **Shows:** a swarm of tiny monsters.
+- **Prompt:** a swarm of many tiny round monsters crowding together, each
+  with a different face
+
+### The Windows Update — *Restarting in 10 minutes. Or now.*
+
+`windows_update`: a random joker is disabled each hand.
+
+- **Shows:** a house window monster, curtains drawn.
+- **Prompt:** a wooden house window with four panes turned into a monster,
+  curtains as eyelids half closed, a yawning mouth below the sill
+
+### The Clippy — *It looks like you're playing a hand!*
+
+`clippy`: one card is always forced into the selection.
+
+- **Shows:** a stationery paperclip monster with fangs.
+- **Prompt:** a bent metal paperclip monster with small sharp fangs and
+  claws, eager and pushy

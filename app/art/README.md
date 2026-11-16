@@ -90,6 +90,16 @@ image.png --key none --crop 0 --map
 green; `ff7a6b=r` where red must stay: `cpupower`'s flames, the hearts of
 `ln_s` and `mv_hearts`). `briefs.md` has their briefs.
 
+# Boss portraits
+
+Each boss has a 64 × 64 portrait (`bosses/<id>.txt`), square like the
+jokers: a monster made of one object (`briefs.md`). Retro Diffusion gave
+them on an opaque background of the palette's light, which the drawings
+use inside too (teeth, highlights): `--key edge` takes away only the part
+that reaches the edges. `art.py import bosses/<id> image.png --key edge
+--map 0f0c1d=d,fff1c1=l,ffb454=w,ff7a6b=r,3b2a5c=R` (the colours of a
+threat: warm, urgent and its dark shade).
+
 # Pack pictures
 
 Each pack kind has a 64 × 40 drawing (`packs/<kind>.txt`: `coreutils`,

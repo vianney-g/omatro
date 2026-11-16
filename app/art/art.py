@@ -198,6 +198,22 @@ def cmd_import(args):
         if len(corners) == 1 and next(iter(corners))[3] >= 128:
             key = next(iter(corners))[:3]
             print(f"background #%02x%02x%02x taken as transparent" % key)
+    elif args.key == "edge":
+        # The corner colour, only where it reaches the edges: an opaque
+        # background goes, the same colour inside the drawing (teeth,
+        # highlights) stays.
+        bg = img.getpixel((0, 0))[:3]
+        outside, todo = set(), [(x, y) for x in range(w) for y in (0, h - 1)] + [(x, y) for y in range(h) for x in (0, w - 1)]
+        while todo:
+            x, y = todo.pop()
+            if (x, y) in outside or not (0 <= x < w and 0 <= y < h) or img.getpixel((x, y))[:3] != bg:
+                continue
+            outside.add((x, y))
+            todo += [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+        img = img.copy()
+        for p in outside:
+            img.putpixel(p, (0, 0, 0, 0))
+        print(f"background #%02x%02x%02x around the drawing taken as transparent" % bg)
     elif args.key != "none":
         key = rgb(args.key)
     off, worst, rows = 0, 0, []
@@ -266,7 +282,7 @@ def main():
     i.add_argument("id")
     i.add_argument("image")
     i.add_argument("--map", help="colours and their letters: 3b2a5c=m,fe7a6b=a (others: nearest)")
-    i.add_argument("--key", default="auto", help="background to make transparent: auto, none or #rrggbb")
+    i.add_argument("--key", default="auto", help="background to make transparent: auto, edge (the corner colour where it reaches the edges), none or #rrggbb")
     i.add_argument("--crop", type=int, default=64,
                    help="cut to N × N around the subject (default 64; 0: keep the size)")
     i.add_argument("--outline", choices=list(LETTERS[1:]), help="letter for the dark outline's edge pixels (k: foreground)")

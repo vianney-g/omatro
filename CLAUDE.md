@@ -124,7 +124,11 @@ than push the play area out.
   `family: "oligarchy"` or `"commands"`); so do packs, one per kind
   (`app/art/packs`, `Drawn.packs`), which `PackView` stacks by size: a frame
   for a normal pack, two for `-full`, three and a passing shine for `-meta`,
-  the quip in the hover bubble. All show
+  the quip in the hover bubble. Bosses have square portraits like the jokers'
+  (`app/art/bosses`, `Drawn.bosses`, `JokerArt` with `family: "bosses"`), on
+  the boss card of `BlindSelect`, beside the boss in the left panel and in
+  the collection. The collection's ids are `<family>:<id>`, the family as
+  serialized (`pack:coreutils`, `boss:paywall`), not its label. All show
   framed at the top of `ConsumableView`, compact (picture, name, what it does
   now; the rest in `CardPeek`'s bubble while hovered), and beside
   the name in the collection. `app/art/README.md` has the style and the workflow

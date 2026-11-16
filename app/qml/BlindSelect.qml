@@ -3,11 +3,13 @@ import omatro
 import "Labels.js" as Labels
 
 // The three blinds of the ante: play the next one, or skip it if it is not
-// the boss.
+// the boss, whose portrait (art/bosses) shows above its name.
 Row {
   id: root
 
   property var blinds: []
+  // The ante's boss (its portrait).
+  property string bossId: ""
   // Change Request: the price of rerolling the boss (-1 when not allowed).
   property int bossRerollCost: -1
   signal play()
@@ -37,6 +39,15 @@ Row {
         anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.spacing.huge }
         spacing: Style.spacing.lg
 
+        JokerArt {
+          id: portrait
+          anchors.horizontalCenter: parent.horizontalCenter
+          visible: modelData.kind === "boss" && ready
+          width: Style.space(112)
+          height: width
+          family: "bosses"
+          jokerId: modelData.kind === "boss" ? root.bossId : ""
+        }
         Text {
           width: parent.width
           horizontalAlignment: Text.AlignHCenter

@@ -73,7 +73,7 @@ fn shaders() -> Vec<QResourceFile> {
 const ART_PALETTE: &str = ".kambwrgcpodlAWRGCPO";
 
 /// The drawings of `art/<dir>/<id>.txt`: a grid of palette letters (64 × 64
-/// for a joker, 64 × 40 for an oligarchy card, a command or a pack), `#` lines being comments. Each
+/// for a joker or a boss, 64 × 40 for an oligarchy card, a command or a pack), `#` lines being comments. Each
 /// becomes a greyscale PGM image, `art/<dir>/<id>.pgm`, whose grey is the
 /// palette index × 8, that `shaders/palette.frag` paints in the theme's
 /// colours. Gives the files and the ids drawn.
@@ -117,11 +117,12 @@ fn drawings(dir: &str, out: &Path) -> (Vec<QResourceFile>, Vec<String>) {
     (files, ids)
 }
 
-/// The joker drawings (`art/jokers`), the oligarchy cards' (`art/oligarchy`),
-/// the commands' (`art/commands`) and the packs' (`art/packs`), see `drawings`; the theme pictures of `art/themes/<id>.png` keep their own
+/// The joker drawings (`art/jokers`), the bosses' (`art/bosses`), the
+/// oligarchy cards' (`art/oligarchy`), the commands' (`art/commands`) and the
+/// packs' (`art/packs`), see `drawings`; the theme pictures of `art/themes/<id>.png` keep their own
 /// colours (those of the theme they show): they go in as they are. `qml/Drawn.js`
 /// lists what is drawn (`Drawn.ids` for the jokers, `Drawn.oligarchy`,
-/// `Drawn.commands`, `Drawn.packs`, `Drawn.themes`), so that the others are not looked for.
+/// `Drawn.commands`, `Drawn.packs`, `Drawn.bosses`, `Drawn.themes`), so that the others are not looked for.
 fn art() -> Vec<QResourceFile> {
     println!("cargo:rerun-if-changed=art/themes");
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("art");
@@ -132,6 +133,8 @@ fn art() -> Vec<QResourceFile> {
     files.extend(command_files);
     let (pack_files, packs) = drawings("packs", &out);
     files.extend(pack_files);
+    let (boss_files, bosses) = drawings("bosses", &out);
+    files.extend(boss_files);
     let mut themes: Vec<String> = std::fs::read_dir("art/themes")
         .unwrap_or_else(|e| panic!("art/themes: {e}"))
         .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
@@ -147,11 +150,12 @@ fn art() -> Vec<QResourceFile> {
     std::fs::write(
         &drawn,
         format!(
-            ".pragma library\nvar ids = {{ {} }}\nvar oligarchy = {{ {} }}\nvar commands = {{ {} }}\nvar packs = {{ {} }}\nvar themes = {{ {} }}\n",
+            ".pragma library\nvar ids = {{ {} }}\nvar oligarchy = {{ {} }}\nvar commands = {{ {} }}\nvar packs = {{ {} }}\nvar bosses = {{ {} }}\nvar themes = {{ {} }}\n",
             jokers.join(", "),
             oligarchy.join(", "),
             commands.join(", "),
             packs.join(", "),
+            bosses.join(", "),
             themes.join(", ")
         ),
     )
