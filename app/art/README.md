@@ -80,6 +80,16 @@ too. Imported whole, background included:
 palette, its purple as the accent's dark shade). `briefs.md` has their
 briefs. A card shows its picture and name; hovered, its full view.
 
+# Command pictures
+
+Commands have 64 × 40 drawings too, the oligarchy cards' format (Insider
+Access mixes both in coreutils packs), in `commands/<id>.txt`, following
+the theme, but in the terminal's colours: `art.py import commands/<id>
+image.png --key none --crop 0 --map
+0f0c1d=d,3b2a5c=A,fff1c1=l,ffb454=a,ff7a6b=g` (gold as the accent, red as
+green; `ff7a6b=r` where red must stay: `cpupower`'s flames, the hearts of
+`ln_s` and `mv_hearts`). `briefs.md` has their briefs.
+
 # Theme pictures
 
 Each theme card has `themes/<id>.png` (the theme's id in the engine:

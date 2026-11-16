@@ -6,8 +6,8 @@ import "Drawn.js" as Drawn
 // A consumable (theme, command or oligarchy card): kind, name, effect and quip.
 // Oligarchy cards stand out in the urgent colour; a Transparent one takes no slot.
 // A theme with a picture (art/themes/<id>.png, in the theme's own colours, not
-// the current theme's) or a drawn oligarchy card (art/oligarchy, in the
-// current theme's, as jokers) shows it at the top, framed, in place of its kind;
+// the current theme's) or a drawn oligarchy card or command (art/oligarchy,
+// art/commands, in the current theme's, as jokers) shows it at the top, framed, in place of its kind;
 // with its name and what it would do now only, its full view showing beside it
 // while hovered (CardPeek, through Peek), as drawn jokers do.
 Rectangle {
@@ -37,9 +37,12 @@ Rectangle {
   readonly property bool narrow: width < Style.space(110)
   readonly property bool oligarchy: item !== null && item.kind === "oligarchy"
   readonly property bool transparent: item !== null && item.transparent === true
+  // Where a drawn oligarchy card or command is (JokerArt's family).
+  readonly property string drawing: item === null ? ""
+    : item.kind === "oligarchy" ? "oligarchy" : item.kind === "command" ? "commands" : ""
   readonly property bool pictured: item !== null
     && (item.kind === "theme" ? Drawn.themes[item.id] === true
-      : item.kind === "oligarchy" && Drawn.oligarchy[item.id] === true)
+      : drawing !== "" && Drawn[drawing][item.id] === true)
   color: Qt.tint(Colors.background, Util.alpha(oligarchy ? Colors.urgent : Colors.foreground, transparent ? 0.03 : 0.08))
   border.width: oligarchy || transparent ? Style.space(2) : Style.normalBorderWidth
   border.color: oligarchy ? Colors.urgent : transparent ? Colors.accent : Colors.foreground
@@ -62,16 +65,16 @@ Rectangle {
       border.color: root.oligarchy ? Colors.urgent : Colors.foreground
       Image {
         anchors { fill: parent; margins: parent.border.width }
-        visible: !root.oligarchy
+        visible: root.drawing === ""
         smooth: false
         fillMode: Image.Stretch
-        source: root.pictured && !root.oligarchy ? "../art/themes/" + root.item.id + ".png" : ""
+        source: root.pictured && root.drawing === "" ? "../art/themes/" + root.item.id + ".png" : ""
       }
       JokerArt {
         anchors { fill: parent; margins: parent.border.width }
-        visible: root.oligarchy
-        family: "oligarchy"
-        jokerId: root.pictured && root.oligarchy ? root.item.id : ""
+        visible: root.drawing !== ""
+        family: root.drawing || "oligarchy"
+        jokerId: root.pictured && root.drawing !== "" ? root.item.id : ""
       }
     }
     Text {

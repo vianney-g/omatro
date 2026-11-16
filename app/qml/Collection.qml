@@ -372,14 +372,17 @@ Rectangle {
       id: tile
       readonly property var e: parent.entry
       readonly property bool found: e.state === "found"
-      // A joker found and drawn, or a theme or oligarchy card with a picture:
+      // A joker found and drawn, or a theme, oligarchy card or command with a picture:
       // its drawing and name; hovered, its full view beside it (Peek).
       readonly property bool drawn: found && tileArt.ready
       readonly property string family: e.id.slice(0, e.id.indexOf(":"))
       readonly property string itemId: e.id.slice(e.id.indexOf(":") + 1)
+      // Where a drawn oligarchy card or command is (JokerArt's family).
+      readonly property string drawing: family === "oligarchy" ? "oligarchy"
+        : family === "command" ? "commands" : ""
       readonly property bool pictured: found
         && (family === "theme" ? Drawn.themes[itemId] === true
-          : family === "oligarchy" && Drawn.oligarchy[itemId] === true)
+          : drawing !== "" && Drawn[drawing][itemId] === true)
       readonly property var consumable: pictured ? {
         kind: family, id: itemId, name: e.name, description: e.description || "",
         quip: e.quip || "", current: null, transparent: false } : null
@@ -423,9 +426,9 @@ Rectangle {
           }
           JokerArt {
             anchors.fill: parent
-            visible: tile.family === "oligarchy"
-            family: "oligarchy"
-            jokerId: tile.pictured && tile.family === "oligarchy" ? tile.itemId : ""
+            visible: tile.drawing !== ""
+            family: tile.drawing || "oligarchy"
+            jokerId: tile.pictured && tile.drawing !== "" ? tile.itemId : ""
           }
         }
         Text {

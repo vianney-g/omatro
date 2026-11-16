@@ -1427,3 +1427,214 @@ Levels up every poker hand type.
 - **Shows:** a briefcase wearing a crown on a pedestal, gold rays behind it.
 - **Prompt:** a leather briefcase wearing a gold crown on a pedestal, gold
   light rays shining behind it
+
+# Commands
+
+What each command's picture shows: 64 × 40, the oligarchy cards' format
+(Insider Access mixes both in coreutils packs, so they must match), framed
+at the top of the card, following the current theme. They are generated
+with the same Retro Diffusion palette as the oligarchy cards, but imported
+in the terminal's colours: gold becomes the accent (`a`), red becomes green
+(`g`), the purple the accent's dark shade (`A`), so that a command and an
+oligarchy card tell apart at a glance. Where the subject needs red (flames,
+a heart), red stays red (`r`): noted in the brief.
+
+The humour is the command line's: each picture is a pun on the command or
+its quip, with objects only. No logos (Rust, npm, systemd, Arch, Ferris).
+
+Style line, at the start of every prompt (generate at 64 × 40):
+
+> pixel art game card illustration, wide landscape composition, flat 2D,
+> clean dark outline, few colors, gold and red accents, transparent
+> background, playful command line humor, no text
+
+Retro Diffusion gave them at 60 × 40: their background was widened by two
+columns on each side (the edge columns repeated) before the import.
+
+Keys, screens, labels and folders stay blank: letters are unreadable at
+this size.
+
+## Batch 1 (drawn)
+
+### Up Arrow — *History is a flat circle.*
+
+Creates the last command or theme used (not Up Arrow).
+
+- **Shows:** a keyboard key with an up arrow, a circular arrow looping
+  around it.
+- **Prompt:** a single keyboard keycap with an up arrow on it, a big gold
+  circular arrow looping all the way around the key
+
+### npm test — *Works on the second run.*
+
+Up to 2 selected cards become Flaky Test.
+
+- **Shows:** a test tube with snowflakes falling around it: flaky.
+- **Prompt:** a glass test tube filled with red liquid, standing in a rack,
+  white snowflakes falling around it
+
+### omarchy-theme-install — *The gallery is bigger than you think.*
+
+Creates up to 2 random themes.
+
+- **Shows:** a gallery wall of framed pictures, a download arrow coming in.
+- **Prompt:** a gallery wall with five small framed paintings of different
+  sizes in gold frames, a big red download arrow pointing down at them
+
+### make -j — *-j$(nproc), obviously.*
+
+Up to 2 selected cards become Multithreaded.
+
+- **Shows:** a spool of thread with several threads running off it side by
+  side, a needle at the end of each: threads, in parallel.
+- **Prompt:** a wooden spool with four parallel threads running off it
+  side by side, a sewing needle at the end of each thread
+
+### omarchy-menu — *Super+Alt+Space: everything's in there.*
+
+Creates up to 2 random commands.
+
+- **Shows:** a launcher window of blank lines, three keys under it.
+- **Prompt:** a floating launcher menu window with a search bar and six
+  blank list lines, one highlighted, three blank keyboard keys below it
+
+### cargo build --release — *Ten minutes to save ten milliseconds.*
+
+Up to 2 selected cards become Optimized.
+
+- **Shows:** a wooden cargo crate with a rocket strapped to it, an
+  hourglass beside it.
+- **Prompt:** a wooden cargo crate with a small rocket strapped on its
+  side, red flames, a gold hourglass standing next to the crate
+
+### ln -s — *Two paths, one heart.*
+
+1 selected card becomes a Symlink.
+
+- **Shows:** the four suits together, a symlink counting as every suit
+  (the maintainer's change from two paths joined by a chain link).
+- **Prompt:** the four card suits, a heart, a diamond, a club and a spade,
+  arranged in a square
+
+### systemctl enable — *Starts at boot. Forever.*
+
+1 selected card becomes a Daemon.
+
+- **Shows:** a small friendly horned imp sitting on a power button.
+- **Prompt:** a small friendly cartoon imp with little horns and a tail
+  sitting on a big round power button, smiling
+
+### cpupower — *Performance governor. Fans: on.*
+
+1 selected card becomes Overclocked. Red stays red (the flames).
+
+- **Shows:** a CPU chip on fire, its fan at full speed.
+- **Prompt:** a square computer processor chip with gold pins, red flames
+  rising from it, a cooling fan spinning fast beside it with motion lines
+
+### rsync ~/wallet — *Incremental backups of your money.*
+
+Doubles your money (+$20 at most).
+
+- **Shows:** two identical wallets, sync arrows going round between them.
+- **Prompt:** two identical leather wallets full of gold coins side by
+  side, two curved arrows circling between them
+
+### hyprctl reload — *Nope. Nope. Nope. Oh, nice blur!*
+
+1 in 4 chance to give a random joker Blur, Shadow or Animated.
+
+- **Shows:** three dull window frames and a fourth of frosted glass,
+  shining.
+- **Prompt:** four small window frames in a row, three grey and dull, the
+  fourth made of shining frosted glass with sparkles
+
+### npm version patch — *1.0.0 → 1.0.1, ship it.*
+
+Raises the rank of up to 2 selected cards by one.
+
+- **Shows:** a cloth patch sewn on, an up arrow stitched on it.
+- **Prompt:** a round embroidered cloth patch with stitched edges, a gold
+  up arrow embroidered in the middle, a needle and thread beside it
+
+### rm -rf — *No undo. No regrets.*
+
+Destroys up to 2 selected cards.
+
+- **Shows:** a paper shredder swallowing playing cards, strips coming out.
+- **Prompt:** an office paper shredder swallowing two blank playing cards,
+  thin paper strips falling out below it
+
+### cp -f — *Overwrite without asking.*
+
+Of 2 selected cards, the left one becomes a copy of the right one.
+
+- **Shows:** a photocopier pushing a fresh copy over another card.
+- **Prompt:** an office photocopier with a bright light under its lid, a
+  blank playing card coming out and landing on top of another card
+
+### du -sh ~/jokers — *Worth more than you think.*
+
+Gives the total sell value of your jokers ($50 at most).
+
+- **Shows:** a balance scale: jester hats on one side, coins on the other.
+- **Prompt:** a balance scale, two jester hats with bells on one pan, a
+  pile of gold coins on the other, balanced
+
+### Accept EULA — *Nobody reads it. Everybody signs it.*
+
+1 selected card becomes Enterprise.
+
+- **Shows:** an endless contract unrolling to the floor, one ticked box, a
+  pen.
+- **Prompt:** a very long paper contract scroll unrolling down to the
+  floor in loops, one checkbox ticked at the bottom, a gold pen
+
+### strip — *Debug symbols? Never heard of them.*
+
+1 selected card becomes a Binary Blob.
+
+- **Shows:** a shapeless blob, little bugs flying off it: the debug symbols
+  going away.
+- **Prompt:** a shapeless shiny blob of goo, three tiny cartoon bugs flying
+  away from it
+
+### mv * ♦/ — *Shiny new folder.*
+
+Up to 3 selected cards become diamonds.
+
+- **Shows:** an open folder holding a big cut diamond, shining.
+- **Prompt:** an open file folder with a big cut diamond gem inside it,
+  sparkles around the diamond
+
+### mv * ♣/ — *Members only.*
+
+Up to 3 selected cards become clubs.
+
+- **Shows:** a club's door behind a velvet rope.
+- **Prompt:** the entrance door of an exclusive club, a red velvet rope on
+  two gold posts in front of it
+
+### mv * ♥/ — *Moving in with love.*
+
+Up to 3 selected cards become hearts. Red stays red (the heart).
+
+- **Shows:** a moving box marked with a heart.
+- **Prompt:** a cardboard moving box with a big red heart on its side, a
+  hand truck under it
+
+### mv * ♠/ — *Dig a little deeper.*
+
+Up to 3 selected cards become spades.
+
+- **Shows:** a spade dug into a mound of earth.
+- **Prompt:** a garden spade stuck in a mound of dirt, a small pile of
+  earth thrown beside it
+
+### yay -S — *Straight from the AUR. What could go wrong?*
+
+Creates a random joker (needs a free slot).
+
+- **Shows:** a jack-in-the-box springing out of a delivery box.
+- **Prompt:** a cardboard delivery box flung open, a jack-in-the-box
+  jester springing out of it on a coiled spring

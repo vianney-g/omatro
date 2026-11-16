@@ -114,9 +114,10 @@ than push the play area out.
   the joker elsewhere). The collection's joker tiles show the drawing and name
   the same way. Jokers not drawn keep their text card. Theme cards have a
   picture instead (`app/art/themes/<id>.png`, 64 × 40, in the theme's own
-  colours, embedded as is and listed in `Drawn.themes`); oligarchy cards have
-  palette-letter drawings like the jokers' but 64 × 40 (`app/art/oligarchy`,
-  `Drawn.oligarchy`, `JokerArt` with `family: "oligarchy"`). Both show
+  colours, embedded as is and listed in `Drawn.themes`); oligarchy cards and commands
+  have palette-letter drawings like the jokers' but 64 × 40 (`app/art/oligarchy`,
+  `app/art/commands`, `Drawn.oligarchy`, `Drawn.commands`, `JokerArt` with
+  `family: "oligarchy"` or `"commands"`). All show
   framed at the top of `ConsumableView`, compact (picture, name, what it does
   now; the full view, `full: true`, in `CardPeek` while hovered), and beside
   the name in the collection. `app/art/README.md` has the style and the workflow
