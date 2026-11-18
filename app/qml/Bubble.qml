@@ -9,7 +9,7 @@ import omatro
 // never passes for one more card: beside `place` (on its right, or its left
 // when there is no room), or under the y `below` when it is set (≥ 0),
 // pointing up at `place`. Always in the window: fill the window with it.
-// It takes no pointer.
+// It takes no pointer, unless `clickable` (its panel alone, then).
 Item {
   id: root
 
@@ -18,6 +18,9 @@ Item {
   property real below: -1
   property bool shown: false
   property real panelWidth: Style.space(250)
+  // Takes clicks on its panel (the guide's), rather than none.
+  property bool clickable: false
+  signal clicked()
   default property alias content: column.data
 
   readonly property real arrowSize: Style.space(8)
@@ -27,7 +30,7 @@ Item {
   readonly property bool downward: below >= 0
   readonly property bool onRight: place.x + place.width + gap + panel.width <= width
 
-  enabled: false
+  enabled: clickable
   visible: shown
 
   RectangularShadow {
@@ -53,6 +56,13 @@ Item {
     color: Colors.background
     border.width: root.border
     border.color: Colors.accent
+
+    MouseArea {
+      anchors.fill: parent
+      enabled: root.clickable
+      cursorShape: Qt.PointingHandCursor
+      onClicked: root.clicked()
+    }
 
     Column {
       id: column

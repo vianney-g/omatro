@@ -137,6 +137,13 @@ than push the play area out.
   the name in the collection. `app/art/README.md` has the style and the workflow
   (`art.py import` / `preview`), `app/art/briefs.md` what each drawing shows
   (proposed to the maintainer first, as names are).
+- The guided first game: `Guide.qml` shows one bubble at a time (a clickable
+  `Bubble`), pointing at what it explains. Main decides the step due (`guideDue`: the
+  phase, the selection, the steps read in `settings.guideSeen`) and what it points at
+  (`guideTarget`); a step is read with Enter, a click, or when the game moves past it,
+  and Escape turns the guide off. It is on for a profile that never played a hand
+  (`settings.guideState`, set from the collection's stats at start), and the settings
+  show it again. A new step needs its text in `Guide.texts` and in the French catalog.
 - Animation speed: the settings (A) set `Style.speed` (×1, ×2, ×4); every duration of
   what plays out a move (scoring steps, cards flying, flashing, breaking, turning over,
   money counting and flying, level-ups) goes through `Style.ms()`, so that a fast player

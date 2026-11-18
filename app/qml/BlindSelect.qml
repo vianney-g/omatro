@@ -18,7 +18,11 @@ Row {
 
   spacing: Style.spacing.huge
 
+  // The panel of blind i (the guide points at them).
+  function panelAt(i) { return blindRepeater.itemAt(i) }
+
   Repeater {
+    id: blindRepeater
     model: root.blinds
 
     Rectangle {

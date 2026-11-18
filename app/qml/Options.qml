@@ -2,7 +2,8 @@ import QtQuick
 import omatro
 
 // Settings (O, from anywhere): language, music and sound volumes, the
-// wallpaper, the speed of the animations; then every key of the game.
+// wallpaper, the speed of the animations, the guide (shown again); then every
+// key of the game.
 Rectangle {
   id: root
 
@@ -14,6 +15,7 @@ Rectangle {
   property int animationSpeed: 1
   signal toggleWallpaper()
   signal animationSpeedSet(int speed)
+  signal guideAgain()
   signal close()
   signal language(string lang)
   signal toggleMusic()
@@ -162,6 +164,12 @@ Rectangle {
               onClicked: root.animationSpeedSet(modelData)
             }
           }
+        }
+        Label { text: I18n.tr("Guide"); color: Colors.muted }
+        Button {
+          compact: true
+          text: I18n.tr("Show it again")
+          onClicked: root.guideAgain()
         }
       }
 

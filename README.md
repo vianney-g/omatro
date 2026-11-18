@@ -106,8 +106,10 @@ lyrics, and jokes) everywhere else; each track plays to its end and the next one
 follows where you are. M switches it on and off, Shift+M the sound effects (cards,
 chips climbing a scale, the PC speaker's beeps when a game is lost…). The settings
 (O, from anywhere) set their volumes (←/→ for the music, Shift+←/→ for the sounds),
-the language and the speed of the animations (×1, ×2 or ×4; A switches it), and list
-every key.
+the language and the speed of the animations (×1, ×2 or ×4; A switches it), show the
+guide again, and list every key. The first game is guided: a few bubbles, one at a
+time, point at what to look at as the game gets there (Enter or a click when read,
+Escape to skip the guide).
 
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, Tab to sort the hand
 by rank or suit, Shift+←/→ to move the selected card (or drag it), J to choose the next

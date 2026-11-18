@@ -55,7 +55,12 @@ Window {
     var changes = r.card_changes || []
     if (r.state) showDeckChanges(changes, r.state)
     if (r.event === "state") applyChangedState(r.state, changes)
-    else if (r.event === "collection") collection = r.collection
+    else if (r.event === "collection") {
+      collection = r.collection
+      // Never played a hand: the guide is on.
+      if (settings.guideState === "" && r.collection.stats)
+        settings.guideState = r.collection.stats.hands_played > 0 ? "off" : "on"
+    }
     else if (r.event === "preview") showPreview(r)
     else if (r.event === "scored") startScoring(r, changes)
     else if (r.event === "error") notice = r.message
@@ -92,6 +97,8 @@ Window {
     var lang = settings.language || (Qt.locale().name.indexOf("fr") === 0 ? "fr" : "en")
     send({ cmd: "language", lang: lang })
     send({ cmd: "glossary" })
+    // The profile says whether this is a first game (the guide).
+    if (settings.guideState === "") send({ cmd: "collection" })
     send({ cmd: "saved_game" })
     if (savedGame !== null) resuming = true
     else newGame()
@@ -281,8 +288,70 @@ Window {
     property bool wallpaper: true
     // How fast the hands play out (A): 1, 2 or 4.
     property int animationSpeed: 1
+    // The guided first game: "" until the profile says whether a game was
+    // ever played, then "on" or "off"; the steps read, comma-separated.
+    property string guideState: ""
+    property string guideSeen: ""
   }
   Binding { target: Style; property: "speed"; value: settings.animationSpeed }
+
+  // ---- the guided first game (Guide): the step due now, if any, one at a
+  // time, as the game gets to it. A step is read once: Enter or a click, or
+  // the game moving past it.
+  function guideRead(step) { return settings.guideSeen.split(",").indexOf(step) >= 0 }
+  readonly property string guideDue: {
+    if (settings.guideState !== "on" || game === null) return ""
+    var open = function(step) { return !guideRead(step) }
+    if (choosing) {
+      var boss = game.blinds.length > 2 && game.blinds[2].status === "select"
+      if (!boss && open("blinds")) return "blinds"
+      if (boss && open("boss")) return "boss"
+      return ""
+    }
+    if (playing) {
+      if (selected.length === 0 && game.score === 0 && open("cards")) return "cards"
+      if (selected.length > 0 && open("score")) return "score"
+      if (selected.length > 0 && open("play")) return "play"
+      if (game.score > 0 && selected.length === 0 && open("target")) return "target"
+      return ""
+    }
+    if (shopping) {
+      if (open("shop")) return "shop"
+      if (open("upgrades")) return "upgrades"
+    }
+    return ""
+  }
+  // Hidden under the screens over the game, without being read.
+  readonly property bool guideHidden: optionsOpen || collectionOpen || deckOpen || infoOpen
+    || choosingDeck || resuming
+  readonly property string guideStep: guideHidden ? "" : guideDue
+  property string guideLast: ""
+  onGuideDueChanged: {
+    // The game moved past the step shown: read.
+    if (guideLast !== "" && !guideHidden) guideMarkRead(guideLast)
+    guideLast = guideDue
+  }
+  function guideMarkRead(step) {
+    if (step === "" || guideRead(step)) return
+    settings.guideSeen = settings.guideSeen === "" ? step : settings.guideSeen + "," + step
+  }
+  function guideTarget(step) {
+    switch (step) {
+    case "blinds": return blindSelect.panelAt(0)
+    case "boss": return blindSelect.panelAt(2)
+    case "cards": return handRow
+    case "score": return calcCol.parent
+    case "play": return actionRow
+    case "target": return scoreCol.parent
+    case "shop": return offersZone
+    case "upgrades": return packsZone
+    }
+    return null
+  }
+  function guideAgain() {
+    settings.guideSeen = ""
+    settings.guideState = "on"
+  }
   // ×1 → ×2 → ×4 → ×1.
   function nextAnimationSpeed() {
     settings.animationSpeed = settings.animationSpeed >= 4 ? 1 : settings.animationSpeed * 2
@@ -1111,6 +1180,9 @@ Window {
       else if (k === Qt.Key_M) root.toggleMusic()
       else if (k === Qt.Key_W) settings.wallpaper = !settings.wallpaper
       else if (k === Qt.Key_A) root.nextAnimationSpeed()
+      // A guide bubble: Enter reads it, Escape skips the guide.
+      else if (root.guideStep !== "" && (k === Qt.Key_Return || k === Qt.Key_Enter)) root.guideMarkRead(root.guideStep)
+      else if (root.guideStep !== "" && k === Qt.Key_Escape) settings.guideState = "off"
       else if (root.resuming) {
         if (k === Qt.Key_Return || k === Qt.Key_Enter) root.resumeGame()
         else if (k === Qt.Key_N) root.declineResume()
@@ -1979,6 +2051,7 @@ Window {
 
             // Packs, opened on the spot.
             ShopZone {
+              id: packsZone
               title: I18n.tr("Packages")
               visible: root.game !== null && root.game.packs.length > 0
                 Repeater {
@@ -2026,6 +2099,7 @@ Window {
           Item { Layout.fillHeight: true }
 
           BlindSelect {
+            id: blindSelect
             Layout.alignment: Qt.AlignHCenter
             blinds: root.game ? root.game.blinds : []
             bossId: root.game ? root.game.boss.id : ""
@@ -2173,6 +2247,7 @@ Window {
         }
 
         Row {
+          id: actionRow
           Layout.alignment: Qt.AlignHCenter
           Layout.topMargin: Style.space(16)
           visible: !root.shopping && !root.choosing && !root.inPack
@@ -2492,6 +2567,7 @@ Window {
       soundVolume: settings.soundVolume
       wallpaper: settings.wallpaper
       animationSpeed: settings.animationSpeed
+      onGuideAgain: { root.guideAgain(); root.optionsOpen = false }
       onToggleWallpaper: settings.wallpaper = !settings.wallpaper
       onAnimationSpeedSet: function(speed) { settings.animationSpeed = speed }
       onClose: root.optionsOpen = false
@@ -2549,6 +2625,14 @@ Window {
       onResume: root.resumeGame()
       onNewGame: root.declineResume()
       onDealt: root.sound("draw")
+    }
+
+    // The guided first game, one bubble at a time.
+    Guide {
+      anchors.fill: parent
+      step: root.guideStep
+      target: root.guideTarget(root.guideStep)
+      onDone: root.guideMarkRead(root.guideStep)
     }
 
     // The game's deck, for the card backs.
