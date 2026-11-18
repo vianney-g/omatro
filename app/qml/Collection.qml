@@ -386,6 +386,11 @@ Rectangle {
       readonly property var consumable: pictured ? {
         kind: family, id: itemId, name: e.name, description: e.description || "",
         quip: e.quip || "", current: null, transparent: false } : null
+      // A deck found: its sign (DeckMark), as on its card backs.
+      readonly property bool marked: found && family === "deck"
+      readonly property var deck: marked ? {
+        kind: "deck", id: itemId, name: e.name, description: e.description || "",
+        quip: e.quip || "", current: null, transparent: false } : null
       // A boss found: its portrait, as a joker's drawing (art/bosses).
       readonly property var boss: found && family === "boss" ? {
         kind: "boss", id: itemId, name: e.name, description: e.description || "",
@@ -404,7 +409,7 @@ Rectangle {
       opacity: found ? 1 : 0.7
 
       Row {
-        visible: parent.drawn || parent.pictured
+        visible: parent.drawn || parent.pictured || parent.marked
         anchors { fill: parent; margins: Style.spacing.sm }
         spacing: Style.spacing.md
         JokerArt {
@@ -415,6 +420,15 @@ Rectangle {
           height: parent.height
           family: tile.boss ? "bosses" : "jokers"
           jokerId: joker ? joker.id : tile.boss ? tile.itemId : ""
+        }
+        DeckMark {
+          id: tileMark
+          visible: tile.marked
+          anchors.verticalCenter: parent.verticalCenter
+          // Smaller than the tile: a sign, not a picture.
+          width: visible ? Math.round(parent.height * 0.7) : 0
+          height: width
+          deck: tile.marked ? tile.itemId : ""
         }
         Item {
           id: tilePicture
@@ -438,7 +452,7 @@ Rectangle {
         }
         Text {
           anchors.verticalCenter: parent.verticalCenter
-          width: parent.width - (tile.drawn ? tileArt.width : tilePicture.width) - parent.spacing
+          width: parent.width - (tile.drawn ? tileArt.width : tile.marked ? tileMark.width : tilePicture.width) - parent.spacing
           wrapMode: Text.WordWrap
           text: e.name || ""
           color: tint
@@ -449,7 +463,7 @@ Rectangle {
       }
 
       Column {
-        visible: parent.found && !parent.drawn && !parent.pictured
+        visible: parent.found && !parent.drawn && !parent.pictured && !parent.marked
         anchors { fill: parent; margins: Style.spacing.lg }
         spacing: Style.spacing.xs
         Text {
@@ -514,7 +528,9 @@ Rectangle {
       MouseArea {
         anchors.fill: parent
         hoverEnabled: true
-        onContainsMouseChanged: parent.drawn && parent.boss
+        onContainsMouseChanged: parent.marked
+          ? (containsMouse ? Peek.showConsumable(parent, parent.deck, "") : Peek.hide(parent))
+          : parent.drawn && parent.boss
           ? (containsMouse ? Peek.showConsumable(parent, parent.boss, "") : Peek.hide(parent))
           : parent.drawn
           ? (containsMouse ? Peek.showJoker(parent, parent.joker, null, false) : Peek.hide(parent))

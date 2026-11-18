@@ -2541,6 +2541,13 @@ Window {
       onDealt: root.sound("draw")
     }
 
+    // The game's deck, for the card backs.
+    Binding {
+      target: Run
+      property: "deck"
+      value: root.game && root.game.run_deck ? root.game.run_deck.id : ""
+    }
+
     // The hovered card at full size, when its own form is small.
     CardPeek {
       id: cardPeek

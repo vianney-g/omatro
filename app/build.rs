@@ -199,6 +199,7 @@ fn main() {
         QmlFile::from("qml/SeedLabel.qml"),
         QmlFile::from("qml/OmarchyLogo.qml"),
         QmlFile::from("qml/CardBack.qml"),
+        QmlFile::from("qml/DeckMark.qml"),
         QmlFile::from("qml/DeckView.qml"),
         QmlFile::from("qml/Music.qml"),
         QmlFile::from("qml/Sounds.qml"),
@@ -209,6 +210,7 @@ fn main() {
         QmlFile::from("qml/Util.qml").singleton(true),
         QmlFile::from("qml/Hints.qml").singleton(true),
         QmlFile::from("qml/Peek.qml").singleton(true),
+        QmlFile::from("qml/Run.qml").singleton(true),
         QmlFile::from("qml/I18n.qml").singleton(true),
     ]))
     // .js files are not module files: they go next to them, in the resources.

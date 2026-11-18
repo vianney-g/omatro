@@ -212,10 +212,18 @@ Rectangle {
                   font.pixelSize: Style.font.caption
                 }
               }
-              Column {
+              // Its sign, as on its card backs.
+              DeckMark {
+                id: mark
                 visible: !slice.locked
                 anchors.verticalCenter: parent.verticalCenter
-                width: parent.width
+                width: Style.space(72)
+                height: width
+                deck: modelData.id
+              }
+              Column {
+                visible: !slice.locked
+                anchors { verticalCenter: parent.verticalCenter; left: mark.right; leftMargin: Style.space(12); right: parent.right }
                 spacing: Style.space(3)
                 Row {
                   width: parent.width

@@ -203,6 +203,7 @@ Rectangle {
             Repeater {
               model: 3
               CardBack {
+                deck: root.saved && root.saved.run_deck ? root.saved.run_deck.id : ""
                 x: (2 - index) * Style.space(4)
                 y: index * Style.space(4)
                 width: Style.space(96)

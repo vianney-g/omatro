@@ -286,6 +286,11 @@ the last one remembered with `Settings`) and passed to `Game::with_deck`. `set_u
 builds the cards and the starting items; the rules ask `deck_is(Deck::…)` where they
 apply (`hands_per_blind`, `joker_slots`, `target_of`, `reward`, `roll_offers`…).
 Hyprland Dwindle scores through a `Source::Deck` step (`Effect::Balance`).
+Each deck has a sign (`DeckMark.qml`: a shape as plain as Omarchy's logo, drawn on a
+`Canvas` in the theme's colours, no pixel art), at the middle of its card backs
+(`CardBack`, which takes the game's deck from the `Run` singleton, kept by Main), in
+the new game screen and in the collection; a deck without one keeps Omarchy's logo
+(for challenge decks, some day). A new deck gets its sign in `DeckMark`.
 
 ## Packs
 
