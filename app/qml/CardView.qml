@@ -119,8 +119,8 @@ Item {
     property int delay: 0
     PauseAnimation { duration: flyAnim.delay }
     ParallelAnimation {
-      NumberAnimation { target: fly; property: "x"; to: 0; duration: 260; easing.type: Easing.OutCubic }
-      NumberAnimation { target: fly; property: "y"; to: 0; duration: 260; easing.type: Easing.OutCubic }
+      NumberAnimation { target: fly; property: "x"; to: 0; duration: Style.ms(260); easing.type: Easing.OutCubic }
+      NumberAnimation { target: fly; property: "y"; to: 0; duration: Style.ms(260); easing.type: Easing.OutCubic }
     }
   }
 
@@ -336,25 +336,25 @@ Item {
   SequentialAnimation {
     id: flashAnim
     ParallelAnimation {
-      NumberAnimation { target: face; property: "scale"; from: 1; to: 1.12; duration: 90 }
-      NumberAnimation { target: popup; property: "opacity"; to: 1; duration: 90 }
+      NumberAnimation { target: face; property: "scale"; from: 1; to: 1.12; duration: Style.ms(90) }
+      NumberAnimation { target: popup; property: "opacity"; to: 1; duration: Style.ms(90) }
     }
-    NumberAnimation { target: face; property: "scale"; to: 1; duration: 180; easing.type: Easing.OutBack }
-    PauseAnimation { duration: 220 }
-    NumberAnimation { target: popup; property: "opacity"; to: 0; duration: 200 }
+    NumberAnimation { target: face; property: "scale"; to: 1; duration: Style.ms(180); easing.type: Easing.OutBack }
+    PauseAnimation { duration: Style.ms(220) }
+    NumberAnimation { target: popup; property: "opacity"; to: 0; duration: Style.ms(200) }
   }
 
   // The enhancement scored: the card glows in its hue (Overclocked shakes).
   SequentialAnimation {
     id: enhancedAnim
-    NumberAnimation { target: root; property: "enhancedGlow"; to: 1; duration: 90 }
+    NumberAnimation { target: root; property: "enhancedGlow"; to: 1; duration: Style.ms(90) }
     SequentialAnimation {
       loops: root.card && root.card.enhancement === "overclocked" ? 3 : 0
-      NumberAnimation { target: face; property: "rotation"; to: 4; duration: 40 }
-      NumberAnimation { target: face; property: "rotation"; to: -4; duration: 80 }
-      NumberAnimation { target: face; property: "rotation"; to: 0; duration: 40 }
+      NumberAnimation { target: face; property: "rotation"; to: 4; duration: Style.ms(40) }
+      NumberAnimation { target: face; property: "rotation"; to: -4; duration: Style.ms(80) }
+      NumberAnimation { target: face; property: "rotation"; to: 0; duration: Style.ms(40) }
     }
-    NumberAnimation { target: root; property: "enhancedGlow"; to: 0; duration: 500; easing.type: Easing.InQuad }
+    NumberAnimation { target: root; property: "enhancedGlow"; to: 0; duration: Style.ms(500); easing.type: Easing.InQuad }
   }
 
   // The pieces of a broken card: snapshots of the face, 3 × 4, flying apart
@@ -397,16 +397,16 @@ Item {
     id: shatterAnim
     // It overheats: the halo, a shake.
     ScriptAction { script: root.glowColor = Colors.orange }
-    NumberAnimation { target: root; property: "enhancedGlow"; to: 1; duration: 80 }
+    NumberAnimation { target: root; property: "enhancedGlow"; to: 1; duration: Style.ms(80) }
     SequentialAnimation {
       loops: 3
-      NumberAnimation { target: face; property: "rotation"; to: 5; duration: 35 }
-      NumberAnimation { target: face; property: "rotation"; to: -5; duration: 70 }
-      NumberAnimation { target: face; property: "rotation"; to: 0; duration: 35 }
+      NumberAnimation { target: face; property: "rotation"; to: 5; duration: Style.ms(35) }
+      NumberAnimation { target: face; property: "rotation"; to: -5; duration: Style.ms(70) }
+      NumberAnimation { target: face; property: "rotation"; to: 0; duration: Style.ms(35) }
     }
     // It bursts.
     ScriptAction { script: { shards.burst = 0; shards.visible = true; root.enhancedGlow = 0 } }
-    NumberAnimation { target: shards; property: "burst"; to: 1; duration: 650; easing.type: Easing.OutQuad }
+    NumberAnimation { target: shards; property: "burst"; to: 1; duration: Style.ms(650); easing.type: Easing.OutQuad }
     ScriptAction { script: { root.opacity = 0; shards.visible = false } }
   }
 
@@ -414,13 +414,13 @@ Item {
     id: vanishAnim
     ScriptAction { script: root.glowColor = Colors.urgent }
     ParallelAnimation {
-      NumberAnimation { target: glow; property: "opacity"; to: 1; duration: 90 }
-      NumberAnimation { target: face; property: "scale"; to: 1.1; duration: 90 }
+      NumberAnimation { target: glow; property: "opacity"; to: 1; duration: Style.ms(90) }
+      NumberAnimation { target: face; property: "scale"; to: 1.1; duration: Style.ms(90) }
     }
     ParallelAnimation {
-      NumberAnimation { target: root; property: "opacity"; to: 0; duration: 340; easing.type: Easing.InCubic }
-      NumberAnimation { target: face; property: "scale"; to: 0.4; duration: 340; easing.type: Easing.InBack }
-      NumberAnimation { target: face; property: "rotation"; to: 18; duration: 340; easing.type: Easing.InQuad }
+      NumberAnimation { target: root; property: "opacity"; to: 0; duration: Style.ms(340); easing.type: Easing.InCubic }
+      NumberAnimation { target: face; property: "scale"; to: 0.4; duration: Style.ms(340); easing.type: Easing.InBack }
+      NumberAnimation { target: face; property: "rotation"; to: 18; duration: Style.ms(340); easing.type: Easing.InQuad }
     }
   }
 
@@ -428,10 +428,10 @@ Item {
   SequentialAnimation {
     id: dropAnim
     ScriptAction { script: root.glowColor = Colors.muted }
-    NumberAnimation { target: glow; property: "opacity"; to: 1; duration: 90 }
+    NumberAnimation { target: glow; property: "opacity"; to: 1; duration: Style.ms(90) }
     ParallelAnimation {
-      NumberAnimation { target: fly; property: "y"; to: root.height * 0.8; duration: 380; easing.type: Easing.InCubic }
-      NumberAnimation { target: root; property: "opacity"; to: 0; duration: 380; easing.type: Easing.InQuad }
+      NumberAnimation { target: fly; property: "y"; to: root.height * 0.8; duration: Style.ms(380); easing.type: Easing.InCubic }
+      NumberAnimation { target: root; property: "opacity"; to: 0; duration: Style.ms(380); easing.type: Easing.InQuad }
     }
   }
 
@@ -439,23 +439,23 @@ Item {
     id: morphAnim
     ScriptAction { script: root.glowColor = Colors.accent }
     ParallelAnimation {
-      NumberAnimation { target: flip; property: "xScale"; to: 0; duration: 150; easing.type: Easing.InQuad }
-      NumberAnimation { target: glow; property: "opacity"; to: 1; duration: 150 }
+      NumberAnimation { target: flip; property: "xScale"; to: 0; duration: Style.ms(150); easing.type: Easing.InQuad }
+      NumberAnimation { target: glow; property: "opacity"; to: 1; duration: Style.ms(150) }
     }
     ScriptAction { script: if (root.nextCard) root.card = root.nextCard }
-    NumberAnimation { target: flip; property: "xScale"; to: 1; duration: 220; easing.type: Easing.OutBack }
-    NumberAnimation { target: glow; property: "opacity"; to: 0; duration: 260 }
+    NumberAnimation { target: flip; property: "xScale"; to: 1; duration: Style.ms(220); easing.type: Easing.OutBack }
+    NumberAnimation { target: glow; property: "opacity"; to: 0; duration: Style.ms(260) }
   }
 
   SequentialAnimation {
     id: appearAnim
     ScriptAction { script: root.glowColor = Colors.accent }
     ParallelAnimation {
-      NumberAnimation { target: root; property: "opacity"; from: 0; to: 1; duration: 200 }
-      NumberAnimation { target: face; property: "scale"; from: 0.4; to: 1; duration: 340; easing.type: Easing.OutBack }
-      NumberAnimation { target: glow; property: "opacity"; from: 1; to: 1; duration: 200 }
+      NumberAnimation { target: root; property: "opacity"; from: 0; to: 1; duration: Style.ms(200) }
+      NumberAnimation { target: face; property: "scale"; from: 0.4; to: 1; duration: Style.ms(340); easing.type: Easing.OutBack }
+      NumberAnimation { target: glow; property: "opacity"; from: 1; to: 1; duration: Style.ms(200) }
     }
-    NumberAnimation { target: glow; property: "opacity"; to: 0; duration: 400 }
+    NumberAnimation { target: glow; property: "opacity"; to: 0; duration: Style.ms(400) }
   }
 
   MouseArea {

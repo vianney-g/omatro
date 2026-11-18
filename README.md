@@ -105,8 +105,9 @@ The music is lofi, from the maintainer: instrumentals during blinds, songs (with
 lyrics, and jokes) everywhere else; each track plays to its end and the next one
 follows where you are. M switches it on and off, Shift+M the sound effects (cards,
 chips climbing a scale, the PC speaker's beeps when a game is lost…). The settings
-(O, from anywhere) set their volumes (←/→ for the music, Shift+←/→ for the sounds)
-and the language, and list every key.
+(O, from anywhere) set their volumes (←/→ for the music, Shift+←/→ for the sounds),
+the language and the speed of the animations (×1, ×2 or ×4; A switches it), and list
+every key.
 
 Keys: 1 to 9 and 0 to choose cards, Enter to play, D to discard, Tab to sort the hand
 by rank or suit, Shift+←/→ to move the selected card (or drag it), J to choose the next
@@ -114,7 +115,7 @@ joker (or click one), then Shift+←/→ to move it (or drag it, in the shop and
 blind) and X to sell it, Ctrl+N for a new game (starting it
 asks again while a game is in progress), I for fastfetch (run
 info: the machine and its level, hand levels, cards left), C for the collection, O for the
-settings and the list of keys, M for the music, Shift+M for the sound effects, Ctrl+Q
+settings and the list of keys, A for the speed of the animations, M for the music, Shift+M for the sound effects, Ctrl+Q
 to quit. Before a blind: Enter to play it, S to skip it. Ctrl+1 to 9 apply the
 consumables of the clipboard, Ctrl+Shift+1 to 9 sell them. In the shop: 1 to 9 to buy the offers, then the packs,
 then the pull requests, in order; Shift+1 to 9 for Use now, which buys a theme or

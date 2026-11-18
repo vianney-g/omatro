@@ -137,6 +137,11 @@ than push the play area out.
   the name in the collection. `app/art/README.md` has the style and the workflow
   (`art.py import` / `preview`), `app/art/briefs.md` what each drawing shows
   (proposed to the maintainer first, as names are).
+- Animation speed: the settings (A) set `Style.speed` (×1, ×2, ×4); every duration of
+  what plays out a move (scoring steps, cards flying, flashing, breaking, turning over,
+  money counting and flying, level-ups) goes through `Style.ms()`, so that a fast player
+  waits less. Ambient motion (breathing jokers, shines, sparkles, boss scenes) keeps
+  its pace.
 - Sizing: every size goes through `Style.space()` / `Style.fontPx()`, i.e. theme scale ×
   `Style.fit`. `Main.qml` sets `fit` so the whole UI shrinks together when the window is
   smaller than `designWidth` × `designHeight` (tiled Hyprland windows ignore the minimum

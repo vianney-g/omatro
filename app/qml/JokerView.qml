@@ -329,15 +329,15 @@ Item {
   SequentialAnimation {
     id: flashAnim
     ParallelAnimation {
-      NumberAnimation { target: face; property: "scale"; from: 1; to: 1.1; duration: 90 }
-      NumberAnimation { target: face; property: "rotation"; from: 0; to: -4; duration: 90 }
-      NumberAnimation { target: popup; property: "opacity"; to: 1; duration: 90 }
+      NumberAnimation { target: face; property: "scale"; from: 1; to: 1.1; duration: Style.ms(90) }
+      NumberAnimation { target: face; property: "rotation"; from: 0; to: -4; duration: Style.ms(90) }
+      NumberAnimation { target: popup; property: "opacity"; to: 1; duration: Style.ms(90) }
     }
     ParallelAnimation {
-      NumberAnimation { target: face; property: "scale"; to: 1; duration: 180; easing.type: Easing.OutBack }
-      NumberAnimation { target: face; property: "rotation"; to: 0; duration: 180; easing.type: Easing.OutBack }
+      NumberAnimation { target: face; property: "scale"; to: 1; duration: Style.ms(180); easing.type: Easing.OutBack }
+      NumberAnimation { target: face; property: "rotation"; to: 0; duration: Style.ms(180); easing.type: Easing.OutBack }
     }
-    PauseAnimation { duration: 220 }
-    NumberAnimation { target: popup; property: "opacity"; to: 0; duration: 200 }
+    PauseAnimation { duration: Style.ms(220) }
+    NumberAnimation { target: popup; property: "opacity"; to: 0; duration: Style.ms(200) }
   }
 }

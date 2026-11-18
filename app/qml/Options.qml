@@ -2,7 +2,7 @@ import QtQuick
 import omatro
 
 // Settings (O, from anywhere): language, music and sound volumes, the
-// wallpaper; then every key of the game.
+// wallpaper, the speed of the animations; then every key of the game.
 Rectangle {
   id: root
 
@@ -11,7 +11,9 @@ Rectangle {
   property bool sounds: true
   property real soundVolume: 0.5
   property bool wallpaper: true
+  property int animationSpeed: 1
   signal toggleWallpaper()
+  signal animationSpeedSet(int speed)
   signal close()
   signal language(string lang)
   signal toggleMusic()
@@ -36,7 +38,7 @@ Rectangle {
     { title: "Anywhere", keys: [
       ["J, Shift+←/→", "choose a joker, move it"], ["X", "sell the chosen joker"],
       ["Ctrl+1-9", "apply a consumable"], ["Ctrl+Shift+1-9", "sell a consumable"],
-      ["I", "fastfetch"], ["P", "the deck"], ["C", "collection"], ["Ctrl+N", "new game"], ["O", "settings"], ["Ctrl+Q", "quit"] ] },
+      ["I", "fastfetch"], ["P", "the deck"], ["A", "animation speed"], ["C", "collection"], ["Ctrl+N", "new game"], ["O", "settings"], ["Ctrl+Q", "quit"] ] },
   ]
 
   // Key names as the keyboard reads in the language (Maj, Entrée…).
@@ -147,6 +149,19 @@ Rectangle {
           bordered: root.wallpaper
           text: I18n.tr(root.wallpaper ? "Shown" : "Hidden")
           onClicked: root.toggleWallpaper()
+        }
+        Label { text: I18n.tr("Animations (A)"); color: Colors.muted }
+        Row {
+          spacing: Style.spacing.md
+          Repeater {
+            model: [1, 2, 4]
+            Button {
+              compact: true
+              text: "×" + modelData
+              bordered: modelData === root.animationSpeed
+              onClicked: root.animationSpeedSet(modelData)
+            }
+          }
         }
       }
 

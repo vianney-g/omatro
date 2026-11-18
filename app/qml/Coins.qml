@@ -17,7 +17,7 @@ Item {
     var b = to.mapToItem(root, to.width / 2, to.height / 2)
     var n = Math.max(1, Math.min(10, Math.round(amount)))
     for (var i = 0; i < n; i++)
-      coin.createObject(root, { fromX: a.x, fromY: a.y, toX: b.x, toY: b.y, delay: i * 70 })
+      coin.createObject(root, { fromX: a.x, fromY: a.y, toX: b.x, toY: b.y, delay: Style.ms(i * 70) })
   }
 
   Component {
@@ -58,9 +58,9 @@ Item {
         running: true
         PauseAnimation { duration: c.delay }
         PropertyAction { target: c; property: "opacity"; value: 1 }
-        NumberAnimation { target: c; property: "t"; to: 1; duration: 620; easing.type: Easing.InOutQuad }
+        NumberAnimation { target: c; property: "t"; to: 1; duration: Style.ms(620); easing.type: Easing.InOutQuad }
         ScriptAction { script: root.landed() }
-        NumberAnimation { target: c; property: "opacity"; to: 0; duration: 80 }
+        NumberAnimation { target: c; property: "opacity"; to: 0; duration: Style.ms(80) }
         ScriptAction { script: c.destroy() }
       }
     }

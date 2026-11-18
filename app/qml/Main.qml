@@ -124,7 +124,7 @@ Window {
   property bool moneyCounts: true
   Behavior on shownMoney {
     enabled: root.moneyCounts
-    NumberAnimation { duration: 500; easing.type: Easing.OutCubic }
+    NumberAnimation { duration: Style.ms(500); easing.type: Easing.OutCubic }
   }
   function showMoney(money) {
     var delta = money - Math.round(shownMoney)
@@ -279,6 +279,13 @@ Window {
     property real soundVolume: 0.5
     // The Omarchy wallpaper, blurred, behind the game (W).
     property bool wallpaper: true
+    // How fast the hands play out (A): 1, 2 or 4.
+    property int animationSpeed: 1
+  }
+  Binding { target: Style; property: "speed"; value: settings.animationSpeed }
+  // ×1 → ×2 → ×4 → ×1.
+  function nextAnimationSpeed() {
+    settings.animationSpeed = settings.animationSpeed >= 4 ? 1 : settings.animationSpeed * 2
   }
 
   // ---- music (M switches it on and off); none in scripted runs, unless
@@ -405,7 +412,7 @@ Window {
   property int cardChangesTime: 620
   // Breaks and turns over the cards on view; true when there was any.
   function playCardChanges(changes) {
-    cardChangesTime = 620
+    cardChangesTime = Style.ms(620)
     var shown = false
     var broke = false
     var dropped = false
@@ -418,7 +425,7 @@ Window {
           view.shatter()
           shatterSparks.views = shatterSparks.views.concat([view])
           shatterSparks.restart()
-          cardChangesTime = 1300
+          cardChangesTime = Style.ms(1300)
         } else view.vanish()
         broke = true
       } else if (c.change === "discarded") {
@@ -443,7 +450,7 @@ Window {
   SequentialAnimation {
     id: shatterSparks
     property var views: []
-    PauseAnimation { duration: 500 }
+    PauseAnimation { duration: Style.ms(500) }
     ScriptAction {
       script: {
         shatterSparks.views.forEach(function(v) { sparks.burst(v, "warm", 28, true) })
@@ -563,7 +570,7 @@ Window {
     levelShownLevel = levelShown.from ? levelShown.from.level : 0
     liveChips = levelShown.from ? levelShown.from.chips : 0
     liveMult = levelShown.from ? levelShown.from.mult : 0
-    levelTimer.interval = levelShown.from ? 350 : 0
+    levelTimer.interval = levelShown.from ? Style.ms(350) : 0
     levelTimer.restart()
   }
   function raiseLevel() {
@@ -579,7 +586,7 @@ Window {
     chipsCounter.pulse(); sparks.burst(chipsCounter, "chips")
     multCounter.pulse(); sparks.burst(multCounter, "mult")
     sound("mult")
-    levelTimer.interval = up.to ? 1000 : 1400
+    levelTimer.interval = Style.ms(up.to ? 1000 : 1400)
     levelTimer.restart()
   }
   // Ends the show (now, if a hand is played): the box shows the selection.
@@ -897,7 +904,7 @@ Window {
     fireOut.stop()
     fireHeat = 0
     chipSteps = 0
-    stepTimer.interval = 600
+    stepTimer.interval = Style.ms(600)
     stepTimer.start()
     tableRow.forceLayout()
     for (var t = 0; t < tableRepeater.count; t++) {
@@ -905,7 +912,7 @@ Window {
       var start = from[tableCards[t].id]
       if (!card || !start || !start.at) continue
       var here = card.mapToItem(null, 0, 0)
-      card.flyFrom(start.at.x - here.x, start.at.y - here.y, 40 * t)
+      card.flyFrom(start.at.x - here.x, start.at.y - here.y, Style.ms(40 * t))
     }
   }
 
@@ -927,9 +934,9 @@ Window {
   function nextStep() {
     if (!turnedOver) {
       turnedOver = true
-      if (turnOverTable()) { stepTimer.interval = 620; return }
+      if (turnOverTable()) { stepTimer.interval = Style.ms(620); return }
     }
-    stepTimer.interval = 420
+    stepTimer.interval = Style.ms(420)
     var steps = scoring.steps
     stepIndex++
     if (stepIndex < steps.length) {
@@ -968,7 +975,7 @@ Window {
         quake(heatFor(scoring.total) - 1)
         sound("quake-" + (heatFor(scoring.total) - 1))
       }
-      stepTimer.interval = 900
+      stepTimer.interval = Style.ms(900)
     } else if (!changesShown && playCardChanges(scoringChanges)) {
       changesShown = true
       stepTimer.interval = cardChangesTime
@@ -1103,6 +1110,7 @@ Window {
       else if (k === Qt.Key_M && (event.modifiers & Qt.ShiftModifier)) root.toggleSounds()
       else if (k === Qt.Key_M) root.toggleMusic()
       else if (k === Qt.Key_W) settings.wallpaper = !settings.wallpaper
+      else if (k === Qt.Key_A) root.nextAnimationSpeed()
       else if (root.resuming) {
         if (k === Qt.Key_Return || k === Qt.Key_Enter) root.resumeGame()
         else if (k === Qt.Key_N) root.declineResume()
@@ -2483,7 +2491,9 @@ Window {
       sounds: settings.sounds
       soundVolume: settings.soundVolume
       wallpaper: settings.wallpaper
+      animationSpeed: settings.animationSpeed
       onToggleWallpaper: settings.wallpaper = !settings.wallpaper
+      onAnimationSpeedSet: function(speed) { settings.animationSpeed = speed }
       onClose: root.optionsOpen = false
       onLanguage: function(lang) { root.setLanguage(lang) }
       onToggleMusic: root.toggleMusic()

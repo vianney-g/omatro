@@ -60,7 +60,7 @@ Item {
         Column {
           visible: place.digit
           y: place.digit ? -Number(place.glyph) * probe.implicitHeight : 0
-          Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+          Behavior on y { NumberAnimation { duration: Style.ms(180); easing.type: Easing.OutCubic } }
           Repeater {
             model: 10
             Text {

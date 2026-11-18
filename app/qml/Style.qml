@@ -15,6 +15,11 @@ QtObject {
   readonly property real scale: themeScale * fit
 
   function space(px) { return Math.round(px * scale) }
+  // The speed of the game's animations (settings: ×1, ×2, ×4), and a
+  // duration at that speed. Ambient motion (breathing, shines, bosses) keeps
+  // its own pace.
+  property real speed: 1
+  function ms(duration) { return Math.round(duration / speed) }
   function fontPx(mult) { return Math.max(1, Math.round(OmarchyTheme.fontBaseSize * fit * mult)) }
 
   readonly property int normalBorderWidth: 1
