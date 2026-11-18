@@ -229,7 +229,7 @@ Responses:
   jokers (`id`, `name`, `description`, `quip`, `rarity`, `edition`, `price`,
   `sell_value`, `bonus` for what a growing joker gives now, `current` for what a Fork
   copies), `max_jokers`, `jokers_hidden`, `disabled_joker`, `vouchers` merged, `vouchers_for_sale` (in
-  the shop), `tags` (badges won, waiting; a blind's `tag` too, with `current` for what it would give now), `boss_reroll_cost` (when Change Request allows it now), `modifiers` (names and effects of every enhancement, seal and
+  the shop; `follows` names the pull request a second one of its pair follows up), `tags` (badges won, waiting; a blind's `tag` too, with `current` for what it would give now), `boss_reroll_cost` (when Change Request allows it now), `modifiers` (names and effects of every enhancement, seal and
   edition), `consumables` (`kind` = `theme` / `command` / `oligarchy`, `id`, `name`,
   `description`, `quip`, `price`, `sell_value`, `min_cards` / `max_cards` to select,
   `needs_hand` when it works on the cards in hand, `transparent` when it takes no slot,

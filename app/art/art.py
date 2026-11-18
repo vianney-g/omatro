@@ -206,7 +206,10 @@ def cmd_import(args):
         outside, todo = set(), [(x, y) for x in range(w) for y in (0, h - 1)] + [(x, y) for y in range(h) for x in (0, w - 1)]
         while todo:
             x, y = todo.pop()
-            if (x, y) in outside or not (0 <= x < w and 0 <= y < h) or img.getpixel((x, y))[:3] != bg:
+            if (x, y) in outside or not (0 <= x < w and 0 <= y < h):
+                continue
+            r, g, b, a = img.getpixel((x, y))
+            if a >= 128 and sum(abs(c - k) for c, k in zip((r, g, b), bg)) > 24:
                 continue
             outside.add((x, y))
             todo += [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
@@ -216,6 +219,11 @@ def cmd_import(args):
         print(f"background #%02x%02x%02x around the drawing taken as transparent" % bg)
     elif args.key != "none":
         key = rgb(args.key)
+    # A full-colour image: its colours by lightness onto the letters given,
+    # darkest first.
+    tones = args.tones.split(",") if args.tones else None
+    # Five tones: the cuts that keep outlines dark and highlights light.
+    cuts = (0.16, 0.36, 0.58, 0.80) if tones and len(tones) == 5 else [i / len(tones) for i in range(1, len(tones))] if tones else ()
     off, worst, rows = 0, 0, []
     for y in range(h):
         row = ""
@@ -223,6 +231,9 @@ def cmd_import(args):
             r, g, b, a = img.getpixel((x, y))
             if a < 128 or (key and math.dist((r, g, b), key) < 8):
                 row += "."
+            elif tones:
+                light = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+                row += tones[sum(light >= t for t in cuts)]
             elif (r, g, b) in mapping:
                 row += mapping[(r, g, b)]
             else:
@@ -282,6 +293,7 @@ def main():
     i.add_argument("id")
     i.add_argument("image")
     i.add_argument("--map", help="colours and their letters: 3b2a5c=m,fe7a6b=a (others: nearest)")
+    i.add_argument("--tones", help="a full-colour image: its colours by lightness onto these letters, darkest first (d,A,a,w,l)")
     i.add_argument("--key", default="auto", help="background to make transparent: auto, edge (the corner colour where it reaches the edges), none or #rrggbb")
     i.add_argument("--crop", type=int, default=64,
                    help="cut to N × N around the subject (default 64; 0: keep the size)")

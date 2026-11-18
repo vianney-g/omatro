@@ -255,6 +255,9 @@ pub struct ItemInfo {
     /// What unlocks a locked item: its achievement.
     pub achievement: Option<&'static str>,
     pub condition: Option<&'static str>,
+    /// For a second pull request of its pair, the one it follows up (its
+    /// drawing is the pair's).
+    pub follows: Option<crate::voucher::Voucher>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -514,6 +517,10 @@ fn item_info(item: Item, profile: &Profile) -> ItemInfo {
         rarity_name: joker.filter(|_| found).map(|j| j.rarity().name()),
         achievement: hidden_by.map(Achievement::name),
         condition: hidden_by.map(Achievement::description),
+        follows: match item {
+            Item::Voucher(v) => v.follows(),
+            _ => None,
+        },
     }
 }
 

@@ -213,6 +213,8 @@ pub struct VoucherInfo {
     pub description: &'static str,
     pub quip: &'static str,
     pub price: u32,
+    /// The pull request it follows up, for a second one of its pair.
+    pub follows: Option<Voucher>,
 }
 
 impl From<Voucher> for VoucherInfo {
@@ -223,6 +225,7 @@ impl From<Voucher> for VoucherInfo {
             description: voucher.description(),
             quip: voucher.quip(),
             price: VOUCHER_PRICE,
+            follows: voucher.follows(),
         }
     }
 }

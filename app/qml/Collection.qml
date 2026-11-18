@@ -379,12 +379,15 @@ Rectangle {
       readonly property string itemId: e.id.slice(e.id.indexOf(":") + 1)
       // Where a drawn oligarchy card or command is (JokerArt's family).
       readonly property string drawing: family === "oligarchy" ? "oligarchy"
-        : family === "command" ? "commands" : family === "pack" ? "packs" : ""
+        : family === "command" ? "commands" : family === "pack" ? "packs"
+        : family === "voucher" ? "vouchers" : ""
+      // Its drawing's id: a pull request's pair's, named after the first.
+      readonly property string artId: e.follows ? e.follows : itemId
       readonly property bool pictured: found
         && (family === "theme" ? Drawn.themes[itemId] === true
-          : drawing !== "" && Drawn[drawing][itemId] === true)
+          : drawing !== "" && Drawn[drawing][artId] === true)
       readonly property var consumable: pictured ? {
-        kind: family, id: itemId, name: e.name, description: e.description || "",
+        kind: family === "pack" ? "package" : family === "voucher" ? "pull request" : family, id: itemId, name: e.name, description: e.description || "",
         quip: e.quip || "", current: null, transparent: false } : null
       // A deck found: its sign (DeckMark), as on its card backs.
       readonly property bool marked: found && family === "deck"
@@ -447,7 +450,7 @@ Rectangle {
             anchors.fill: parent
             visible: tile.drawing !== ""
             family: tile.drawing || "oligarchy"
-            jokerId: tile.pictured && tile.drawing !== "" ? tile.itemId : ""
+            jokerId: tile.pictured && tile.drawing !== "" ? tile.artId : ""
           }
         }
         Text {

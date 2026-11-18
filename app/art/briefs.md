@@ -1969,3 +1969,155 @@ Style line, at the start of every prompt (generate at 64 × 64):
 - **Shows:** a stationery paperclip monster with fangs.
 - **Prompt:** a bent metal paperclip monster with small sharp fangs and
   claws, eager and pushy
+
+# Pull requests
+
+What each pair of pull requests shows: one drawing per pair (named after
+its first pull request), 64 × 40 like the other cards of the shop, framed
+at the top of the card and following the current theme. The follow-up of a
+pair shows the same drawing in a "deluxe" card, made by the game: a
+shining frame and sparkles.
+
+Retro Diffusion gave them in full colour, without the usual palette: they
+were imported by lightness onto five letters, `--tones d,A,a,w,l` (ink, the
+accent's dark shade, the accent, the warm, the light), the white background
+cleared from the edges (`--key edge`), as the pull request cards are in the
+accent. Each `.txt` keeps its command.
+
+Style line, at the start of every prompt (generate at 64 × 40):
+
+> pixel art game card illustration, wide landscape composition, flat 2D,
+> clean dark outline, few colors, gold and red accents, transparent
+> background, cozy developer humor, no text
+
+## Batch 1 (drawn)
+
+### More Workspaces / Even More Workspaces
+
+`more_workspaces`: +1 card slot in the shop, then +1 more.
+
+- **Shows:** a desk with a row of drawers.
+- **Prompt:** a long wooden office desk with a row of many small drawers,
+  one drawer pulled open
+
+### Early Bird / Lifetime Deal
+
+`early_bird`: shop cards and packs 25% off, then 50%.
+
+- **Shows:** a bird holding a worm and a price tag.
+- **Prompt:** a small round bird holding a worm in its beak and a price tag
+  on a string under its wing
+
+### Compositor Tweaks / Eye Candy
+
+`compositor_tweaks`: editions twice as often, then four times.
+
+- **Shows:** a shining swirl lollipop: eye candy.
+- **Prompt:** a big round swirl lollipop on a stick, shining, small
+  sparkles around it
+
+### Mirror List / Fastest Mirror
+
+`mirror_list`: rerolls $2 less, then $2 less again.
+
+- **Shows:** a hand mirror with speed lines.
+- **Prompt:** an oval hand mirror with a handle, flying sideways, speed
+  lines behind it
+
+### Clipboard Manager / Insider Access
+
+`clipboard_manager`: +1 clipboard slot, then oligarchy cards in coreutils
+packs.
+
+- **Shows:** a clipboard with its clip and sheets.
+- **Prompt:** a wooden clipboard with a metal clip holding a few blank
+  sheets of paper
+
+### Theme Preview / Theme Showcase
+
+`theme_preview`: base16 packs hold the theme of the most played hand, then
+themes in the clipboard give ×1.5 mult.
+
+- **Shows:** a fan of colour swatches.
+- **Prompt:** a fan of paint color swatch cards spread open, held by a pin
+  at the bottom
+
+### Overtime / Crunch Time
+
+`overtime`: +1 hand each blind, then +1 more.
+
+- **Shows:** a steaming coffee mug in front of the moon, at night.
+- **Prompt:** a steaming coffee mug on a desk in front of a window with a
+  crescent moon, late at night
+
+### rm -i / Empty Trash
+
+`rm_i`: +1 discard each blind, then +1 more.
+
+- **Shows:** a trash can, its lid ajar.
+- **Prompt:** a metal trash can with its lid slightly open, a crumpled
+  paper on top
+
+### Shell Aliases / Shell Plugins
+
+`shell_aliases`: commands twice as often in the shop, then four times. A
+shell, as in a seashell.
+
+- **Shows:** a seashell.
+- **Prompt:** a big spiral seashell lying on its side, a few small pearls
+  beside it
+
+### Theme Gallery / Theme Marketplace
+
+`theme_gallery`: themes twice as often in the shop, then four times.
+
+- **Shows:** a painting on an easel.
+- **Prompt:** a framed landscape painting standing on a wooden easel, a
+  paintbrush resting on the ledge
+
+### High-Yield Savings / Index Fund
+
+`high_yield_savings`: interest up to $10, then $20.
+
+- **Shows:** a piggy bank.
+- **Prompt:** a round piggy bank with a coin dropping into the slot on its
+  back
+
+### Lorem Ipsum / Feature Flag
+
+`lorem_ipsum`: does nothing, then +1 joker slot.
+
+- **Shows:** a flag on its pole.
+- **Prompt:** a small flag waving on a tall pole with a round knob on top,
+  planted in a little mound
+
+### Card Marketplace / Premium Cards
+
+`card_marketplace`: playing cards in the shop, then with modifiers.
+
+- **Shows:** a market stall selling playing cards.
+- **Prompt:** a small market stall with a striped awning, blank playing
+  cards laid out on its counter
+
+### git revert / git reset --hard
+
+`git_revert`: −1 ante and −1 hand, then −1 ante again and −1 discard.
+
+- **Shows:** a U-turn road sign.
+- **Prompt:** a road sign on a post showing a big U-turn arrow
+
+### Change Request / Emergency Change
+
+`change_request`: reroll the boss once per ante, then as often as you like.
+
+- **Shows:** a ticket with its stub, as at a counter.
+- **Prompt:** a paper ticket with a torn stub and a perforated edge,
+  coming out of a small ticket dispenser
+
+### HiDPI / 4K Display
+
+`hidpi`: +1 hand size, then +1 more.
+
+- **Shows:** a magnifying glass over a grid of pixels.
+- **Prompt:** a magnifying glass over a grid of big square pixels, the
+  pixels inside the lens sharp and small

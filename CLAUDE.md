@@ -128,7 +128,10 @@ than push the play area out.
   (`app/art/bosses`, `Drawn.bosses`, `JokerArt` with `family: "bosses"`), on
   the boss card of `BlindSelect`, beside the boss in the left panel and in
   the collection. The collection's ids are `<family>:<id>`, the family as
-  serialized (`pack:coreutils`, `boss:paywall`), not its label. All show
+  serialized (`pack:coreutils`, `boss:paywall`), not its label. Pull requests have
+  one 64 × 40 drawing per pair (`app/art/vouchers`, named after the first,
+  `Drawn.vouchers`); the second of a pair (`follows`, in `VoucherInfo` and the
+  collection's entries) is `VoucherView`'s deluxe card. All show
   framed at the top of `ConsumableView`, compact (picture, name, what it does
   now; the rest in `CardPeek`'s bubble while hovered), and beside
   the name in the collection. `app/art/README.md` has the style and the workflow

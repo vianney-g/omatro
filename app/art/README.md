@@ -90,6 +90,14 @@ image.png --key none --crop 0 --map
 green; `ff7a6b=r` where red must stay: `cpupower`'s flames, the hearts of
 `ln_s` and `mv_hearts`). `briefs.md` has their briefs.
 
+# Pull request pictures
+
+One 64 × 40 drawing per pair of pull requests (`vouchers/<id>.txt`, named
+after the first of the pair); the second of a pair (`follows` in the state
+and the collection) shows it in `VoucherView`'s deluxe card (a golden frame,
+a passing shine, sparkles). They came from Retro Diffusion in full colour:
+`--tones d,A,a,w,l` maps any image by lightness onto letters, darkest first.
+
 # Boss portraits
 
 Each boss has a 64 × 64 portrait (`bosses/<id>.txt`), square like the
