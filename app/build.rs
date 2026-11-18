@@ -181,6 +181,7 @@ fn main() {
         QmlFile::from("qml/PackOpening.qml"),
         QmlFile::from("qml/VoucherView.qml"),
         QmlFile::from("qml/BadgeView.qml"),
+        QmlFile::from("qml/BadgeIcon.qml"),
         QmlFile::from("qml/NewGame.qml"),
         QmlFile::from("qml/ResumeGame.qml"),
         QmlFile::from("qml/Glossary.qml"),

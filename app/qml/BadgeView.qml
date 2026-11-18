@@ -1,9 +1,9 @@
 import QtQuick
 import omatro
-import "Labels.js" as Labels
 
-// A badge, like a README badge ("label: value"); hovering it tells what it
-// does.
+// A badge, as on a README: its icon (BadgeIcon) and label on a dark part, its
+// value on the accent (the urgent red for the oligarchy's), what it would give
+// now under it. Hovered, what it does shows beside it (CardPeek, through Peek).
 Item {
   id: root
 
@@ -13,7 +13,17 @@ Item {
   property bool hovered: false
   property bool hoverable: true
   readonly property bool showTip: (mouse.containsMouse || hovered) && tag !== null
-  onShowTipChanged: showTip ? Hints.show(root, tag.description, tag.name) : Hints.hide(root)
+  onShowTipChanged: showTip
+    ? Peek.showConsumable(pill, {
+        kind: "badge", id: tag.id, name: tag.name, description: tag.description,
+        quip: tag.quip, current: tag.current, transparent: false }, "")
+    : Peek.hide(pill)
+  Component.onDestruction: Peek.hide(pill)
+
+  readonly property bool hasValue: tag !== null && tag.value !== ""
+  readonly property color valueColor: tag !== null && tag.id === "funding_oligarchy" ? Colors.urgent : Colors.accent
+  readonly property real pad: Style.space(6)
+  readonly property real r: Style.cornerRadius
 
   implicitWidth: Math.max(pill.width, currentText.visible ? currentText.implicitWidth : 0)
   implicitHeight: pill.height + (currentText.visible ? currentText.implicitHeight : 0)
@@ -30,24 +40,68 @@ Item {
     font.bold: true
   }
 
-  // One pill: "resolution: 4k".
-  Rectangle {
+  // The pill: "★ stars | 100".
+  Item {
     id: pill
-    width: labelText.implicitWidth + 2 * Style.space(6)
+    anchors.horizontalCenter: parent.horizontalCenter
+    width: left.width + (root.hasValue ? valueBox.width : 0)
     height: labelText.implicitHeight + 2 * Style.space(3)
-    color: Util.alpha(Colors.accent, 0.3)
-    border.width: Style.normalBorderWidth
-    border.color: Util.alpha(Colors.accent, 0.6)
-    radius: Style.cornerRadius
-    Text {
-      id: labelText
-      anchors.centerIn: parent
-      textFormat: Text.StyledText
-      text: !root.tag ? "" : root.tag.value === "" ? "<b>" + root.tag.label + "</b>"
-        : root.tag.label + ": <b>" + root.tag.value + "</b>"
-      color: Colors.foreground
-      font.family: Style.font.family
-      font.pixelSize: Style.font.caption
+
+    Rectangle {
+      id: leftFill
+      width: left.width + (root.hasValue ? root.r : 0)
+      height: parent.height
+      radius: root.r
+      color: Qt.tint(Colors.background, Util.alpha(Colors.foreground, 0.18))
+    }
+    Item {
+      id: left
+      width: leftRow.implicitWidth + 2 * root.pad
+      height: parent.height
+      Row {
+        id: leftRow
+        anchors.centerIn: parent
+        spacing: Style.space(4)
+        BadgeIcon {
+          anchors.verticalCenter: parent.verticalCenter
+          width: labelText.font.pixelSize
+          height: width
+          tag: root.tag ? root.tag.id : ""
+          color: Colors.foreground
+        }
+        Text {
+          id: labelText
+          text: root.tag ? root.tag.label : ""
+          color: Colors.foreground
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          font.bold: !root.hasValue
+        }
+      }
+    }
+    Rectangle {
+      id: valueBox
+      visible: root.hasValue
+      x: left.width
+      width: valueText.implicitWidth + 2 * root.pad
+      height: parent.height
+      radius: root.r
+      color: root.valueColor
+      // Square where it meets the label.
+      Rectangle {
+        width: root.r
+        height: parent.height
+        color: parent.color
+      }
+      Text {
+        id: valueText
+        anchors.centerIn: parent
+        text: root.tag ? root.tag.value : ""
+        color: Colors.background
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+        font.bold: true
+      }
     }
   }
 
@@ -56,27 +110,5 @@ Item {
     anchors.fill: pill
     enabled: root.hoverable
     hoverEnabled: true
-  }
-
-  Rectangle {
-    z: 10
-    visible: root.showTip
-    anchors { horizontalCenter: pill.horizontalCenter; bottom: pill.top; bottomMargin: Style.space(6) }
-    width: Math.min(Style.space(240), tip.implicitWidth + 2 * Style.space(8))
-    height: tip.implicitHeight + 2 * Style.space(6)
-    radius: Style.cornerRadius
-    color: Colors.background
-    border.width: Style.normalBorderWidth
-    border.color: Colors.accent
-    Text {
-      id: tip
-      anchors { fill: parent; margins: Style.space(6) }
-      wrapMode: Text.WordWrap
-      textFormat: Text.StyledText
-      text: root.tag ? Labels.highlight(root.tag.description, Hints.terms, root.tag.name) + "<br>" + root.tag.quip : ""
-      color: Colors.foreground
-      font.family: Style.font.family
-      font.pixelSize: Style.font.caption
-    }
   }
 }

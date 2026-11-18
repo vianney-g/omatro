@@ -389,10 +389,10 @@ Rectangle {
       readonly property var consumable: pictured ? {
         kind: family === "pack" ? "package" : family === "voucher" ? "pull request" : family, id: itemId, name: e.name, description: e.description || "",
         quip: e.quip || "", current: null, transparent: false } : null
-      // A deck found: its sign (DeckMark), as on its card backs.
-      readonly property bool marked: found && family === "deck"
+      // A deck or a badge found: its sign (DeckMark, BadgeIcon).
+      readonly property bool marked: found && (family === "deck" || family === "tag")
       readonly property var deck: marked ? {
-        kind: "deck", id: itemId, name: e.name, description: e.description || "",
+        kind: family === "tag" ? "badge" : "deck", id: itemId, name: e.name, description: e.description || "",
         quip: e.quip || "", current: null, transparent: false } : null
       // A boss found: its portrait, as a joker's drawing (art/bosses).
       readonly property var boss: found && family === "boss" ? {
@@ -426,12 +426,20 @@ Rectangle {
         }
         DeckMark {
           id: tileMark
-          visible: tile.marked
+          visible: tile.marked && tile.family === "deck"
           anchors.verticalCenter: parent.verticalCenter
           // Smaller than the tile: a sign, not a picture.
           width: visible ? Math.round(parent.height * 0.7) : 0
           height: width
-          deck: tile.marked ? tile.itemId : ""
+          deck: visible ? tile.itemId : ""
+        }
+        BadgeIcon {
+          id: tileIcon
+          visible: tile.marked && tile.family === "tag"
+          anchors.verticalCenter: parent.verticalCenter
+          width: visible ? Math.round(parent.height * 0.5) : 0
+          height: width
+          tag: visible ? tile.itemId : ""
         }
         Item {
           id: tilePicture
@@ -455,7 +463,7 @@ Rectangle {
         }
         Text {
           anchors.verticalCenter: parent.verticalCenter
-          width: parent.width - (tile.drawn ? tileArt.width : tile.marked ? tileMark.width : tilePicture.width) - parent.spacing
+          width: parent.width - (tile.drawn ? tileArt.width : tile.marked ? tileMark.width + tileIcon.width : tilePicture.width) - parent.spacing
           wrapMode: Text.WordWrap
           text: e.name || ""
           color: tint

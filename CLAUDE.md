@@ -254,6 +254,10 @@ boss reroll, free packs through `open_free_pack`, which come back to the phase t
 were opened from) or keeps the badge in `Game::tags` until its moment: `shop_tags` at
 cash-out (free offers in `free_offers`, `free_packs`), `select_blind` (`juggle`),
 `win_blind` (funding). Take waiting badges with `take_tags`.
+`BadgeView` draws a badge as a README badge: its icon (`BadgeIcon.qml`, a sign as
+plain as the decks', drawn on a `Canvas`) and label on a dark part, its value on the
+accent (the urgent red for the oligarchy's); hovered, what it does shows in the
+`CardPeek` bubble. A new badge gets its icon in `BadgeIcon`.
 
 ## Translations
 
