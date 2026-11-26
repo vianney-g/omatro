@@ -20,7 +20,7 @@ Item {
     { file: "just-one-more-blind", title: "Just One More Blind", song: true },
     { file: "omakase-shuffle", title: "Omakase Shuffle", song: true },
     { file: "tiling-rain", title: "Tiling Rain", song: true },
-    { file: "vingt-quatre-heures-trente-cinq-heures", title: "Vingt-quatre heures, trente-cinq heures", song: true },
+    { file: "depasse-par-mes-machines", title: "Dépassé par mes machines", song: true },
     { file: "omatro-1", title: "Omatro 1", song: false },
     { file: "omatro-2", title: "Omatro 2", song: false },
     { file: "omatro-3", title: "Omatro 3", song: false },
@@ -30,6 +30,11 @@ Item {
     { file: "kernel-lullaby", title: "Kernel Lullaby", song: false },
     { file: "pacman-syu", title: "Pacman Syu", song: false },
     { file: "quattro-nights", title: "Quattro Nights", song: false },
+    { file: "mirrorlist", title: "Mirrorlist", song: false },
+    { file: "yay-syu", title: "Yay -Syu", song: false },
+    { file: "dotfiles", title: "Dotfiles", song: false },
+    { file: "keyring-refresh", title: "Keyring Refresh", song: false },
+    { file: "orphan-packages", title: "Orphan Packages", song: false },
   ]
   property int current: -1
   // Tracks that failed in a row: past all of them, the music stops.
