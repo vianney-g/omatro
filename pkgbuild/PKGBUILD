@@ -1,6 +1,6 @@
 # Maintainer: Vianney Gremmel <vianneygremmel@gmail.com>
 pkgname=omatro
-pkgver=0.9.0
+pkgver=0.10.0
 pkgrel=1
 pkgdesc="A Balatro-like card game for Omarchy, in the colors of your theme"
 arch=('x86_64')
@@ -11,7 +11,7 @@ makedepends=('cargo' 'qt6-shadertools')
 # cxx-qt's C++ objects can't link with LTO.
 options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('aec501b8ed2ec1685355101b80e70b23dfc920d403a65626bdce2b44a69b2d09')
+sha256sums=('9dc6a3584b7bf9968acdcb0b9053e905b344f75dd7ca8fd5e7e7f2822c7748e5')
 
 prepare() {
   cd "$pkgname-$pkgver"
